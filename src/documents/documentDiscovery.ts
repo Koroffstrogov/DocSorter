@@ -10,6 +10,11 @@ export type AppErrorCode =
   | "DIRECTORY_NOT_FOUND"
   | "DIRECTORY_ACCESS_DENIED"
   | "DIRECTORY_UNAVAILABLE"
+  | "FILE_NOT_FOUND"
+  | "FILE_ACCESS_DENIED"
+  | "FILE_UNAVAILABLE"
+  | "UNSUPPORTED_FILE_TYPE"
+  | "PREVIEW_NOT_ALLOWED"
   | "UNKNOWN_ERROR";
 
 export interface AppError {
@@ -134,7 +139,7 @@ async function toDocumentItem(sourcePath: string, name: string): Promise<Documen
   }
 }
 
-function failure(code: AppErrorCode): Result<never> {
+export function failure(code: AppErrorCode): Result<never> {
   return {
     ok: false,
     error: {
@@ -154,12 +159,22 @@ function errorMessageByCode(code: AppErrorCode): string {
       return "Accès au dossier source refusé.";
     case "DIRECTORY_UNAVAILABLE":
       return "Dossier source indisponible.";
+    case "FILE_NOT_FOUND":
+      return "Fichier indisponible.";
+    case "FILE_ACCESS_DENIED":
+      return "Accès au fichier refusé.";
+    case "FILE_UNAVAILABLE":
+      return "Fichier indisponible.";
+    case "UNSUPPORTED_FILE_TYPE":
+      return "Format de prévisualisation non supporté.";
+    case "PREVIEW_NOT_ALLOWED":
+      return "Aperçu non autorisé pour ce fichier.";
     case "UNKNOWN_ERROR":
       return "Impossible de lire le dossier source.";
   }
 }
 
-function mapFileSystemError(error: unknown): AppErrorCode {
+export function mapFileSystemError(error: unknown): AppErrorCode {
   if (!isNodeFileSystemError(error)) {
     return "UNKNOWN_ERROR";
   }

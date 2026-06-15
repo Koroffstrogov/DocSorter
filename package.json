@@ -24,5 +24,8 @@
     "electron": "^42.4.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.0.227"
   }
 }

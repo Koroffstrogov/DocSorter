@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
+import type { PreviewData } from "../preview/previewTypes";
 
 interface DirectorySelection {
   path: string;
@@ -13,7 +14,9 @@ const api = {
   selectTargetDirectory: (): Promise<Result<DirectorySelection | null>> =>
     ipcRenderer.invoke("directory:selectTarget"),
   listDocuments: (sourcePath: string): Promise<Result<DocumentDiscoveryResult>> =>
-    ipcRenderer.invoke("documents:list", sourcePath)
+    ipcRenderer.invoke("documents:list", sourcePath),
+  getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>
+    ipcRenderer.invoke("preview:getData", documentPath)
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

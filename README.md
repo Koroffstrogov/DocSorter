@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 1 : source, cible, file d'attente réelle et document actif en lecture seule stricte.
+Lot 2 : source, cible, file d'attente réelle, document actif et prévisualisation locale PDF/image en lecture seule.
 
 ## Commandes
 
@@ -25,11 +25,19 @@ npm run dev
 - file d'attente réelle pour `.pdf`, `.jpg`, `.jpeg` et `.png` ;
 - exclusion des sous-dossiers, fichiers non supportés et fichiers temporaires Office `~$...` ;
 - sélection d'un document actif ;
-- affichage des métadonnées de base en lecture seule.
+- affichage des métadonnées de base en lecture seule ;
+- prévisualisation locale des images JPG/JPEG/PNG ;
+- prévisualisation locale des PDF via canvas ;
+- zoom borné entre 50 % et 300 % ;
+- navigation page précédente/suivante pour PDF multipages ;
+- rotation visuelle des images.
+
+## Dépendances
+
+- `pdfjs-dist` : utilisé pour rendre localement les PDF dans un canvas. Cette dépendance est limitée au Lot 2 et ne fait pas d'OCR, d'extraction texte, d'upload ou d'analyse distante.
 
 ## Ce qui ne fonctionne pas encore
 
-- pas de vraie prévisualisation PDF ou image ;
 - pas de renommage ;
 - pas de déplacement ;
 - pas de suppression ;
@@ -45,8 +53,13 @@ npm run dev
 - les PDF/JPG/JPEG/PNG du dossier apparaissent dans la file d'attente ;
 - les fichiers non supportés et les sous-dossiers n'apparaissent pas ;
 - le bouton `Choisir cible` affiche le chemin cible sélectionné ;
-- un document peut être sélectionné ;
-- ses métadonnées s'affichent dans le panneau `Document actif` ;
+- une image sélectionnée s'affiche réellement ;
+- les contrôles zoom image fonctionnent ;
+- la rotation image est seulement visuelle ;
+- un PDF sélectionné affiche sa première page ;
+- les boutons page précédente/suivante fonctionnent sur un PDF multipage ;
+- les contrôles zoom PDF fonctionnent ;
+- si un fichier est déplacé ou supprimé après le scan, une erreur propre s'affiche ;
 - aucun fichier n'est modifié, renommé, déplacé ou supprimé.
 
 ## Principes

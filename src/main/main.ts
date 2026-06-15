@@ -2,10 +2,15 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 
 import { discoverDocuments, type Result } from "../documents/documentDiscovery";
+import { getPreviewData } from "../preview/previewService";
 
 interface DirectorySelection {
   path: string;
 }
+
+let selectedSourcePath: string | null = null;
+let selectedTargetPath: string | null = null;
+let queuedDocumentPaths = new Set<string>();
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -27,16 +32,63 @@ function createMainWindow(): void {
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getVersion", () => app.getVersion());
 
-  ipcMain.handle("directory:selectSource", () => selectDirectory("Choisir le dossier source"));
-  ipcMain.handle("directory:selectTarget", () => selectDirectory("Choisir le dossier cible"));
+  ipcMain.handle("directory:selectSource", () => selectSourceDirectory());
+  ipcMain.handle("directory:selectTarget", () => selectTargetDirectory());
 
-  ipcMain.handle("documents:list", (_event, sourcePath: unknown) => {
+  ipcMain.handle("documents:list", async (_event, sourcePath: unknown) => {
     if (typeof sourcePath !== "string") {
       return discoverDocuments(undefined);
     }
 
-    return discoverDocuments(sourcePath);
+    if (!selectedSourcePath || path.resolve(sourcePath) !== path.resolve(selectedSourcePath)) {
+      queuedDocumentPaths = new Set();
+      return discoverDocuments(undefined);
+    }
+
+    const result = await discoverDocuments(sourcePath);
+    if (result.ok) {
+      queuedDocumentPaths = new Set(
+        result.value.documents.map((documentItem) => path.resolve(documentItem.filePath))
+      );
+    } else {
+      queuedDocumentPaths = new Set();
+    }
+
+    return result;
   });
+
+  ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
+    if (typeof documentPath !== "string") {
+      return getPreviewData(undefined, {
+        sourcePath: selectedSourcePath,
+        queuedDocumentPaths
+      });
+    }
+
+    return getPreviewData(documentPath, {
+      sourcePath: selectedSourcePath,
+      queuedDocumentPaths
+    });
+  });
+}
+
+async function selectSourceDirectory(): Promise<Result<DirectorySelection | null>> {
+  const selection = await selectDirectory("Choisir le dossier source");
+  if (selection.ok && selection.value) {
+    selectedSourcePath = selection.value.path;
+    queuedDocumentPaths = new Set();
+  }
+
+  return selection;
+}
+
+async function selectTargetDirectory(): Promise<Result<DirectorySelection | null>> {
+  const selection = await selectDirectory("Choisir le dossier cible");
+  if (selection.ok && selection.value) {
+    selectedTargetPath = selection.value.path;
+  }
+
+  return selection;
 }
 
 async function selectDirectory(title: string): Promise<Result<DirectorySelection | null>> {

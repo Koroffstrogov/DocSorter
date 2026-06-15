@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; img-src 'self' data: blob:"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DocSorter Local</title>
@@ -52,6 +52,19 @@
       <section class="preview-panel" aria-label="Aperçu document">
         <div class="preview-toolbar">
           <h2>Aperçu</h2>
+          <div id="preview-controls" class="preview-controls" hidden>
+            <div id="pdf-page-controls" class="page-controls" hidden>
+              <button id="previous-page" type="button" title="Page précédente" aria-label="Page précédente">&lt;</button>
+              <span id="page-indicator">1 / 1</span>
+              <button id="next-page" type="button" title="Page suivante" aria-label="Page suivante">&gt;</button>
+            </div>
+            <div class="zoom-controls">
+              <button id="zoom-out" type="button" title="Réduire le zoom" aria-label="Réduire le zoom">-</button>
+              <button id="zoom-reset" type="button" title="Réinitialiser le zoom" aria-label="Réinitialiser le zoom">100%</button>
+              <button id="zoom-in" type="button" title="Augmenter le zoom" aria-label="Augmenter le zoom">+</button>
+              <button id="rotate-preview" type="button" title="Rotation" aria-label="Rotation">90°</button>
+            </div>
+          </div>
           <span id="status-text">Lecture seule</span>
         </div>
         <div id="preview-content" class="document-preview">
@@ -70,6 +83,8 @@
       </aside>
     </main>
 
+    <script src="./imagePreview.js"></script>
+    <script src="./pdfPreview.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>
