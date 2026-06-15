@@ -1,4 +1,24 @@
-import type { AppError, DocumentItem, SupportedDocumentExtension } from "../documents/documentDiscovery";
+type SupportedDocumentExtension = ".pdf" | ".jpg" | ".jpeg" | ".png";
+
+interface AppError {
+  code:
+    | "SOURCE_NOT_SELECTED"
+    | "DIRECTORY_NOT_FOUND"
+    | "DIRECTORY_ACCESS_DENIED"
+    | "DIRECTORY_UNAVAILABLE"
+    | "UNKNOWN_ERROR";
+  message: string;
+}
+
+interface DocumentItem {
+  name: string;
+  filePath: string;
+  extension: SupportedDocumentExtension;
+  sizeBytes: number;
+  sizeLabel: string;
+  modifiedAt: string;
+  status: "pending";
+}
 
 interface AppState {
   sourcePath: string | null;
