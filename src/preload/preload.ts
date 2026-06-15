@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
+import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type { PreviewData } from "../preview/previewTypes";
 
 interface DirectorySelection {
@@ -16,7 +17,13 @@ const api = {
   refreshSourceDocuments: (): Promise<Result<DocumentDiscoveryResult>> =>
     ipcRenderer.invoke("documents:refreshSource"),
   getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>
-    ipcRenderer.invoke("preview:getData", documentPath)
+    ipcRenderer.invoke("preview:getData", documentPath),
+  createInitialNamingDraft: (originalName: string): Promise<NamingDraft> =>
+    ipcRenderer.invoke("naming:createInitialDraft", originalName),
+  buildNamingProposal: (
+    draft: NamingDraft,
+    originalExtension: string
+  ): Promise<ProposedFilename> => ipcRenderer.invoke("naming:buildProposal", draft, originalExtension)
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

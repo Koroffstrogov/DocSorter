@@ -1,6 +1,7 @@
 type SupportedDocumentExtension = ".pdf" | ".jpg" | ".jpeg" | ".png";
 type PreviewKind = "image" | "pdf";
 type PreviewStatus = "idle" | "loading" | "ready" | "error";
+type NamingMessageLevel = "error" | "warning" | "info";
 
 interface AppError {
   code:
@@ -35,6 +36,32 @@ interface RendererPreviewData {
   bytes: ArrayBuffer;
 }
 
+interface NamingDraft {
+  documentDate: string;
+  subject: string;
+  documentType: string;
+  keywords: string;
+}
+
+interface NamingMessage {
+  level: NamingMessageLevel;
+  code: string;
+  message: string;
+}
+
+interface ProposedFilename {
+  proposedFilename: string;
+  isValid: boolean;
+  messages: NamingMessage[];
+  normalizedDraft: NamingDraft;
+}
+
+interface NamingState {
+  draft: NamingDraft;
+  proposal: ProposedFilename | null;
+  isLoading: boolean;
+}
+
 interface PreviewState {
   status: PreviewStatus;
   data: RendererPreviewData | null;
@@ -54,6 +81,7 @@ interface AppState {
   queueMessage: string;
   isLoading: boolean;
   preview: PreviewState;
+  naming: NamingState;
 }
 
 interface RefreshOptions {
@@ -72,11 +100,13 @@ const state: AppState = {
   activeDocumentPath: null,
   queueMessage: "Aucun dossier source sélectionné",
   isLoading: false,
-  preview: createIdlePreviewState()
+  preview: createIdlePreviewState(),
+  naming: createIdleNamingState()
 };
 
 let previewRequestId = 0;
 let pdfRenderRequestId = 0;
+let namingRequestId = 0;
 
 const version = document.querySelector<HTMLElement>("#app-version");
 const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-source");
@@ -99,6 +129,14 @@ const zoomInButton = document.querySelector<HTMLButtonElement>("#zoom-in");
 const rotatePreviewButton = document.querySelector<HTMLButtonElement>("#rotate-preview");
 const statusText = document.querySelector<HTMLElement>("#status-text");
 const documentDetails = document.querySelector<HTMLElement>("#document-details");
+const namingPanel = document.querySelector<HTMLElement>("#naming-panel");
+const namingDateInput = document.querySelector<HTMLInputElement>("#naming-date");
+const namingSubjectInput = document.querySelector<HTMLInputElement>("#naming-subject");
+const namingTypeInput = document.querySelector<HTMLInputElement>("#naming-type");
+const namingKeywordsInput = document.querySelector<HTMLInputElement>("#naming-keywords");
+const resetNamingButton = document.querySelector<HTMLButtonElement>("#reset-naming");
+const proposedFilename = document.querySelector<HTMLElement>("#proposed-filename");
+const namingMessages = document.querySelector<HTMLUListElement>("#naming-messages");
 
 void window.docSorter.getVersion().then((value) => {
   if (version) {
@@ -165,6 +203,21 @@ rotatePreviewButton?.addEventListener("click", () => {
   render();
 });
 
+[namingDateInput, namingSubjectInput, namingTypeInput, namingKeywordsInput].forEach((input) => {
+  input?.addEventListener("input", () => {
+    updateNamingDraftFromInputs();
+  });
+});
+
+resetNamingButton?.addEventListener("click", () => {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument) {
+    return;
+  }
+
+  void initializeNamingDraft(activeDocument);
+});
+
 render();
 
 async function selectSourceDirectory(): Promise<void> {
@@ -187,6 +240,7 @@ async function selectSourceDirectory(): Promise<void> {
   state.documents = [];
   state.activeDocumentPath = null;
   state.preview = createIdlePreviewState();
+  resetNamingState();
   state.queueMessage = "Analyse du dossier source";
   render();
 
@@ -265,6 +319,9 @@ async function refreshDocuments(options: RefreshOptions): Promise<void> {
           errorMessage: "Le document sélectionné n'est plus disponible"
         }
       : createIdlePreviewState();
+  if (!state.activeDocumentPath) {
+    resetNamingState();
+  }
   state.queueMessage = refreshQueueMessage(
     Boolean(activeDocumentPathBeforeRefresh),
     options.successMessage
@@ -277,6 +334,7 @@ function applyDiscoveryError(error: AppError): void {
   state.documents = [];
   state.activeDocumentPath = null;
   state.preview = createIdlePreviewState();
+  resetNamingState();
   state.queueMessage = error.message;
 }
 
@@ -291,7 +349,9 @@ function selectDocument(documentItem: DocumentItem): void {
     ...createIdlePreviewState(),
     status: "loading"
   };
+  resetNamingState();
   render();
+  void initializeNamingDraft(documentItem);
   void loadActivePreview(documentItem);
 }
 
@@ -571,6 +631,7 @@ function renderPdfPage(container: HTMLElement, pageNumber: number, zoom: number)
 
 function renderDetails(): void {
   if (!documentDetails) {
+    renderNamingPanel(true);
     return;
   }
 
@@ -578,6 +639,7 @@ function renderDetails(): void {
   if (!activeDocument) {
     documentDetails.className = "details-empty";
     documentDetails.replaceChildren("Aucun document actif");
+    renderNamingPanel(true);
     return;
   }
 
@@ -591,6 +653,7 @@ function renderDetails(): void {
     createDetailRow("Statut", statusLabel(activeDocument.status)),
     createDetailRow("Dossier cible", state.targetPath ?? "Aucun dossier cible sélectionné")
   );
+  renderNamingPanel(true);
 }
 
 function createDetailRow(label: string, value: string): HTMLDivElement {
@@ -611,6 +674,119 @@ function createPlaceholder(message: string): HTMLDivElement {
   placeholder.className = "placeholder-card";
   placeholder.textContent = message;
   return placeholder;
+}
+
+async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> {
+  const requestId = ++namingRequestId;
+  state.naming = {
+    ...createIdleNamingState(),
+    isLoading: true
+  };
+  renderNamingPanel(true);
+
+  const draft = await window.docSorter.createInitialNamingDraft(documentItem.name);
+  if (requestId !== namingRequestId || state.activeDocumentPath !== documentItem.filePath) {
+    return;
+  }
+
+  state.naming = {
+    draft,
+    proposal: null,
+    isLoading: true
+  };
+  renderNamingPanel(true);
+  await updateNamingProposal(documentItem.extension, requestId);
+}
+
+function updateNamingDraftFromInputs(): void {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument) {
+    return;
+  }
+
+  state.naming.draft = {
+    documentDate: namingDateInput?.value ?? "",
+    subject: namingSubjectInput?.value ?? "",
+    documentType: namingTypeInput?.value ?? "",
+    keywords: namingKeywordsInput?.value ?? ""
+  };
+  state.naming.isLoading = true;
+  renderNamingPanel(false);
+  void updateNamingProposal(activeDocument.extension, ++namingRequestId);
+}
+
+async function updateNamingProposal(
+  originalExtension: SupportedDocumentExtension,
+  requestId: number
+): Promise<void> {
+  const proposal = await window.docSorter.buildNamingProposal(state.naming.draft, originalExtension);
+  if (requestId !== namingRequestId) {
+    return;
+  }
+
+  state.naming.proposal = proposal as ProposedFilename;
+  state.naming.isLoading = false;
+  renderNamingPanel(false);
+}
+
+function renderNamingPanel(syncInputs: boolean): void {
+  const activeDocument = getActiveDocument();
+
+  if (!namingPanel) {
+    return;
+  }
+
+  namingPanel.hidden = !activeDocument;
+  if (!activeDocument) {
+    return;
+  }
+
+  if (syncInputs) {
+    syncNamingInputs();
+  }
+
+  if (proposedFilename) {
+    proposedFilename.className = state.naming.proposal?.isValid ? "valid" : "invalid";
+    proposedFilename.replaceChildren(
+      state.naming.isLoading
+        ? "Calcul de la proposition..."
+        : state.naming.proposal?.proposedFilename || "Nom impossible à générer"
+    );
+    proposedFilename.title = state.naming.proposal?.proposedFilename ?? "";
+  }
+
+  if (namingMessages) {
+    const messages = state.naming.proposal?.messages ?? [
+      {
+        level: "warning",
+        code: "DATE_REQUIRED",
+        message: "Date documentaire à confirmer."
+      }
+    ];
+    namingMessages.replaceChildren(...messages.map(createNamingMessageItem));
+  }
+}
+
+function syncNamingInputs(): void {
+  if (namingDateInput) {
+    namingDateInput.value = state.naming.draft.documentDate;
+  }
+  if (namingSubjectInput) {
+    namingSubjectInput.value = state.naming.draft.subject;
+  }
+  if (namingTypeInput) {
+    namingTypeInput.value = state.naming.draft.documentType;
+  }
+  if (namingKeywordsInput) {
+    namingKeywordsInput.value = state.naming.draft.keywords;
+  }
+}
+
+function createNamingMessageItem(message: NamingMessage): HTMLLIElement {
+  const item = document.createElement("li");
+  item.className = message.level;
+  item.textContent = message.message;
+  return item;
 }
 
 function refreshQueueMessage(activeDocumentLost: boolean, successMessage: string): string {
@@ -675,6 +851,24 @@ function createIdlePreviewState(): PreviewState {
     pdfPageCount: 1,
     pdfFitZoom: 1
   };
+}
+
+function createIdleNamingState(): NamingState {
+  return {
+    draft: {
+      documentDate: "",
+      subject: "",
+      documentType: "",
+      keywords: ""
+    },
+    proposal: null,
+    isLoading: false
+  };
+}
+
+function resetNamingState(): void {
+  namingRequestId += 1;
+  state.naming = createIdleNamingState();
 }
 
 function clampPreviewZoom(zoom: number): number {

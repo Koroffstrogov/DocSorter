@@ -76,11 +76,46 @@
       <aside class="panel detail-panel" aria-label="Document actif">
         <div class="panel-header">
           <div>
-            <h2>Document actif</h2>
+            <h2>Document</h2>
             <small>Lecture seule</small>
           </div>
         </div>
-        <div id="document-details" class="details-empty">Aucun document actif</div>
+        <div class="detail-scroll">
+          <section class="detail-section" aria-label="Document actif">
+            <h3>Document actif</h3>
+            <div id="document-details" class="details-empty">Aucun document actif</div>
+          </section>
+
+          <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
+            <div class="section-heading">
+              <h3>Renommage proposé</h3>
+              <button id="reset-naming" type="button">Réinitialiser</button>
+            </div>
+            <form id="naming-form" class="naming-form">
+              <label>
+                Date documentaire
+                <input id="naming-date" name="documentDate" autocomplete="off" placeholder="AAAA-MM-JJ ou AAAA" />
+              </label>
+              <label>
+                Sujet
+                <input id="naming-subject" name="subject" autocomplete="off" />
+              </label>
+              <label>
+                Type
+                <input id="naming-type" name="documentType" autocomplete="off" placeholder="Facture, Releve, Avis" />
+              </label>
+              <label>
+                Mots-clés
+                <input id="naming-keywords" name="keywords" autocomplete="off" placeholder="Optionnel" />
+              </label>
+            </form>
+            <div class="naming-result" aria-live="polite">
+              <span>Nom proposé</span>
+              <strong id="proposed-filename">Nom impossible à générer</strong>
+              <ul id="naming-messages" class="naming-messages"></ul>
+            </div>
+          </section>
+        </div>
       </aside>
     </main>
 

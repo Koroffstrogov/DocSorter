@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 2.5B : source, cible, file d'attente réelle, prévisualisation locale PDF/image, rafraîchissement manuel de la source et gestion visuelle des fichiers indisponibles.
+Lot 3 : source, cible, file d'attente réelle, prévisualisation locale PDF/image et prévisualisation du renommage normalisé sans mutation disque.
 
 ## Commandes
 
@@ -31,9 +31,36 @@ npm run dev
 - prévisualisation locale des PDF via canvas ;
 - zoom borné entre 50 % et 300 % ;
 - navigation page précédente/suivante pour PDF multipages ;
-- rotation visuelle des images.
+- rotation visuelle des images ;
 - marquage visuel `Indisponible` si un fichier disparaît avant sa prévisualisation ;
-- conservation du dossier cible pendant les rafraîchissements.
+- conservation du dossier cible pendant les rafraîchissements ;
+- panneau `Renommage proposé` en prévisualisation uniquement ;
+- proposition de nom recalculée depuis les champs Date documentaire, Sujet, Type et Mots-clés ;
+- détection prudente d'une date dans le nom de fichier existant ;
+- validation visuelle des champs nécessaires avant futur classement.
+
+## Convention de nommage
+
+Format prévisualisé :
+
+```text
+AAAA-MM-JJ_Sujet_Type_MotsCles.ext
+```
+
+Une année seule est acceptée si la date documentaire complète n'est pas connue :
+
+```text
+AAAA_Sujet_Type_MotsCles.ext
+```
+
+Règles principales :
+
+- underscores entre les grands blocs ;
+- tirets dans les mots d'un même bloc ;
+- accents et caractères Windows interdits normalisés ;
+- extension conservée en minuscule ;
+- date documentaire et sujet requis pour générer un nom final ;
+- aucun fichier n'est renommé dans le Lot 3.
 
 ## Dépendances
 
@@ -41,12 +68,15 @@ npm run dev
 
 ## Ce qui ne fonctionne pas encore
 
-- pas de renommage ;
+- pas de renommage réel ;
 - pas de déplacement ;
 - pas de suppression ;
 - pas de configuration persistée ;
 - pas de cache ni historique ;
 - pas de watcher automatique du dossier source ;
+- pas de contrôle réel de collision dans le dossier cible ;
+- pas de validation ni déplacement ;
+- pas de tri par métadonnées ni recherche dans la file ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Validations manuelles
@@ -67,6 +97,11 @@ npm run dev
 - les boutons page précédente/suivante fonctionnent sur un PDF multipage ;
 - les contrôles zoom PDF fonctionnent ;
 - si un fichier est déplacé ou supprimé après le scan, une erreur propre s'affiche et le document peut être marqué `Indisponible` ;
+- les champs de renommage apparaissent quand un document est sélectionné ;
+- modifier date, sujet, type ou mots-clés met à jour le nom proposé ;
+- les accents et caractères interdits sont normalisés dans la proposition ;
+- date ou sujet manquant affiche un message de validation ;
+- changer de document réinitialise proprement la proposition ;
 - aucun fichier n'est modifié, renommé, déplacé ou supprimé.
 
 ## Principes

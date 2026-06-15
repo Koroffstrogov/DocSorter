@@ -33,7 +33,8 @@ body {
   background: var(--bg);
 }
 
-button {
+button,
+input {
   font: inherit;
 }
 
@@ -430,7 +431,6 @@ h2 {
 .details-list {
   display: grid;
   gap: 12px;
-  padding: 16px;
 }
 
 .details-list div {
@@ -450,4 +450,133 @@ h2 {
   font-size: 13px;
   font-weight: 640;
   line-height: 1.35;
+}
+
+.detail-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.detail-scroll {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.detail-section {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-section .details-empty {
+  margin: 0;
+}
+
+.detail-section h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-heading button {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.naming-panel[hidden] {
+  display: none;
+}
+
+.naming-form {
+  display: grid;
+  gap: 10px;
+}
+
+.naming-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.naming-form input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.naming-form input:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgba(39, 93, 83, 0.18);
+}
+
+.naming-result {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #cdd7e5;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f7faff;
+}
+
+.naming-result span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.naming-result strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.naming-result strong.valid {
+  color: var(--accent-strong);
+}
+
+.naming-result strong.invalid {
+  color: #8a3f00;
+}
+
+.naming-messages {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.naming-messages .error {
+  color: #9b1c1c;
+}
+
+.naming-messages .warning {
+  color: var(--warning);
+}
+
+.naming-messages .info {
+  color: var(--muted);
 }

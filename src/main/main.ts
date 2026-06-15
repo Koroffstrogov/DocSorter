@@ -2,6 +2,11 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 
 import { discoverDocuments, type Result } from "../documents/documentDiscovery";
+import {
+  buildProposedFilename,
+  createInitialNamingDraft,
+  isNamingDraft
+} from "../naming/namingDraft";
 import { getPreviewData } from "../preview/previewService";
 
 interface DirectorySelection {
@@ -35,6 +40,28 @@ function registerIpcHandlers(): void {
   ipcMain.handle("directory:selectSource", () => selectSourceDirectory());
   ipcMain.handle("directory:selectTarget", () => selectTargetDirectory());
   ipcMain.handle("documents:refreshSource", () => refreshSelectedSourceDocuments());
+  ipcMain.handle("naming:createInitialDraft", (_event, originalName: unknown) => {
+    if (typeof originalName !== "string") {
+      return createInitialNamingDraft("");
+    }
+
+    return createInitialNamingDraft(originalName);
+  });
+  ipcMain.handle("naming:buildProposal", (_event, draft: unknown, originalExtension: unknown) => {
+    if (!isNamingDraft(draft) || typeof originalExtension !== "string") {
+      return buildProposedFilename(
+        {
+          documentDate: "",
+          subject: "",
+          documentType: "",
+          keywords: ""
+        },
+        ""
+      );
+    }
+
+    return buildProposedFilename(draft, originalExtension);
+  });
 
   ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {
