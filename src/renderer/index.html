@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DocSorter Local</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">DocSorter Local</p>
+        <h1>Tri des documents</h1>
+      </div>
+      <div class="header-meta">
+        <span class="status-pill">Local</span>
+        <span id="app-version">v0.1.0</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="panel queue-panel" aria-label="Lot de travail">
+        <div class="panel-header">
+          <h2>Lot de travail</h2>
+          <button type="button" class="icon-button" title="Sélectionner un dossier" aria-label="Sélectionner un dossier">
+            +
+          </button>
+        </div>
+        <ol class="document-list">
+          <li class="document-item selected">
+            <span class="document-icon">PDF</span>
+            <span>
+              <strong>scan.pdf</strong>
+              <small>Exemple local</small>
+            </span>
+          </li>
+        </ol>
+      </aside>
+
+      <section class="preview-panel" aria-label="Aperçu document">
+        <div class="preview-toolbar">
+          <h2>Aperçu document</h2>
+          <span id="status-text">En attente</span>
+        </div>
+        <div class="document-preview">
+          <div class="paper">
+            <span>PDF</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel detail-panel" aria-label="Renommage">
+        <div class="panel-header">
+          <h2>Renommage</h2>
+        </div>
+        <form id="rename-form" class="rename-form">
+          <label>
+            Nom actuel
+            <input name="originalName" value="scan.pdf" autocomplete="off" />
+          </label>
+          <label>
+            Date
+            <input name="documentDate" type="date" value="2026-06-15" />
+          </label>
+          <label>
+            Catégorie
+            <input name="category" value="Administratif" autocomplete="off" />
+          </label>
+          <label>
+            Titre
+            <input name="title" value="Facture exemple" autocomplete="off" />
+          </label>
+          <button type="submit">Prévisualiser</button>
+        </form>
+        <div class="result-box" aria-live="polite">
+          <span>Nom proposé</span>
+          <strong id="proposed-name">Aucune proposition</strong>
+          <ul id="warnings" class="warnings"></ul>
+        </div>
+      </aside>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
