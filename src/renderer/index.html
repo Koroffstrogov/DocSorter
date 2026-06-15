@@ -12,9 +12,13 @@
   </head>
   <body>
     <header class="app-header">
-      <div>
+      <div class="title-block">
         <p class="eyebrow">DocSorter Local</p>
         <h1>Tri des documents</h1>
+      </div>
+      <div class="directory-controls" aria-label="Dossiers de travail">
+        <button id="select-source" type="button">Choisir source</button>
+        <button id="select-target" type="button">Choisir cible</button>
       </div>
       <div class="header-meta">
         <span class="status-pill">Local</span>
@@ -22,65 +26,47 @@
       </div>
     </header>
 
+    <section class="path-bar" aria-label="Chemins sélectionnés">
+      <div>
+        <span>Source</span>
+        <strong id="source-path">Aucun dossier source sélectionné</strong>
+      </div>
+      <div>
+        <span>Cible</span>
+        <strong id="target-path">Aucun dossier cible sélectionné</strong>
+      </div>
+    </section>
+
     <main class="workspace">
-      <aside class="panel queue-panel" aria-label="Lot de travail">
+      <aside class="panel queue-panel" aria-label="File d'attente">
         <div class="panel-header">
-          <h2>Lot de travail</h2>
-          <button type="button" class="icon-button" title="Sélectionner un dossier" aria-label="Sélectionner un dossier">
-            +
-          </button>
+          <div>
+            <h2>File d'attente</h2>
+            <small id="queue-count">0 document</small>
+          </div>
         </div>
-        <ol class="document-list">
-          <li class="document-item selected">
-            <span class="document-icon">PDF</span>
-            <span>
-              <strong>scan.pdf</strong>
-              <small>Exemple local</small>
-            </span>
-          </li>
-        </ol>
+        <div id="queue-state" class="empty-state">Aucun dossier source sélectionné</div>
+        <ol id="document-list" class="document-list"></ol>
       </aside>
 
       <section class="preview-panel" aria-label="Aperçu document">
         <div class="preview-toolbar">
-          <h2>Aperçu document</h2>
-          <span id="status-text">En attente</span>
+          <h2>Aperçu</h2>
+          <span id="status-text">Lecture seule</span>
         </div>
-        <div class="document-preview">
-          <div class="paper">
-            <span>PDF</span>
-          </div>
+        <div id="preview-content" class="document-preview">
+          <div class="placeholder-card">Sélectionnez un document</div>
         </div>
       </section>
 
-      <aside class="panel detail-panel" aria-label="Renommage">
+      <aside class="panel detail-panel" aria-label="Document actif">
         <div class="panel-header">
-          <h2>Renommage</h2>
+          <div>
+            <h2>Document actif</h2>
+            <small>Lecture seule</small>
+          </div>
         </div>
-        <form id="rename-form" class="rename-form">
-          <label>
-            Nom actuel
-            <input name="originalName" value="scan.pdf" autocomplete="off" />
-          </label>
-          <label>
-            Date
-            <input name="documentDate" type="date" value="2026-06-15" />
-          </label>
-          <label>
-            Catégorie
-            <input name="category" value="Administratif" autocomplete="off" />
-          </label>
-          <label>
-            Titre
-            <input name="title" value="Facture exemple" autocomplete="off" />
-          </label>
-          <button type="submit">Prévisualiser</button>
-        </form>
-        <div class="result-box" aria-live="polite">
-          <span>Nom proposé</span>
-          <strong id="proposed-name">Aucune proposition</strong>
-          <ul id="warnings" class="warnings"></ul>
-        </div>
+        <div id="document-details" class="details-empty">Aucun document actif</div>
       </aside>
     </main>
 

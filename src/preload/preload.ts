@@ -1,11 +1,19 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { RenameDraft, RenameDraftInput } from "../core/renameDraft";
+import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
+
+interface DirectorySelection {
+  path: string;
+}
 
 const api = {
   getVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
-  previewRename: (input: RenameDraftInput): Promise<RenameDraft> =>
-    ipcRenderer.invoke("rename:preview", input)
+  selectSourceDirectory: (): Promise<Result<DirectorySelection | null>> =>
+    ipcRenderer.invoke("directory:selectSource"),
+  selectTargetDirectory: (): Promise<Result<DirectorySelection | null>> =>
+    ipcRenderer.invoke("directory:selectTarget"),
+  listDocuments: (sourcePath: string): Promise<Result<DocumentDiscoveryResult>> =>
+    ipcRenderer.invoke("documents:list", sourcePath)
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

@@ -1,7 +1,11 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 
-import { buildRenameDraft, isRenameDraftInput } from "../core/renameDraft";
+import { discoverDocuments, type Result } from "../documents/documentDiscovery";
+
+interface DirectorySelection {
+  path: string;
+}
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -23,13 +27,39 @@ function createMainWindow(): void {
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getVersion", () => app.getVersion());
 
-  ipcMain.handle("rename:preview", (_event, input: unknown) => {
-    if (!isRenameDraftInput(input)) {
-      throw new Error("Invalid rename preview request.");
+  ipcMain.handle("directory:selectSource", () => selectDirectory("Choisir le dossier source"));
+  ipcMain.handle("directory:selectTarget", () => selectDirectory("Choisir le dossier cible"));
+
+  ipcMain.handle("documents:list", (_event, sourcePath: unknown) => {
+    if (typeof sourcePath !== "string") {
+      return discoverDocuments(undefined);
     }
 
-    return buildRenameDraft(input);
+    return discoverDocuments(sourcePath);
   });
+}
+
+async function selectDirectory(title: string): Promise<Result<DirectorySelection | null>> {
+  try {
+    const result = await dialog.showOpenDialog({
+      title,
+      properties: ["openDirectory"]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { ok: true, value: null };
+    }
+
+    return { ok: true, value: { path: result.filePaths[0] } };
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Impossible d'ouvrir le sélecteur de dossier."
+      }
+    };
+  }
 }
 
 registerIpcHandlers();
