@@ -580,3 +580,84 @@ h2 {
 .naming-messages .info {
   color: var(--muted);
 }
+
+.destination-check {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #d7e0ec;
+  padding-top: 10px;
+}
+
+.destination-check-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.destination-check-header strong {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.status-neutral {
+  color: var(--muted);
+}
+
+.status-valid {
+  color: var(--accent-strong);
+}
+
+.status-warning {
+  color: var(--warning);
+}
+
+.status-error {
+  color: #9b1c1c;
+}
+
+.destination-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.destination-details div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.destination-details dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.destination-details dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.destination-check button {
+  justify-self: start;
+  min-height: 30px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: var(--accent);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.destination-check button[hidden] {
+  display: none;
+}

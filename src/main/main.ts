@@ -7,6 +7,7 @@ import {
   createInitialNamingDraft,
   isNamingDraft
 } from "../naming/namingDraft";
+import { checkDestinationNameAvailability } from "../naming/destinationNameAvailability";
 import { getPreviewData } from "../preview/previewService";
 
 interface DirectorySelection {
@@ -62,6 +63,12 @@ function registerIpcHandlers(): void {
 
     return buildProposedFilename(draft, originalExtension);
   });
+  ipcMain.handle("naming:checkDestinationAvailability", (_event, proposedFilename: unknown) =>
+    checkDestinationNameAvailability(
+      selectedTargetPath,
+      typeof proposedFilename === "string" ? proposedFilename : ""
+    )
+  );
 
   ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {

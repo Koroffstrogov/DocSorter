@@ -113,6 +113,27 @@
               <span>Nom proposé</span>
               <strong id="proposed-filename">Nom impossible à générer</strong>
               <ul id="naming-messages" class="naming-messages"></ul>
+              <div class="destination-check" aria-label="Contrôle cible">
+                <div class="destination-check-header">
+                  <span>Contrôle cible</span>
+                  <strong id="destination-status" class="status-neutral">Contrôle cible non lancé</strong>
+                </div>
+                <dl class="destination-details">
+                  <div>
+                    <dt>Cible</dt>
+                    <dd id="destination-target">Aucun dossier cible sélectionné</dd>
+                  </div>
+                  <div>
+                    <dt>Chemin final</dt>
+                    <dd id="destination-final-path">Le nom final sera vérifié avant validation future</dd>
+                  </div>
+                  <div>
+                    <dt>Alternative</dt>
+                    <dd id="destination-alternative"></dd>
+                  </div>
+                </dl>
+                <button id="apply-destination-alternative" type="button" hidden>Appliquer le suffixe</button>
+              </div>
             </div>
           </section>
         </div>

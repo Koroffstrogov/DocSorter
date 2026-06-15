@@ -2,6 +2,14 @@ type SupportedDocumentExtension = ".pdf" | ".jpg" | ".jpeg" | ".png";
 type PreviewKind = "image" | "pdf";
 type PreviewStatus = "idle" | "loading" | "ready" | "error";
 type NamingMessageLevel = "error" | "warning" | "info";
+type DestinationCheckStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "collision"
+  | "target-not-selected"
+  | "invalid"
+  | "error";
 
 interface AppError {
   code:
@@ -59,7 +67,37 @@ interface ProposedFilename {
 interface NamingState {
   draft: NamingDraft;
   proposal: ProposedFilename | null;
+  overrideFilename: string | null;
   isLoading: boolean;
+}
+
+interface DestinationAvailabilityError {
+  code:
+    | "TARGET_NOT_SELECTED"
+    | "TARGET_NOT_FOUND"
+    | "TARGET_NOT_DIRECTORY"
+    | "TARGET_ACCESS_DENIED"
+    | "INVALID_FILENAME"
+    | "TOO_MANY_COLLISIONS"
+    | "UNKNOWN_ERROR";
+  message: string;
+}
+
+interface DestinationAvailability {
+  status: "available" | "collision";
+  targetPath: string;
+  proposedFilename: string;
+  finalFilename: string;
+  finalPath: string;
+  alternativeFilename: string | null;
+  message: string;
+}
+
+interface DestinationCheckState {
+  status: DestinationCheckStatus;
+  result: DestinationAvailability | null;
+  error: DestinationAvailabilityError | null;
+  checkedFilename: string;
 }
 
 interface PreviewState {
@@ -82,6 +120,7 @@ interface AppState {
   isLoading: boolean;
   preview: PreviewState;
   naming: NamingState;
+  destination: DestinationCheckState;
 }
 
 interface RefreshOptions {
@@ -101,12 +140,15 @@ const state: AppState = {
   queueMessage: "Aucun dossier source sélectionné",
   isLoading: false,
   preview: createIdlePreviewState(),
-  naming: createIdleNamingState()
+  naming: createIdleNamingState(),
+  destination: createIdleDestinationCheckState()
 };
 
 let previewRequestId = 0;
 let pdfRenderRequestId = 0;
 let namingRequestId = 0;
+let destinationRequestId = 0;
+let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
 const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-source");
@@ -137,6 +179,13 @@ const namingKeywordsInput = document.querySelector<HTMLInputElement>("#naming-ke
 const resetNamingButton = document.querySelector<HTMLButtonElement>("#reset-naming");
 const proposedFilename = document.querySelector<HTMLElement>("#proposed-filename");
 const namingMessages = document.querySelector<HTMLUListElement>("#naming-messages");
+const destinationStatus = document.querySelector<HTMLElement>("#destination-status");
+const destinationTarget = document.querySelector<HTMLElement>("#destination-target");
+const destinationFinalPath = document.querySelector<HTMLElement>("#destination-final-path");
+const destinationAlternative = document.querySelector<HTMLElement>("#destination-alternative");
+const applyDestinationAlternativeButton = document.querySelector<HTMLButtonElement>(
+  "#apply-destination-alternative"
+);
 
 void window.docSorter.getVersion().then((value) => {
   if (version) {
@@ -218,6 +267,18 @@ resetNamingButton?.addEventListener("click", () => {
   void initializeNamingDraft(activeDocument);
 });
 
+applyDestinationAlternativeButton?.addEventListener("click", () => {
+  const alternativeFilename = state.destination.result?.alternativeFilename;
+  if (!alternativeFilename) {
+    return;
+  }
+
+  state.naming.overrideFilename = alternativeFilename;
+  resetDestinationCheck();
+  renderNamingPanel(false);
+  scheduleDestinationCheck();
+});
+
 render();
 
 async function selectSourceDirectory(): Promise<void> {
@@ -267,6 +328,7 @@ async function selectTargetDirectory(): Promise<void> {
 
   state.targetPath = selection.value.path;
   render();
+  scheduleDestinationCheck();
 }
 
 async function refreshDocuments(options: RefreshOptions): Promise<void> {
@@ -306,6 +368,7 @@ async function refreshDocuments(options: RefreshOptions): Promise<void> {
     };
     state.queueMessage = options.successMessage;
     render();
+    scheduleDestinationCheck();
     void loadActivePreview(activeDocumentAfterRefresh);
     return;
   }
@@ -692,6 +755,7 @@ async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> 
   state.naming = {
     draft,
     proposal: null,
+    overrideFilename: null,
     isLoading: true
   };
   renderNamingPanel(true);
@@ -710,7 +774,9 @@ function updateNamingDraftFromInputs(): void {
     documentType: namingTypeInput?.value ?? "",
     keywords: namingKeywordsInput?.value ?? ""
   };
+  state.naming.overrideFilename = null;
   state.naming.isLoading = true;
+  resetDestinationCheck();
   renderNamingPanel(false);
   void updateNamingProposal(activeDocument.extension, ++namingRequestId);
 }
@@ -727,6 +793,7 @@ async function updateNamingProposal(
   state.naming.proposal = proposal as ProposedFilename;
   state.naming.isLoading = false;
   renderNamingPanel(false);
+  scheduleDestinationCheck();
 }
 
 function renderNamingPanel(syncInputs: boolean): void {
@@ -738,6 +805,7 @@ function renderNamingPanel(syncInputs: boolean): void {
 
   namingPanel.hidden = !activeDocument;
   if (!activeDocument) {
+    renderDestinationCheck();
     return;
   }
 
@@ -746,13 +814,14 @@ function renderNamingPanel(syncInputs: boolean): void {
   }
 
   if (proposedFilename) {
+    const effectiveFilename = getEffectiveProposedFilename();
     proposedFilename.className = state.naming.proposal?.isValid ? "valid" : "invalid";
     proposedFilename.replaceChildren(
       state.naming.isLoading
         ? "Calcul de la proposition..."
-        : state.naming.proposal?.proposedFilename || "Nom impossible à générer"
+        : effectiveFilename || "Nom impossible à générer"
     );
-    proposedFilename.title = state.naming.proposal?.proposedFilename ?? "";
+    proposedFilename.title = effectiveFilename;
   }
 
   if (namingMessages) {
@@ -765,6 +834,8 @@ function renderNamingPanel(syncInputs: boolean): void {
     ];
     namingMessages.replaceChildren(...messages.map(createNamingMessageItem));
   }
+
+  renderDestinationCheck();
 }
 
 function syncNamingInputs(): void {
@@ -787,6 +858,248 @@ function createNamingMessageItem(message: NamingMessage): HTMLLIElement {
   item.className = message.level;
   item.textContent = message.message;
   return item;
+}
+
+function scheduleDestinationCheck(): void {
+  clearDestinationCheckTimer();
+
+  const activeDocument = getActiveDocument();
+  const filename = getEffectiveProposedFilename();
+
+  if (!activeDocument) {
+    resetDestinationCheck();
+    renderDestinationCheck();
+    return;
+  }
+
+  if (state.naming.isLoading) {
+    state.destination = createIdleDestinationCheckState();
+    renderDestinationCheck();
+    return;
+  }
+
+  if (!state.naming.proposal?.isValid || !filename) {
+    state.destination = {
+      ...createIdleDestinationCheckState(),
+      status: "invalid",
+      checkedFilename: filename
+    };
+    renderDestinationCheck();
+    return;
+  }
+
+  if (!state.targetPath) {
+    state.destination = {
+      ...createIdleDestinationCheckState(),
+      status: "target-not-selected",
+      checkedFilename: filename,
+      error: {
+        code: "TARGET_NOT_SELECTED",
+        message: "Aucun dossier cible sélectionné pour contrôler le nom final."
+      }
+    };
+    renderDestinationCheck();
+    return;
+  }
+
+  const requestId = ++destinationRequestId;
+  state.destination = {
+    ...createIdleDestinationCheckState(),
+    status: "checking",
+    checkedFilename: filename
+  };
+  renderDestinationCheck();
+
+  destinationCheckTimer = window.setTimeout(() => {
+    void checkDestinationAvailability(filename, requestId);
+  }, 250);
+}
+
+async function checkDestinationAvailability(filename: string, requestId: number): Promise<void> {
+  const result = await window.docSorter.checkDestinationAvailability(filename);
+
+  if (requestId !== destinationRequestId || filename !== getEffectiveProposedFilename()) {
+    return;
+  }
+
+  if (result.ok) {
+    state.destination = {
+      status: result.value.status,
+      result: result.value as DestinationAvailability,
+      error: null,
+      checkedFilename: filename
+    };
+    renderDestinationCheck();
+    return;
+  }
+
+  state.destination = {
+    status: mapDestinationErrorStatus(result.error.code),
+    result: null,
+    error: result.error as DestinationAvailabilityError,
+    checkedFilename: filename
+  };
+  renderDestinationCheck();
+}
+
+function renderDestinationCheck(): void {
+  if (!destinationStatus || !destinationTarget || !destinationFinalPath || !destinationAlternative) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  const targetLabel = state.targetPath ?? "Aucun dossier cible sélectionné";
+  destinationTarget.replaceChildren(targetLabel);
+  destinationTarget.title = targetLabel;
+
+  if (!activeDocument) {
+    destinationStatus.className = "status-neutral";
+    destinationStatus.replaceChildren("Aucun document actif");
+    destinationFinalPath.replaceChildren("Aucun contrôle cible en cours");
+    destinationFinalPath.title = "";
+    destinationAlternative.replaceChildren("");
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = true;
+    }
+    return;
+  }
+
+  if (state.naming.isLoading) {
+    destinationStatus.className = "status-neutral";
+    destinationStatus.replaceChildren("En attente de la proposition");
+    destinationFinalPath.replaceChildren("Le nom final sera contrôlé après calcul");
+    destinationFinalPath.title = "";
+    destinationAlternative.replaceChildren("");
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = true;
+    }
+    return;
+  }
+
+  if (state.destination.status === "invalid") {
+    destinationStatus.className = "status-warning";
+    destinationStatus.replaceChildren("Nom proposé invalide");
+    destinationFinalPath.replaceChildren("Corriger la proposition avant contrôle cible");
+    destinationFinalPath.title = "";
+    destinationAlternative.replaceChildren("");
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = true;
+    }
+    return;
+  }
+
+  if (state.destination.status === "target-not-selected") {
+    destinationStatus.className = "status-warning";
+    destinationStatus.replaceChildren("Aucune cible sélectionnée");
+    destinationFinalPath.replaceChildren("Choisir une cible pour vérifier la disponibilité");
+    destinationFinalPath.title = "";
+    destinationAlternative.replaceChildren("");
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = true;
+    }
+    return;
+  }
+
+  if (state.destination.status === "checking") {
+    destinationStatus.className = "status-neutral";
+    destinationStatus.replaceChildren("Contrôle en cours");
+    destinationFinalPath.replaceChildren(state.destination.checkedFilename);
+    destinationFinalPath.title = state.destination.checkedFilename;
+    destinationAlternative.replaceChildren("");
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = true;
+    }
+    return;
+  }
+
+  if (state.destination.result) {
+    const isCollision = state.destination.status === "collision";
+    destinationStatus.className = isCollision ? "status-warning" : "status-valid";
+    destinationStatus.replaceChildren(isCollision ? "Nom déjà utilisé" : "Nom disponible");
+    destinationFinalPath.replaceChildren(state.destination.result.finalPath);
+    destinationFinalPath.title = state.destination.result.finalPath;
+    destinationAlternative.replaceChildren(
+      state.destination.result.alternativeFilename
+        ? `Alternative proposée : ${state.destination.result.alternativeFilename}`
+        : "Aucune alternative nécessaire"
+    );
+
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = !state.destination.result.alternativeFilename;
+    }
+    return;
+  }
+
+  if (state.destination.error) {
+    destinationStatus.className = "status-error";
+    destinationStatus.replaceChildren(destinationErrorLabel(state.destination.error));
+    destinationFinalPath.replaceChildren(state.destination.error.message);
+    destinationFinalPath.title = state.destination.error.message;
+    destinationAlternative.replaceChildren("");
+    if (applyDestinationAlternativeButton) {
+      applyDestinationAlternativeButton.hidden = true;
+    }
+    return;
+  }
+
+  destinationStatus.className = "status-neutral";
+  destinationStatus.replaceChildren("Contrôle cible non lancé");
+  destinationFinalPath.replaceChildren("Le nom final sera vérifié avant validation future");
+  destinationFinalPath.title = "";
+  destinationAlternative.replaceChildren("");
+  if (applyDestinationAlternativeButton) {
+    applyDestinationAlternativeButton.hidden = true;
+  }
+}
+
+function getEffectiveProposedFilename(): string {
+  return state.naming.overrideFilename ?? state.naming.proposal?.proposedFilename ?? "";
+}
+
+function mapDestinationErrorStatus(code: DestinationAvailabilityError["code"]): DestinationCheckStatus {
+  if (code === "TARGET_NOT_SELECTED") {
+    return "target-not-selected";
+  }
+
+  if (code === "INVALID_FILENAME") {
+    return "invalid";
+  }
+
+  return "error";
+}
+
+function destinationErrorLabel(error: DestinationAvailabilityError): string {
+  switch (error.code) {
+    case "TARGET_NOT_FOUND":
+      return "Cible introuvable";
+    case "TARGET_NOT_DIRECTORY":
+      return "Cible invalide";
+    case "TARGET_ACCESS_DENIED":
+      return "Accès cible refusé";
+    case "TOO_MANY_COLLISIONS":
+      return "Trop de collisions";
+    case "UNKNOWN_ERROR":
+      return "Contrôle cible impossible";
+    case "TARGET_NOT_SELECTED":
+      return "Aucune cible sélectionnée";
+    case "INVALID_FILENAME":
+      return "Nom proposé invalide";
+  }
+}
+
+function resetDestinationCheck(): void {
+  destinationRequestId += 1;
+  clearDestinationCheckTimer();
+  state.destination = createIdleDestinationCheckState();
+}
+
+function clearDestinationCheckTimer(): void {
+  if (!destinationCheckTimer) {
+    return;
+  }
+
+  window.clearTimeout(destinationCheckTimer);
+  destinationCheckTimer = null;
 }
 
 function refreshQueueMessage(activeDocumentLost: boolean, successMessage: string): string {
@@ -862,13 +1175,24 @@ function createIdleNamingState(): NamingState {
       keywords: ""
     },
     proposal: null,
+    overrideFilename: null,
     isLoading: false
+  };
+}
+
+function createIdleDestinationCheckState(): DestinationCheckState {
+  return {
+    status: "idle",
+    result: null,
+    error: null,
+    checkedFilename: ""
   };
 }
 
 function resetNamingState(): void {
   namingRequestId += 1;
   state.naming = createIdleNamingState();
+  resetDestinationCheck();
 }
 
 function clampPreviewZoom(zoom: number): number {

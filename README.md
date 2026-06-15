@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 3 : source, cible, file d'attente réelle, prévisualisation locale PDF/image et prévisualisation du renommage normalisé sans mutation disque.
+Lot 3.5 : source, cible, file d'attente réelle, prévisualisation locale PDF/image, prévisualisation du renommage normalisé et contrôle de collision cible en lecture seule.
 
 ## Commandes
 
@@ -38,6 +38,9 @@ npm run dev
 - proposition de nom recalculée depuis les champs Date documentaire, Sujet, Type et Mots-clés ;
 - détection prudente d'une date dans le nom de fichier existant ;
 - validation visuelle des champs nécessaires avant futur classement.
+- contrôle en lecture seule de la disponibilité du nom proposé dans le dossier cible sélectionné ;
+- proposition d'un suffixe `_2` à `_99` si le nom existe déjà dans la cible ;
+- application visuelle du suffixe proposé sans renommage ni déplacement.
 
 ## Convention de nommage
 
@@ -74,7 +77,6 @@ Règles principales :
 - pas de configuration persistée ;
 - pas de cache ni historique ;
 - pas de watcher automatique du dossier source ;
-- pas de contrôle réel de collision dans le dossier cible ;
 - pas de validation ni déplacement ;
 - pas de tri par métadonnées ni recherche dans la file ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
@@ -101,6 +103,10 @@ Règles principales :
 - modifier date, sujet, type ou mots-clés met à jour le nom proposé ;
 - les accents et caractères interdits sont normalisés dans la proposition ;
 - date ou sujet manquant affiche un message de validation ;
+- sans cible sélectionnée, le contrôle cible indique qu'aucune cible n'est disponible ;
+- avec une cible sélectionnée, un nom absent indique `Nom disponible` ;
+- si le nom proposé existe déjà dans la cible, une alternative suffixée est affichée ;
+- le bouton `Appliquer le suffixe` modifie seulement la proposition affichée ;
 - changer de document réinitialise proprement la proposition ;
 - aucun fichier n'est modifié, renommé, déplacé ou supprimé.
 

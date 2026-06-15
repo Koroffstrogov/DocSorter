@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
+import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type { PreviewData } from "../preview/previewTypes";
 
@@ -23,7 +24,11 @@ const api = {
   buildNamingProposal: (
     draft: NamingDraft,
     originalExtension: string
-  ): Promise<ProposedFilename> => ipcRenderer.invoke("naming:buildProposal", draft, originalExtension)
+  ): Promise<ProposedFilename> => ipcRenderer.invoke("naming:buildProposal", draft, originalExtension),
+  checkDestinationAvailability: (
+    proposedFilename: string
+  ): Promise<DestinationAvailabilityResult> =>
+    ipcRenderer.invoke("naming:checkDestinationAvailability", proposedFilename)
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);
