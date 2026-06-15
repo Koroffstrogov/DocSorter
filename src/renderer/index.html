@@ -47,6 +47,37 @@
           </div>
           <button id="analyze-duplicates" type="button" disabled>Analyser les doublons exacts</button>
         </div>
+        <div class="queue-tools" aria-label="Recherche et tri de la file">
+          <div class="queue-search">
+            <input id="queue-search" type="search" placeholder="Rechercher dans la file" autocomplete="off" />
+            <button id="clear-queue-search" type="button" disabled title="Vider la recherche">Effacer</button>
+          </div>
+          <div class="queue-filters" aria-label="Filtres de file">
+            <button type="button" data-queue-filter="all" aria-pressed="true">Tous</button>
+            <button type="button" data-queue-filter="pdf" aria-pressed="false">PDF</button>
+            <button type="button" data-queue-filter="images" aria-pressed="false">Images</button>
+            <button type="button" data-queue-filter="duplicates" aria-pressed="false">Doublons</button>
+            <button type="button" data-queue-filter="missing" aria-pressed="false">Indisponibles</button>
+            <button type="button" data-queue-filter="pending" aria-pressed="false">À traiter</button>
+          </div>
+          <div class="queue-sort">
+            <label>
+              <span>Trier</span>
+              <select id="queue-sort">
+                <option value="name">Nom</option>
+                <option value="modifiedAt">Date</option>
+                <option value="sizeBytes">Taille</option>
+                <option value="extension">Type</option>
+                <option value="status">Statut</option>
+              </select>
+            </label>
+            <button id="queue-sort-direction" type="button" title="Changer le sens du tri">A → Z</button>
+            <div class="queue-navigation" aria-label="Navigation file affichée">
+              <button id="previous-document" type="button" title="Document précédent">Précédent</button>
+              <button id="next-document" type="button" title="Document suivant">Suivant</button>
+            </div>
+          </div>
+        </div>
         <div id="queue-state" class="empty-state">Aucun dossier source sélectionné</div>
         <ol id="document-list" class="document-list"></ol>
       </aside>
@@ -169,6 +200,7 @@
 
     <script src="./imagePreview.js"></script>
     <script src="./pdfPreview.js"></script>
+    <script src="../documents/documentQueueView.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>

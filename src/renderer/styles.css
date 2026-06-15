@@ -177,7 +177,7 @@ h2 {
 
 .queue-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
 }
 
 .panel-header,
@@ -211,7 +211,7 @@ h2 {
 
 .document-list {
   display: grid;
-  grid-row: 3;
+  grid-row: 4;
   align-content: start;
   gap: 8px;
   margin: 0;
@@ -345,7 +345,98 @@ h2 {
 }
 
 .queue-panel .empty-state {
-  grid-row: 2;
+  grid-row: 3;
+}
+
+.queue-tools {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #fbfcfb;
+}
+
+.queue-search,
+.queue-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.queue-search input {
+  min-width: 0;
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.queue-search input:focus,
+.queue-sort select:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgba(39, 93, 83, 0.18);
+}
+
+.queue-tools button,
+.queue-sort select {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.queue-tools button {
+  padding: 0 9px;
+}
+
+.queue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.queue-filters button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.queue-sort {
+  flex-wrap: wrap;
+}
+
+.queue-sort label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.queue-sort select {
+  padding: 0 8px;
+}
+
+.queue-navigation {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.queue-tools button:disabled,
+.queue-sort select:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 .preview-panel {
@@ -563,6 +654,27 @@ h2 {
 .duplicate-match small {
   color: var(--muted);
   font-size: 11px;
+}
+
+.duplicate-source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.duplicate-source-links button {
+  max-width: 100%;
+  min-height: 28px;
+  overflow: hidden;
+  border: 1px solid #d7bc5d;
+  border-radius: 6px;
+  padding: 0 8px;
+  color: #765d13;
+  background: #fffaf0;
+  font-size: 11px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .duplicate-actions {

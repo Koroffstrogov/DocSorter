@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 5A : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante de la dernière action et détection explicite des doublons exacts par hash SHA-256.
+Lot 5B : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, détection explicite des doublons exacts et exploitation locale de la file par recherche, filtres, tri et navigation.
 
 ## Commandes
 
@@ -60,7 +60,12 @@ npm run dev
 - marquage visuel `Doublon exact` dans la file d'attente ;
 - panneau de détail des doublons exacts pour le document actif ;
 - avertissement avant classement réel si le document actif est un doublon exact ;
-- boutons de session `Ignorer pour l'instant` et `Conserver quand même`, sans suppression ni remplacement.
+- boutons de session `Ignorer pour l'instant` et `Conserver quand même`, sans suppression ni remplacement ;
+- recherche locale dans la file courante par nom, extension, statut, taille lisible et chemin ;
+- filtres visuels `Tous`, `PDF`, `Images`, `Doublons`, `Indisponibles` et `À traiter` ;
+- tri stable de la file affichée par nom, date, taille, type ou statut ;
+- navigation précédent/suivant dans la file actuellement filtrée et triée ;
+- sélection rapide d'un autre fichier doublon présent dans la file source depuis le panneau `Doublons exacts`.
 
 ## Convention de nommage
 
@@ -106,6 +111,12 @@ L'analyse des doublons est volontairement explicite : elle ne se lance pas autom
 
 Les entrées d'historique anciennes ou non fiables sont ignorées. L'application ne supprime rien, ne remplace rien et ne fusionne aucun fichier.
 
+## File d'attente
+
+La recherche et les filtres s'appliquent uniquement aux documents déjà présents dans la file courante. Ils ne relancent pas de scan, ne lisent pas le contenu des documents, ne parcourent pas les fichiers classés et ne consultent pas le journal complet.
+
+Le compteur de file affiche le nombre de documents visibles sur le total scanné. Si le document actif est masqué par la recherche ou un filtre, il reste sélectionné dans l'état réel et l'interface l'indique sobrement.
+
 ## Dépendances
 
 - `pdfjs-dist` : utilisé pour rendre localement les PDF dans un canvas. Cette dépendance est limitée au Lot 2 et ne fait pas d'OCR, d'extraction texte, d'upload ou d'analyse distante.
@@ -121,12 +132,13 @@ Les entrées d'historique anciennes ou non fiables sont ignorées. L'application
 - pas de fallback `copy + delete` pour les déplacements entre volumes ;
 - pas de suppression, remplacement ou fusion de doublons ;
 - pas de doublons probables ou similaires ;
-- pas de tri par métadonnées ni recherche dans la file ;
+- pas de recherche globale dans les documents classés ;
+- pas de recherche plein texte dans les PDF ou images ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
-Tester le Lot 5A d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Tester le Lot 5B d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
 Pour le classement réel et l'annulation, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
 ## Passage futur recommandé
@@ -134,7 +146,7 @@ Pour le classement réel et l'annulation, tester aussi la fermeture puis relance
 Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
-- filtres ou recherche dans la file d'attente ;
+- raccourcis clavier de navigation si l'usage le justifie ;
 - aide au choix de dossier cible, sans OCR ni upload.
 
 ## Validations manuelles
@@ -183,6 +195,15 @@ Un prochain lot pourra ajouter :
 - `Conserver quand même` masque aussi l'alerte du document actif pour la session, sans action disque ;
 - préparer puis valider un classement sur un doublon affiche un avertissement, mais ne supprime ni ne remplace aucun fichier ;
 - supprimer ou déplacer un fichier de la source avant l'analyse marque le document comme indisponible ;
+- saisir une partie de nom dans la recherche filtre immédiatement la file courante ;
+- la recherche ignore la casse et les accents simples ;
+- vider la recherche restaure la file affichée ;
+- les filtres `PDF`, `Images`, `Doublons`, `Indisponibles` et `À traiter` se combinent avec la recherche ;
+- le compteur visible/total reste cohérent après recherche, filtre et tri ;
+- le tri par nom, date, taille, type et statut ne modifie pas la vraie file scannée ;
+- les boutons `Précédent` et `Suivant` suivent la liste actuellement filtrée et triée ;
+- si le document actif est masqué par un filtre, un message l'indique sans le supprimer de l'état réel ;
+- depuis le panneau `Doublons exacts`, cliquer un doublon présent dans la source sélectionne ce document ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

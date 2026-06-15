@@ -242,12 +242,20 @@ interface PreviewState {
   pdfFitZoom: number;
 }
 
+interface QueueUiState {
+  query: string;
+  filter: QueueViewFilter;
+  sortKey: QueueViewSortKey;
+  sortDirection: QueueViewSortDirection;
+}
+
 interface AppState {
   sourcePath: string | null;
   targetPath: string | null;
   documents: DocumentItem[];
   activeDocumentPath: string | null;
   queueMessage: string;
+  queueView: QueueUiState;
   isLoading: boolean;
   preview: PreviewState;
   naming: NamingState;
@@ -274,6 +282,7 @@ const state: AppState = {
   documents: [],
   activeDocumentPath: null,
   queueMessage: "Aucun dossier source sélectionné",
+  queueView: createIdleQueueViewState(),
   isLoading: false,
   preview: createIdlePreviewState(),
   naming: createIdleNamingState(),
@@ -302,6 +311,15 @@ const targetPath = document.querySelector<HTMLElement>("#target-path");
 const queueCount = document.querySelector<HTMLElement>("#queue-count");
 const queueState = document.querySelector<HTMLElement>("#queue-state");
 const documentList = document.querySelector<HTMLOListElement>("#document-list");
+const queueSearchInput = document.querySelector<HTMLInputElement>("#queue-search");
+const clearQueueSearchButton = document.querySelector<HTMLButtonElement>("#clear-queue-search");
+const queueFilterButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-queue-filter]")
+);
+const queueSortSelect = document.querySelector<HTMLSelectElement>("#queue-sort");
+const queueSortDirectionButton = document.querySelector<HTMLButtonElement>("#queue-sort-direction");
+const previousDocumentButton = document.querySelector<HTMLButtonElement>("#previous-document");
+const nextDocumentButton = document.querySelector<HTMLButtonElement>("#next-document");
 const previewContent = document.querySelector<HTMLElement>("#preview-content");
 const previewControls = document.querySelector<HTMLElement>("#preview-controls");
 const pdfPageControls = document.querySelector<HTMLElement>("#pdf-page-controls");
@@ -367,6 +385,51 @@ selectTargetButton?.addEventListener("click", () => {
 
 analyzeDuplicatesButton?.addEventListener("click", () => {
   void analyzeExactDuplicates();
+});
+
+queueSearchInput?.addEventListener("input", () => {
+  state.queueView.query = queueSearchInput.value;
+  renderQueue();
+});
+
+clearQueueSearchButton?.addEventListener("click", () => {
+  state.queueView.query = "";
+  renderQueue();
+});
+
+queueFilterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const filter = button.dataset.queueFilter;
+    if (!isQueueFilter(filter)) {
+      return;
+    }
+
+    state.queueView.filter = filter;
+    renderQueue();
+  });
+});
+
+queueSortSelect?.addEventListener("change", () => {
+  const sortKey = queueSortSelect.value;
+  if (!isQueueSortKey(sortKey)) {
+    return;
+  }
+
+  state.queueView.sortKey = sortKey;
+  renderQueue();
+});
+
+queueSortDirectionButton?.addEventListener("click", () => {
+  state.queueView.sortDirection = state.queueView.sortDirection === "asc" ? "desc" : "asc";
+  renderQueue();
+});
+
+previousDocumentButton?.addEventListener("click", () => {
+  navigateVisibleQueue("previous");
+});
+
+nextDocumentButton?.addEventListener("click", () => {
+  navigateVisibleQueue("next");
 });
 
 previousPageButton?.addEventListener("click", () => {
@@ -486,6 +549,7 @@ async function selectSourceDirectory(): Promise<void> {
   state.sourcePath = selection.value.path;
   state.documents = [];
   state.activeDocumentPath = null;
+  state.queueView = createIdleQueueViewState();
   state.preview = createIdlePreviewState();
   resetNamingState();
   resetDuplicateAnalysisState();
@@ -751,9 +815,14 @@ function renderPaths(): void {
 }
 
 function renderQueue(): void {
-  const documentCount = state.documents.length;
-  queueCount?.replaceChildren(`${documentCount} document${documentCount > 1 ? "s" : ""}`);
-  documentList?.replaceChildren(...state.documents.map(createDocumentListItem));
+  const visibleQueue = getVisibleQueue();
+  queueCount?.replaceChildren(
+    `${visibleQueue.visibleCount} / ${visibleQueue.totalCount} document${
+      visibleQueue.totalCount > 1 ? "s" : ""
+    } affiché${visibleQueue.visibleCount > 1 ? "s" : ""}`
+  );
+  documentList?.replaceChildren(...visibleQueue.documents.map(createDocumentListItem));
+  renderQueueTools(visibleQueue);
 
   if (!queueState) {
     return;
@@ -765,8 +834,19 @@ function renderQueue(): void {
     return;
   }
 
-  queueState.hidden = state.queueMessage.length === 0;
-  queueState.replaceChildren(state.queueMessage);
+  const messages: string[] = [];
+  if (state.queueMessage) {
+    messages.push(state.queueMessage);
+  }
+
+  if (state.documents.length > 0 && visibleQueue.visibleCount === 0) {
+    messages.push("Aucun document ne correspond aux filtres.");
+  } else if (state.activeDocumentPath && !visibleQueue.activeDocumentVisible) {
+    messages.push("Le document actif est masqué par la recherche ou le filtre.");
+  }
+
+  queueState.hidden = messages.length === 0;
+  queueState.replaceChildren(messages.join(" "));
 }
 
 function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
@@ -810,6 +890,138 @@ function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
 
   listItem.append(button);
   return listItem;
+}
+
+function renderQueueTools(visibleQueue: QueueViewResult<DocumentItem>): void {
+  const toolsDisabled = state.documents.length === 0 || state.isLoading;
+
+  if (queueSearchInput) {
+    queueSearchInput.disabled = toolsDisabled;
+    queueSearchInput.value = state.queueView.query;
+  }
+
+  if (clearQueueSearchButton) {
+    clearQueueSearchButton.disabled = toolsDisabled || state.queueView.query.length === 0;
+  }
+
+  queueFilterButtons.forEach((button) => {
+    const filter = button.dataset.queueFilter;
+    const isActive = filter === state.queueView.filter;
+    button.disabled = toolsDisabled;
+    button.ariaPressed = String(isActive);
+  });
+
+  if (queueSortSelect) {
+    queueSortSelect.disabled = toolsDisabled;
+    queueSortSelect.value = state.queueView.sortKey;
+  }
+
+  if (queueSortDirectionButton) {
+    queueSortDirectionButton.disabled = toolsDisabled;
+    queueSortDirectionButton.replaceChildren(queueSortDirectionLabel());
+    queueSortDirectionButton.title =
+      state.queueView.sortDirection === "asc" ? "Tri ascendant" : "Tri descendant";
+  }
+
+  const previousPath = DocSorterQueueView.findAdjacentVisibleDocumentPath(
+    visibleQueue.documents,
+    state.activeDocumentPath,
+    "previous"
+  );
+  const nextPath = DocSorterQueueView.findAdjacentVisibleDocumentPath(
+    visibleQueue.documents,
+    state.activeDocumentPath,
+    "next"
+  );
+
+  if (previousDocumentButton) {
+    previousDocumentButton.disabled = toolsDisabled || !previousPath;
+  }
+  if (nextDocumentButton) {
+    nextDocumentButton.disabled = toolsDisabled || !nextPath;
+  }
+}
+
+function getVisibleQueue(): QueueViewResult<DocumentItem> {
+  return DocSorterQueueView.buildVisibleQueue(state.documents, {
+    query: state.queueView.query,
+    filter: state.queueView.filter,
+    sortKey: state.queueView.sortKey,
+    sortDirection: state.queueView.sortDirection,
+    duplicateFilePaths: getDuplicateDocumentPathList(),
+    activeDocumentPath: state.activeDocumentPath
+  });
+}
+
+function getDuplicateDocumentPathList(): string[] {
+  if (state.duplicates.status !== "ready") {
+    return [];
+  }
+
+  const ignoredFilePaths = new Set(state.duplicates.ignoredFilePaths);
+  const duplicateFilePaths = new Set<string>();
+
+  for (const match of state.duplicates.matches) {
+    if (match.type === "source-queue") {
+      match.files.forEach((file) => duplicateFilePaths.add(file.filePath));
+    } else {
+      duplicateFilePaths.add(match.sourceFile.filePath);
+    }
+  }
+
+  return Array.from(duplicateFilePaths).filter((filePath) => !ignoredFilePaths.has(filePath));
+}
+
+function navigateVisibleQueue(direction: QueueViewNavigationDirection): void {
+  const visibleQueue = getVisibleQueue();
+  const targetPath = DocSorterQueueView.findAdjacentVisibleDocumentPath(
+    visibleQueue.documents,
+    state.activeDocumentPath,
+    direction
+  );
+  if (!targetPath) {
+    return;
+  }
+
+  selectDocumentByPath(targetPath);
+}
+
+function selectDocumentByPath(filePath: string): void {
+  const documentItem = state.documents.find((candidate) => candidate.filePath === filePath);
+  if (!documentItem) {
+    return;
+  }
+
+  selectDocument(documentItem);
+}
+
+function queueSortDirectionLabel(): string {
+  if (state.queueView.sortKey === "name") {
+    return state.queueView.sortDirection === "asc" ? "A → Z" : "Z → A";
+  }
+
+  return state.queueView.sortDirection === "asc" ? "Asc" : "Desc";
+}
+
+function isQueueFilter(value: string | undefined): value is QueueViewFilter {
+  return (
+    value === "all" ||
+    value === "pdf" ||
+    value === "images" ||
+    value === "duplicates" ||
+    value === "missing" ||
+    value === "pending"
+  );
+}
+
+function isQueueSortKey(value: string): value is QueueViewSortKey {
+  return (
+    value === "name" ||
+    value === "modifiedAt" ||
+    value === "sizeBytes" ||
+    value === "extension" ||
+    value === "status"
+  );
 }
 
 function renderPreview(): void {
@@ -1087,7 +1299,12 @@ function createDuplicateMatchItem(match: ExactDuplicateMatch, activeFilePath: st
     title.textContent = "Doublon dans la file source";
     description.textContent = `Aussi présent : ${formatDuplicateNames(otherFiles)}`;
     item.title = otherFiles.map((file) => file.filePath).join("\n");
-    item.append(title, description, hash);
+    item.append(title, description);
+    const sourceLinks = createDuplicateSourceLinks(otherFiles);
+    if (sourceLinks) {
+      item.append(sourceLinks);
+    }
+    item.append(hash);
     return item;
   }
 
@@ -1096,6 +1313,31 @@ function createDuplicateMatchItem(match: ExactDuplicateMatch, activeFilePath: st
   item.title = match.historyFile.filePath;
   item.append(title, description, hash);
   return item;
+}
+
+function createDuplicateSourceLinks(files: DuplicateFileReference[]): HTMLDivElement | null {
+  const availableFiles = files.filter((file) =>
+    state.documents.some((documentItem) => documentItem.filePath === file.filePath)
+  );
+  if (availableFiles.length === 0) {
+    return null;
+  }
+
+  const links = document.createElement("div");
+  links.className = "duplicate-source-links";
+
+  availableFiles.forEach((file) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = file.name;
+    button.title = file.filePath;
+    button.addEventListener("click", () => {
+      selectDocumentByPath(file.filePath);
+    });
+    links.append(button);
+  });
+
+  return links;
 }
 
 function getVisibleDuplicateMatchesForDocument(filePath: string): ExactDuplicateMatch[] {
@@ -2079,6 +2321,15 @@ function clearPreviewResources(): void {
   pdfRenderRequestId += 1;
   window.docSorterImagePreview?.clear();
   window.docSorterPdfPreview?.clear();
+}
+
+function createIdleQueueViewState(): QueueUiState {
+  return {
+    query: "",
+    filter: "all",
+    sortKey: "name",
+    sortDirection: "asc"
+  };
 }
 
 function createIdlePreviewState(): PreviewState {
