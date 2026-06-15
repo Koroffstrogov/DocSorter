@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 3.5 : source, cible, file d'attente réelle, prévisualisation locale PDF/image, prévisualisation du renommage normalisé et contrôle de collision cible en lecture seule.
+Lot 4A : source, cible, file d'attente réelle, prévisualisation locale PDF/image, prévisualisation du renommage normalisé, contrôle de collision cible et simulation de classement sans mutation disque.
 
 ## Commandes
 
@@ -37,10 +37,14 @@ npm run dev
 - panneau `Renommage proposé` en prévisualisation uniquement ;
 - proposition de nom recalculée depuis les champs Date documentaire, Sujet, Type et Mots-clés ;
 - détection prudente d'une date dans le nom de fichier existant ;
-- validation visuelle des champs nécessaires avant futur classement.
+- validation visuelle des champs nécessaires avant futur classement ;
 - contrôle en lecture seule de la disponibilité du nom proposé dans le dossier cible sélectionné ;
 - proposition d'un suffixe `_2` à `_99` si le nom existe déjà dans la cible ;
-- application visuelle du suffixe proposé sans renommage ni déplacement.
+- application visuelle du suffixe proposé sans renommage ni déplacement ;
+- bouton `Vérifier avant classement` pour préparer un plan de classement simulé ;
+- re-check au clic du document source, de la file scannée, de la cible, du nom proposé et de la collision ;
+- récapitulatif de simulation affichant source, cible, nom proposé, chemin final prévu et contrôles OK/bloquants ;
+- message explicite `Simulation uniquement — aucun fichier n'a été modifié`.
 
 ## Convention de nommage
 
@@ -63,7 +67,7 @@ Règles principales :
 - accents et caractères Windows interdits normalisés ;
 - extension conservée en minuscule ;
 - date documentaire et sujet requis pour générer un nom final ;
-- aucun fichier n'est renommé dans le Lot 3.
+- aucun fichier n'est renommé dans le Lot 4A.
 
 ## Dépendances
 
@@ -77,9 +81,20 @@ Règles principales :
 - pas de configuration persistée ;
 - pas de cache ni historique ;
 - pas de watcher automatique du dossier source ;
-- pas de validation ni déplacement ;
+- pas de classement réel ;
+- pas de journal d'action ;
+- pas d'annulation de dernière action ;
 - pas de tri par métadonnées ni recherche dans la file ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
+
+## Passage prévu au Lot 4B
+
+Le Lot 4B devra ajouter, avec confirmation explicite :
+
+- journal d'action local et sobre ;
+- renommage puis déplacement réels ;
+- annulation de la dernière action si elle est encore possible ;
+- re-check source/cible/collision juste avant toute mutation.
 
 ## Validations manuelles
 
@@ -107,6 +122,12 @@ Règles principales :
 - avec une cible sélectionnée, un nom absent indique `Nom disponible` ;
 - si le nom proposé existe déjà dans la cible, une alternative suffixée est affichée ;
 - le bouton `Appliquer le suffixe` modifie seulement la proposition affichée ;
+- le bouton `Vérifier avant classement` devient disponible uniquement quand le document, la cible et le nom proposé sont prêts ;
+- cliquer sur `Vérifier avant classement` affiche le récapitulatif de simulation ;
+- le récapitulatif affiche `Simulation uniquement — aucun fichier n'a été modifié` ;
+- créer une collision dans la cible puis relancer la préparation bloque le plan ;
+- supprimer ou déplacer le fichier source puis relancer la préparation bloque le plan proprement ;
+- le bouton `Classement réel prévu au lot suivant` reste désactivé ;
 - changer de document réinitialise proprement la proposition ;
 - aucun fichier n'est modifié, renommé, déplacé ou supprimé.
 

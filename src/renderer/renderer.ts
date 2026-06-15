@@ -2,6 +2,7 @@ type SupportedDocumentExtension = ".pdf" | ".jpg" | ".jpeg" | ".png";
 type PreviewKind = "image" | "pdf";
 type PreviewStatus = "idle" | "loading" | "ready" | "error";
 type NamingMessageLevel = "error" | "warning" | "info";
+type ClassificationPanelStatus = "idle" | "preparing" | "ready" | "blocked";
 type DestinationCheckStatus =
   | "idle"
   | "checking"
@@ -10,6 +11,7 @@ type DestinationCheckStatus =
   | "target-not-selected"
   | "invalid"
   | "error";
+type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
 
 interface AppError {
   code:
@@ -100,6 +102,41 @@ interface DestinationCheckState {
   checkedFilename: string;
 }
 
+interface ClassificationPlanCheck {
+  code: string;
+  label: string;
+  status: ClassificationPlanCheckStatus;
+  message: string;
+}
+
+interface ClassificationPlan {
+  status: "ready" | "blocked";
+  sourcePath: string;
+  currentName: string;
+  targetPath: string;
+  proposedFilename: string;
+  destinationPath: string;
+  extension: string;
+  sourceFileStatus: string;
+  targetDirectoryStatus: string;
+  collisionStatus: string;
+  preparedAt: string;
+  checks: ClassificationPlanCheck[];
+  message: string;
+  simulationOnly: true;
+}
+
+interface ClassificationPlanError {
+  code: string;
+  message: string;
+}
+
+interface ClassificationState {
+  status: ClassificationPanelStatus;
+  plan: ClassificationPlan | null;
+  error: ClassificationPlanError | null;
+}
+
 interface PreviewState {
   status: PreviewStatus;
   data: RendererPreviewData | null;
@@ -121,6 +158,7 @@ interface AppState {
   preview: PreviewState;
   naming: NamingState;
   destination: DestinationCheckState;
+  classification: ClassificationState;
 }
 
 interface RefreshOptions {
@@ -141,13 +179,15 @@ const state: AppState = {
   isLoading: false,
   preview: createIdlePreviewState(),
   naming: createIdleNamingState(),
-  destination: createIdleDestinationCheckState()
+  destination: createIdleDestinationCheckState(),
+  classification: createIdleClassificationState()
 };
 
 let previewRequestId = 0;
 let pdfRenderRequestId = 0;
 let namingRequestId = 0;
 let destinationRequestId = 0;
+let classificationRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
@@ -186,6 +226,8 @@ const destinationAlternative = document.querySelector<HTMLElement>("#destination
 const applyDestinationAlternativeButton = document.querySelector<HTMLButtonElement>(
   "#apply-destination-alternative"
 );
+const prepareClassificationButton = document.querySelector<HTMLButtonElement>("#prepare-classification");
+const classificationSummary = document.querySelector<HTMLElement>("#classification-summary");
 
 void window.docSorter.getVersion().then((value) => {
   if (version) {
@@ -274,9 +316,14 @@ applyDestinationAlternativeButton?.addEventListener("click", () => {
   }
 
   state.naming.overrideFilename = alternativeFilename;
+  resetClassificationState();
   resetDestinationCheck();
   renderNamingPanel(false);
   scheduleDestinationCheck();
+});
+
+prepareClassificationButton?.addEventListener("click", () => {
+  void prepareClassificationSimulation();
 });
 
 render();
@@ -327,6 +374,7 @@ async function selectTargetDirectory(): Promise<void> {
   }
 
   state.targetPath = selection.value.path;
+  resetClassificationState();
   render();
   scheduleDestinationCheck();
 }
@@ -356,6 +404,7 @@ async function refreshDocuments(options: RefreshOptions): Promise<void> {
 
   clearPreviewResources();
   state.documents = result.value.documents;
+  resetClassificationState();
   const activeDocumentAfterRefresh = activeDocumentPathBeforeRefresh
     ? state.documents.find((documentItem) => documentItem.filePath === activeDocumentPathBeforeRefresh) ?? null
     : null;
@@ -509,6 +558,10 @@ function render(): void {
 function renderControls(): void {
   if (refreshSourceButton) {
     refreshSourceButton.disabled = !state.sourcePath || state.isLoading;
+  }
+
+  if (prepareClassificationButton) {
+    prepareClassificationButton.disabled = !canPrepareClassificationPlan();
   }
 }
 
@@ -776,6 +829,7 @@ function updateNamingDraftFromInputs(): void {
   };
   state.naming.overrideFilename = null;
   state.naming.isLoading = true;
+  resetClassificationState();
   resetDestinationCheck();
   renderNamingPanel(false);
   void updateNamingProposal(activeDocument.extension, ++namingRequestId);
@@ -806,6 +860,7 @@ function renderNamingPanel(syncInputs: boolean): void {
   namingPanel.hidden = !activeDocument;
   if (!activeDocument) {
     renderDestinationCheck();
+    renderClassificationSummary();
     return;
   }
 
@@ -836,6 +891,7 @@ function renderNamingPanel(syncInputs: boolean): void {
   }
 
   renderDestinationCheck();
+  renderClassificationSummary();
 }
 
 function syncNamingInputs(): void {
@@ -858,6 +914,191 @@ function createNamingMessageItem(message: NamingMessage): HTMLLIElement {
   item.className = message.level;
   item.textContent = message.message;
   return item;
+}
+
+async function prepareClassificationSimulation(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  const filename = getEffectiveProposedFilename();
+  if (!activeDocument || !filename) {
+    return;
+  }
+
+  const requestId = ++classificationRequestId;
+  state.classification = {
+    status: "preparing",
+    plan: null,
+    error: null
+  };
+  render();
+
+  const result = await window.docSorter.prepareClassificationPlan(activeDocument.filePath, filename);
+  if (requestId !== classificationRequestId) {
+    return;
+  }
+
+  if (result.ok) {
+    state.classification = {
+      status: "ready",
+      plan: result.value as ClassificationPlan,
+      error: null
+    };
+    render();
+    return;
+  }
+
+  state.classification = {
+    status: "blocked",
+    plan: result.value as ClassificationPlan,
+    error: result.error as ClassificationPlanError
+  };
+  render();
+}
+
+function renderClassificationSummary(): void {
+  if (!classificationSummary) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || state.classification.status === "idle") {
+    classificationSummary.hidden = true;
+    classificationSummary.replaceChildren();
+    return;
+  }
+
+  classificationSummary.hidden = false;
+
+  if (state.classification.status === "preparing") {
+    classificationSummary.replaceChildren(
+      createClassificationHeading("Simulation de classement", "Préparation en cours"),
+      createClassificationNotice("Simulation uniquement — aucun fichier n'a été modifié")
+    );
+    return;
+  }
+
+  const plan = state.classification.plan;
+  if (!plan) {
+    classificationSummary.hidden = true;
+    classificationSummary.replaceChildren();
+    return;
+  }
+
+  classificationSummary.replaceChildren(
+    createClassificationHeading(
+      "Simulation de classement",
+      state.classification.status === "ready" ? "Plan prêt" : "Plan bloqué"
+    ),
+    createClassificationNotice("Simulation uniquement — aucun fichier n'a été modifié"),
+    createClassificationMessage(plan, state.classification.error),
+    createClassificationDetails(plan),
+    createClassificationChecks(plan.checks)
+  );
+}
+
+function createClassificationHeading(title: string, status: string): HTMLDivElement {
+  const heading = document.createElement("div");
+  const titleElement = document.createElement("h4");
+  const statusElement = document.createElement("strong");
+
+  heading.className = "classification-heading";
+  titleElement.textContent = title;
+  statusElement.textContent = status;
+  statusElement.className = state.classification.status === "ready" ? "status-valid" : "status-warning";
+  heading.append(titleElement, statusElement);
+
+  return heading;
+}
+
+function createClassificationNotice(message: string): HTMLParagraphElement {
+  const notice = document.createElement("p");
+  notice.className = "classification-notice";
+  notice.textContent = message;
+  return notice;
+}
+
+function createClassificationMessage(
+  plan: ClassificationPlan,
+  error: ClassificationPlanError | null
+): HTMLParagraphElement {
+  const message = document.createElement("p");
+  message.className = plan.status === "ready" ? "classification-message ready" : "classification-message blocked";
+  message.textContent = error?.message ?? plan.message;
+  return message;
+}
+
+function createClassificationDetails(plan: ClassificationPlan): HTMLDListElement {
+  const details = document.createElement("dl");
+  details.className = "classification-details";
+  details.append(
+    createClassificationDetail("Source", plan.sourcePath),
+    createClassificationDetail("Nom actuel", plan.currentName),
+    createClassificationDetail("Cible", plan.targetPath),
+    createClassificationDetail("Nom proposé", plan.proposedFilename),
+    createClassificationDetail("Chemin final prévu", plan.destinationPath || "Non déterminé"),
+    createClassificationDetail("Préparé le", formatDate(plan.preparedAt))
+  );
+
+  return details;
+}
+
+function createClassificationDetail(label: string, value: string): HTMLDivElement {
+  const row = document.createElement("div");
+  const labelElement = document.createElement("dt");
+  const valueElement = document.createElement("dd");
+
+  labelElement.textContent = label;
+  valueElement.textContent = value;
+  valueElement.title = value;
+  row.append(labelElement, valueElement);
+
+  return row;
+}
+
+function createClassificationChecks(checks: ClassificationPlanCheck[]): HTMLUListElement {
+  const list = document.createElement("ul");
+  list.className = "classification-checks";
+  list.replaceChildren(...checks.map(createClassificationCheckItem));
+  return list;
+}
+
+function createClassificationCheckItem(check: ClassificationPlanCheck): HTMLLIElement {
+  const item = document.createElement("li");
+  const status = document.createElement("span");
+  const text = document.createElement("strong");
+  const message = document.createElement("small");
+
+  item.className = `check-${check.status}`;
+  status.textContent = classificationCheckStatusLabel(check.status);
+  text.textContent = check.label;
+  message.textContent = check.message;
+  item.append(status, text, message);
+
+  return item;
+}
+
+function classificationCheckStatusLabel(status: ClassificationPlanCheckStatus): string {
+  switch (status) {
+    case "ok":
+      return "OK";
+    case "blocking":
+      return "Bloquant";
+    case "not-run":
+      return "Non contrôlé";
+  }
+}
+
+function canPrepareClassificationPlan(): boolean {
+  const activeDocument = getActiveDocument();
+  return Boolean(
+    activeDocument &&
+      activeDocument.status !== "missing" &&
+      state.targetPath &&
+      !state.naming.isLoading &&
+      state.naming.proposal?.isValid &&
+      getEffectiveProposedFilename() &&
+      state.destination.status === "available" &&
+      state.classification.status !== "preparing"
+  );
 }
 
 function scheduleDestinationCheck(): void {
@@ -943,6 +1184,8 @@ async function checkDestinationAvailability(filename: string, requestId: number)
 }
 
 function renderDestinationCheck(): void {
+  renderControls();
+
   if (!destinationStatus || !destinationTarget || !destinationFinalPath || !destinationAlternative) {
     return;
   }
@@ -1189,10 +1432,24 @@ function createIdleDestinationCheckState(): DestinationCheckState {
   };
 }
 
+function createIdleClassificationState(): ClassificationState {
+  return {
+    status: "idle",
+    plan: null,
+    error: null
+  };
+}
+
 function resetNamingState(): void {
   namingRequestId += 1;
   state.naming = createIdleNamingState();
   resetDestinationCheck();
+  resetClassificationState();
+}
+
+function resetClassificationState(): void {
+  classificationRequestId += 1;
+  state.classification = createIdleClassificationState();
 }
 
 function clampPreviewZoom(zoom: number): number {

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import type { PrepareClassificationPlanResult } from "../classification/classificationPlan";
 import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
 import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
@@ -28,7 +29,12 @@ const api = {
   checkDestinationAvailability: (
     proposedFilename: string
   ): Promise<DestinationAvailabilityResult> =>
-    ipcRenderer.invoke("naming:checkDestinationAvailability", proposedFilename)
+    ipcRenderer.invoke("naming:checkDestinationAvailability", proposedFilename),
+  prepareClassificationPlan: (
+    documentPath: string,
+    proposedFilename: string
+  ): Promise<PrepareClassificationPlanResult> =>
+    ipcRenderer.invoke("classification:preparePlan", documentPath, proposedFilename)
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

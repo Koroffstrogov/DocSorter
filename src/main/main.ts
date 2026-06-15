@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 
+import { prepareClassificationPlan } from "../classification/classificationPlan";
 import { discoverDocuments, type Result } from "../documents/documentDiscovery";
 import {
   buildProposedFilename,
@@ -68,6 +69,16 @@ function registerIpcHandlers(): void {
       selectedTargetPath,
       typeof proposedFilename === "string" ? proposedFilename : ""
     )
+  );
+  ipcMain.handle(
+    "classification:preparePlan",
+    (_event, documentPath: unknown, proposedFilename: unknown) =>
+      prepareClassificationPlan({
+        documentPath: typeof documentPath === "string" ? documentPath : "",
+        proposedFilename: typeof proposedFilename === "string" ? proposedFilename : "",
+        selectedTargetPath,
+        queuedDocumentPaths
+      })
   );
 
   ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {

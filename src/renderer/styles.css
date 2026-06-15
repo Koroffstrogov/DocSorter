@@ -661,3 +661,153 @@ h2 {
 .destination-check button[hidden] {
   display: none;
 }
+
+.classification-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.classification-actions button {
+  min-height: 34px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: var(--accent);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.classification-actions button:disabled {
+  border-color: var(--border);
+  color: var(--muted);
+  background: #f7f8f7;
+}
+
+.classification-summary {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.classification-summary[hidden] {
+  display: none;
+}
+
+.classification-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.classification-heading h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.classification-heading strong {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.classification-notice,
+.classification-message {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.classification-notice {
+  color: var(--muted);
+  font-weight: 720;
+}
+
+.classification-message.ready {
+  color: var(--accent-strong);
+}
+
+.classification-message.blocked {
+  color: #9b1c1c;
+}
+
+.classification-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.classification-details div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.classification-details dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.classification-details dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.classification-checks {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.classification-checks li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: start;
+}
+
+.classification-checks span {
+  grid-row: span 2;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.classification-checks strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.classification-checks small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.classification-checks .check-ok span {
+  color: var(--accent-strong);
+}
+
+.classification-checks .check-blocking span {
+  color: #9b1c1c;
+}
+
+.classification-checks .check-not-run span {
+  color: var(--muted);
+}
