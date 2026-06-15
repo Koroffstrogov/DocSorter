@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 4A : source, cible, file d'attente réelle, prévisualisation locale PDF/image, prévisualisation du renommage normalisé, contrôle de collision cible et simulation de classement sans mutation disque.
+Lot 4C : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent et annulation persistante de la dernière action.
 
 ## Commandes
 
@@ -44,7 +44,15 @@ npm run dev
 - bouton `Vérifier avant classement` pour préparer un plan de classement simulé ;
 - re-check au clic du document source, de la file scannée, de la cible, du nom proposé et de la collision ;
 - récapitulatif de simulation affichant source, cible, nom proposé, chemin final prévu et contrôles OK/bloquants ;
-- message explicite `Simulation uniquement — aucun fichier n'a été modifié`.
+- message explicite `Simulation uniquement — aucun fichier n'a été modifié` avant validation réelle ;
+- bouton `Valider et classer` après plan prêt ;
+- re-check complet juste avant mutation ;
+- renommage puis déplacement par `fs.rename` uniquement ;
+- refus des collisions et de l'écrasement ;
+- journal local sobre des actions de classement ;
+- historique récent des dernières actions utiles ;
+- rechargement de la dernière action annulable depuis le journal au démarrage ;
+- annulation de la dernière action réussie, même après redémarrage, si les chemins et le hash restent sûrs.
 
 ## Convention de nommage
 
@@ -67,7 +75,19 @@ Règles principales :
 - accents et caractères Windows interdits normalisés ;
 - extension conservée en minuscule ;
 - date documentaire et sujet requis pour générer un nom final ;
-- aucun fichier n'est renommé dans le Lot 4A.
+- le classement réel renomme et déplace uniquement après validation explicite.
+
+## Journal local
+
+Les actions sont journalisées au format JSONL dans le dossier utilisateur Electron :
+
+```text
+app.getPath("userData")/history/actions.jsonl
+```
+
+Le journal contient les chemins source/cible nécessaires à l'annulation, les noms avant/après, le statut `started`/`completed`/`failed` et un hash SHA-256 du fichier avant déplacement. Il ne contient pas d'OCR, pas de contenu documentaire et pas de métadonnées inutiles.
+
+Le journal est relu au démarrage pour retrouver la dernière action `classify completed` non déjà annulée. L'annulation refait les contrôles au clic : fichier classé présent, ancien chemin source libre, hash inchangé si disponible, puis déplacement inverse par `fs.rename`.
 
 ## Dépendances
 
@@ -75,26 +95,29 @@ Règles principales :
 
 ## Ce qui ne fonctionne pas encore
 
-- pas de renommage réel ;
-- pas de déplacement ;
 - pas de suppression ;
 - pas de configuration persistée ;
-- pas de cache ni historique ;
+- pas de cache ;
 - pas de watcher automatique du dossier source ;
-- pas de classement réel ;
-- pas de journal d'action ;
-- pas d'annulation de dernière action ;
+- pas d'annulation multiple ;
+- pas de création de dossier cible ;
+- pas de fallback `copy + delete` pour les déplacements entre volumes ;
+- pas de doublons exacts complets ;
 - pas de tri par métadonnées ni recherche dans la file ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
-## Passage prévu au Lot 4B
+## Recommandation de test
 
-Le Lot 4B devra ajouter, avec confirmation explicite :
+Tester le Lot 4C d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Pour le Lot 4C, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
-- journal d'action local et sobre ;
-- renommage puis déplacement réels ;
-- annulation de la dernière action si elle est encore possible ;
-- re-check source/cible/collision juste avant toute mutation.
+## Passage futur recommandé
+
+Un prochain lot pourra ajouter :
+
+- annulation multiple si le journal et les chemins restent cohérents ;
+- doublons exacts basés sur hash ;
+- aide au choix de dossier cible, sans OCR ni upload.
 
 ## Validations manuelles
 
@@ -125,11 +148,22 @@ Le Lot 4B devra ajouter, avec confirmation explicite :
 - le bouton `Vérifier avant classement` devient disponible uniquement quand le document, la cible et le nom proposé sont prêts ;
 - cliquer sur `Vérifier avant classement` affiche le récapitulatif de simulation ;
 - le récapitulatif affiche `Simulation uniquement — aucun fichier n'a été modifié` ;
+- le bouton `Valider et classer` devient disponible après un plan prêt ;
+- cliquer sur `Valider et classer` déplace le fichier vers la cible avec le nom proposé ;
+- le fichier classé disparaît de la source et apparaît dans la cible ;
+- le journal local contient une action `classify` sobre ;
+- l'historique récent affiche le classement ;
+- après fermeture et relance, `Annuler dernière action` redevient disponible si la dernière action est sûre ;
+- le bouton `Annuler dernière action` restaure le fichier si les chemins sont encore libres ;
+- l'historique récent affiche l'annulation ;
+- le journal local contient une action `undo-classify` après annulation ;
+- modifier manuellement le fichier classé dans la cible bloque l'annulation ;
+- recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;
+- créer une collision dans la cible entre simulation et validation bloque le classement réel ;
 - supprimer ou déplacer le fichier source puis relancer la préparation bloque le plan proprement ;
-- le bouton `Classement réel prévu au lot suivant` reste désactivé ;
 - changer de document réinitialise proprement la proposition ;
-- aucun fichier n'est modifié, renommé, déplacé ou supprimé.
+- aucun fichier n'est écrasé ni supprimé automatiquement.
 
 ## Principes
 

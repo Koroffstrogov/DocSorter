@@ -3,6 +3,13 @@ import path from "node:path";
 
 import { prepareClassificationPlan } from "../classification/classificationPlan";
 import { discoverDocuments, type Result } from "../documents/documentDiscovery";
+import { executeClassification, undoLastClassification } from "../file-ops/classifyFile";
+import {
+  getActionJournalFilePath,
+  readLastUndoableClassification,
+  readRecentActions
+} from "../history/actionJournal";
+import type { UndoableClassificationAction } from "../history/historyTypes";
 import {
   buildProposedFilename,
   createInitialNamingDraft,
@@ -18,6 +25,7 @@ interface DirectorySelection {
 let selectedSourcePath: string | null = null;
 let selectedTargetPath: string | null = null;
 let queuedDocumentPaths = new Set<string>();
+let lastUndoableAction: UndoableClassificationAction | null = null;
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -80,6 +88,45 @@ function registerIpcHandlers(): void {
         queuedDocumentPaths
       })
   );
+  ipcMain.handle(
+    "classification:execute",
+    async (_event, documentPath: unknown, proposedFilename: unknown) => {
+      const result = await executeClassification({
+        documentPath: typeof documentPath === "string" ? documentPath : "",
+        proposedFilename: typeof proposedFilename === "string" ? proposedFilename : "",
+        selectedTargetPath,
+        queuedDocumentPaths,
+        journalFilePath: getActionJournalFilePath(app.getPath("userData"))
+      });
+
+      if (result.ok) {
+        lastUndoableAction = result.value.undoableAction;
+        queuedDocumentPaths.delete(path.resolve(result.value.undoableAction.originalPath));
+      }
+
+      return result;
+    }
+  );
+  ipcMain.handle("classification:undoLast", async () => {
+    const result = await undoLastClassification({
+      undoableAction: lastUndoableAction,
+      journalFilePath: getActionJournalFilePath(app.getPath("userData"))
+    });
+
+    if (result.ok) {
+      queuedDocumentPaths.add(path.resolve(result.value.restoredPath));
+      lastUndoableAction = null;
+    }
+
+    return result;
+  });
+  ipcMain.handle("classification:getLastUndoableAction", () => getLastUndoableAction());
+  ipcMain.handle("history:getRecent", (_event, limit: unknown) =>
+    readRecentActions(
+      getJournalFilePath(),
+      typeof limit === "number" && Number.isFinite(limit) ? limit : 8
+    )
+  );
 
   ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {
@@ -135,6 +182,24 @@ async function refreshSourceDocuments(sourcePath: string) {
   }
 
   return result;
+}
+
+async function getLastUndoableAction(): Promise<UndoableClassificationAction | null> {
+  if (lastUndoableAction) {
+    return lastUndoableAction;
+  }
+
+  const journalAction = await readLastUndoableClassification(getJournalFilePath());
+  if (!journalAction.ok) {
+    return null;
+  }
+
+  lastUndoableAction = journalAction.value;
+  return lastUndoableAction;
+}
+
+function getJournalFilePath(): string {
+  return getActionJournalFilePath(app.getPath("userData"));
 }
 
 async function selectDirectory(title: string): Promise<Result<DirectorySelection | null>> {

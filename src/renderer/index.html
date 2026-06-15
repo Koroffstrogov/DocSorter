@@ -137,9 +137,21 @@
             </div>
             <div class="classification-actions">
               <button id="prepare-classification" type="button" disabled>Vérifier avant classement</button>
-              <button type="button" disabled>Classement réel prévu au lot suivant</button>
+              <button id="execute-classification" type="button" disabled>Valider et classer</button>
             </div>
             <section id="classification-summary" class="classification-summary" aria-live="polite" hidden></section>
+          </section>
+
+          <section class="detail-section history-panel" aria-label="Historique récent">
+            <div class="section-heading">
+              <h3>Historique récent</h3>
+              <div class="history-actions">
+                <button id="refresh-history" type="button">Rafraîchir</button>
+                <button id="undo-last-action" type="button" disabled>Annuler dernière action</button>
+              </div>
+            </div>
+            <div id="history-state" class="history-state">Lecture du journal...</div>
+            <ol id="history-list" class="history-list"></ol>
           </section>
         </div>
       </aside>

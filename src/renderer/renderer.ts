@@ -2,7 +2,7 @@ type SupportedDocumentExtension = ".pdf" | ".jpg" | ".jpeg" | ".png";
 type PreviewKind = "image" | "pdf";
 type PreviewStatus = "idle" | "loading" | "ready" | "error";
 type NamingMessageLevel = "error" | "warning" | "info";
-type ClassificationPanelStatus = "idle" | "preparing" | "ready" | "blocked";
+type ClassificationPanelStatus = "idle" | "preparing" | "ready" | "blocked" | "executing" | "undoing";
 type DestinationCheckStatus =
   | "idle"
   | "checking"
@@ -131,10 +131,52 @@ interface ClassificationPlanError {
   message: string;
 }
 
+interface UndoableClassificationAction {
+  id: string;
+  completedAt: string;
+  originalPath: string;
+  classifiedPath: string;
+  originalName: string;
+  classifiedName: string;
+  sourceHashSha256: string;
+}
+
+interface ClassificationOperationError {
+  code: string;
+  message: string;
+}
+
+interface UndoClassificationError {
+  code: string;
+  message: string;
+}
+
+interface ActionJournalEntry {
+  id: string;
+  timestamp: string;
+  action: "classify" | "undo-classify";
+  status: "started" | "completed" | "failed";
+  originalActionId?: string;
+  oldPath?: string;
+  newPath?: string;
+  oldName?: string;
+  newName?: string;
+  restoredPath?: string;
+  classifiedPath?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
 interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
-  error: ClassificationPlanError | null;
+  error: ClassificationPlanError | ClassificationOperationError | UndoClassificationError | null;
+}
+
+interface HistoryState {
+  entries: ActionJournalEntry[];
+  isLoading: boolean;
+  errorMessage: string;
 }
 
 interface PreviewState {
@@ -159,11 +201,14 @@ interface AppState {
   naming: NamingState;
   destination: DestinationCheckState;
   classification: ClassificationState;
+  lastUndoableAction: UndoableClassificationAction | null;
+  history: HistoryState;
 }
 
 interface RefreshOptions {
   preserveSelection: boolean;
   successMessage: string;
+  preferredSelectionPath?: string;
 }
 
 const minPreviewZoom = 0.5;
@@ -180,7 +225,9 @@ const state: AppState = {
   preview: createIdlePreviewState(),
   naming: createIdleNamingState(),
   destination: createIdleDestinationCheckState(),
-  classification: createIdleClassificationState()
+  classification: createIdleClassificationState(),
+  lastUndoableAction: null,
+  history: createIdleHistoryState()
 };
 
 let previewRequestId = 0;
@@ -227,13 +274,21 @@ const applyDestinationAlternativeButton = document.querySelector<HTMLButtonEleme
   "#apply-destination-alternative"
 );
 const prepareClassificationButton = document.querySelector<HTMLButtonElement>("#prepare-classification");
+const executeClassificationButton = document.querySelector<HTMLButtonElement>("#execute-classification");
+const undoLastActionButton = document.querySelector<HTMLButtonElement>("#undo-last-action");
 const classificationSummary = document.querySelector<HTMLElement>("#classification-summary");
+const refreshHistoryButton = document.querySelector<HTMLButtonElement>("#refresh-history");
+const historyState = document.querySelector<HTMLElement>("#history-state");
+const historyList = document.querySelector<HTMLOListElement>("#history-list");
 
 void window.docSorter.getVersion().then((value) => {
   if (version) {
     version.textContent = `v${value}`;
   }
 });
+
+void refreshLastUndoableAction();
+void refreshRecentHistory();
 
 selectSourceButton?.addEventListener("click", () => {
   void selectSourceDirectory();
@@ -326,6 +381,18 @@ prepareClassificationButton?.addEventListener("click", () => {
   void prepareClassificationSimulation();
 });
 
+executeClassificationButton?.addEventListener("click", () => {
+  void executeClassificationAction();
+});
+
+undoLastActionButton?.addEventListener("click", () => {
+  void undoLastClassificationAction();
+});
+
+refreshHistoryButton?.addEventListener("click", () => {
+  void refreshRecentHistory();
+});
+
 render();
 
 async function selectSourceDirectory(): Promise<void> {
@@ -386,7 +453,8 @@ async function refreshDocuments(options: RefreshOptions): Promise<void> {
     return;
   }
 
-  const activeDocumentPathBeforeRefresh = options.preserveSelection ? state.activeDocumentPath : null;
+  const activeDocumentPathBeforeRefresh =
+    options.preferredSelectionPath ?? (options.preserveSelection ? state.activeDocumentPath : null);
   state.isLoading = true;
   state.queueMessage = options.preserveSelection
     ? "Rafraîchissement du dossier source"
@@ -534,16 +602,18 @@ async function loadActivePreview(documentItem: DocumentItem): Promise<void> {
 }
 
 function setControlsDisabled(disabled: boolean): void {
+  const shouldDisable = disabled || isClassificationBusy();
+
   if (selectSourceButton) {
-    selectSourceButton.disabled = disabled;
+    selectSourceButton.disabled = shouldDisable;
   }
 
   if (refreshSourceButton) {
-    refreshSourceButton.disabled = disabled || !state.sourcePath;
+    refreshSourceButton.disabled = shouldDisable || !state.sourcePath;
   }
 
   if (selectTargetButton) {
-    selectTargetButton.disabled = disabled;
+    selectTargetButton.disabled = shouldDisable;
   }
 }
 
@@ -553,15 +623,36 @@ function render(): void {
   renderQueue();
   renderPreview();
   renderDetails();
+  renderHistory();
 }
 
 function renderControls(): void {
+  if (selectSourceButton) {
+    selectSourceButton.disabled = isClassificationBusy();
+  }
+
+  if (selectTargetButton) {
+    selectTargetButton.disabled = isClassificationBusy();
+  }
+
   if (refreshSourceButton) {
-    refreshSourceButton.disabled = !state.sourcePath || state.isLoading;
+    refreshSourceButton.disabled = !state.sourcePath || state.isLoading || isClassificationBusy();
   }
 
   if (prepareClassificationButton) {
     prepareClassificationButton.disabled = !canPrepareClassificationPlan();
+  }
+
+  if (executeClassificationButton) {
+    executeClassificationButton.disabled = !canExecuteClassification();
+  }
+
+  if (undoLastActionButton) {
+    undoLastActionButton.disabled = !state.lastUndoableAction || isClassificationBusy();
+  }
+
+  if (refreshHistoryButton) {
+    refreshHistoryButton.disabled = state.history.isLoading || isClassificationBusy();
   }
 }
 
@@ -954,12 +1045,177 @@ async function prepareClassificationSimulation(): Promise<void> {
   render();
 }
 
+async function executeClassificationAction(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  const filename = getEffectiveProposedFilename();
+  if (!activeDocument || !filename || !canExecuteClassification()) {
+    return;
+  }
+
+  const requestId = ++classificationRequestId;
+  state.classification = {
+    status: "executing",
+    plan: state.classification.plan,
+    error: null
+  };
+  state.queueMessage = "Classement en cours...";
+  render();
+
+  const result = await window.docSorter.executeClassification(activeDocument.filePath, filename);
+  if (requestId !== classificationRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    state.classification = {
+      status: "blocked",
+      plan: (result.plan as ClassificationPlan | undefined) ?? state.classification.plan,
+      error: result.error as ClassificationOperationError
+    };
+    state.queueMessage = result.error.message;
+    render();
+    void refreshRecentHistory();
+    return;
+  }
+
+  state.lastUndoableAction = result.value.undoableAction as UndoableClassificationAction;
+  state.queueMessage = result.value.message;
+  void refreshRecentHistory();
+  applySuccessfulClassification(activeDocument.filePath);
+}
+
+async function undoLastClassificationAction(): Promise<void> {
+  if (!state.lastUndoableAction || isClassificationBusy()) {
+    return;
+  }
+
+  const requestId = ++classificationRequestId;
+  state.classification = {
+    status: "undoing",
+    plan: null,
+    error: null
+  };
+  state.queueMessage = "Annulation en cours...";
+  render();
+
+  const result = await window.docSorter.undoLastClassification();
+  if (requestId !== classificationRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    state.classification = {
+      status: "idle",
+      plan: null,
+      error: result.error as UndoClassificationError
+    };
+    state.queueMessage = result.error.message;
+    render();
+    void refreshRecentHistory();
+    return;
+  }
+
+  state.lastUndoableAction = null;
+  state.queueMessage = result.value.message;
+  resetClassificationState();
+  await refreshLastUndoableAction();
+  await refreshRecentHistory();
+
+  if (!state.sourcePath) {
+    render();
+    return;
+  }
+
+  await refreshDocuments({
+    preserveSelection: false,
+    preferredSelectionPath: result.value.restoredPath,
+    successMessage: result.value.message
+  });
+}
+
+async function refreshLastUndoableAction(): Promise<void> {
+  state.lastUndoableAction = (await window.docSorter.getLastUndoableAction()) as
+    | UndoableClassificationAction
+    | null;
+  renderControls();
+}
+
+async function refreshRecentHistory(): Promise<void> {
+  state.history = {
+    ...state.history,
+    isLoading: true,
+    errorMessage: ""
+  };
+  renderHistory();
+  renderControls();
+
+  const result = await window.docSorter.getRecentHistory(8);
+  if (result.ok) {
+    state.history = {
+      entries: result.value as ActionJournalEntry[],
+      isLoading: false,
+      errorMessage: ""
+    };
+  } else {
+    state.history = {
+      entries: [],
+      isLoading: false,
+      errorMessage: result.error.message
+    };
+  }
+
+  renderHistory();
+  renderControls();
+}
+
+function applySuccessfulClassification(classifiedDocumentPath: string): void {
+  const classifiedIndex = state.documents.findIndex(
+    (documentItem) => documentItem.filePath === classifiedDocumentPath
+  );
+  const documentsAfterClassification = state.documents.filter(
+    (documentItem) => documentItem.filePath !== classifiedDocumentPath
+  );
+  const nextDocument =
+    documentsAfterClassification[classifiedIndex] ??
+    documentsAfterClassification[classifiedIndex - 1] ??
+    null;
+
+  clearPreviewResources();
+  state.documents = documentsAfterClassification;
+  state.activeDocumentPath = nextDocument?.filePath ?? null;
+  state.preview = nextDocument
+    ? {
+        ...createIdlePreviewState(),
+        status: "loading"
+      }
+    : createIdlePreviewState();
+  resetNamingState();
+  resetClassificationState();
+  render();
+
+  if (!nextDocument) {
+    return;
+  }
+
+  void initializeNamingDraft(nextDocument);
+  void loadActivePreview(nextDocument);
+}
+
 function renderClassificationSummary(): void {
   if (!classificationSummary) {
     return;
   }
 
   const activeDocument = getActiveDocument();
+  if (state.classification.status === "undoing") {
+    classificationSummary.hidden = false;
+    classificationSummary.replaceChildren(
+      createClassificationHeading("Annulation", "En cours"),
+      createClassificationNotice("Annulation de la dernière action en cours...")
+    );
+    return;
+  }
+
   if (!activeDocument || state.classification.status === "idle") {
     classificationSummary.hidden = true;
     classificationSummary.replaceChildren();
@@ -972,6 +1228,14 @@ function renderClassificationSummary(): void {
     classificationSummary.replaceChildren(
       createClassificationHeading("Simulation de classement", "Préparation en cours"),
       createClassificationNotice("Simulation uniquement — aucun fichier n'a été modifié")
+    );
+    return;
+  }
+
+  if (state.classification.status === "executing") {
+    classificationSummary.replaceChildren(
+      createClassificationHeading("Classement réel", "En cours"),
+      createClassificationNotice("Action réelle : le fichier est en cours de renommage et déplacement.")
     );
     return;
   }
@@ -989,10 +1253,95 @@ function renderClassificationSummary(): void {
       state.classification.status === "ready" ? "Plan prêt" : "Plan bloqué"
     ),
     createClassificationNotice("Simulation uniquement — aucun fichier n'a été modifié"),
+    ...(plan.status === "ready"
+      ? [createClassificationNotice("Action réelle : le fichier sera renommé et déplacé.")]
+      : []),
     createClassificationMessage(plan, state.classification.error),
     createClassificationDetails(plan),
     createClassificationChecks(plan.checks)
   );
+}
+
+function renderHistory(): void {
+  if (!historyState || !historyList) {
+    return;
+  }
+
+  if (state.history.isLoading) {
+    historyState.hidden = false;
+    historyState.replaceChildren("Lecture du journal...");
+    historyList.replaceChildren();
+    return;
+  }
+
+  if (state.history.errorMessage) {
+    historyState.hidden = false;
+    historyState.replaceChildren(state.history.errorMessage);
+    historyList.replaceChildren();
+    return;
+  }
+
+  if (state.history.entries.length === 0) {
+    historyState.hidden = false;
+    historyState.replaceChildren("Aucune action récente");
+    historyList.replaceChildren();
+    return;
+  }
+
+  historyState.hidden = true;
+  historyState.replaceChildren();
+  historyList.replaceChildren(...state.history.entries.map(createHistoryItem));
+}
+
+function createHistoryItem(entry: ActionJournalEntry): HTMLLIElement {
+  const item = document.createElement("li");
+  const header = document.createElement("div");
+  const action = document.createElement("strong");
+  const status = document.createElement("span");
+  const names = document.createElement("p");
+  const date = document.createElement("small");
+
+  item.className = `history-item history-${entry.status}`;
+  item.title = historyEntryTitle(entry);
+  action.textContent = historyActionLabel(entry.action);
+  status.textContent = historyStatusLabel(entry.status);
+  header.append(action, status);
+  names.textContent = historyNamesLabel(entry);
+  date.textContent = formatDate(entry.timestamp);
+  item.append(header, names, date);
+
+  return item;
+}
+
+function historyEntryTitle(entry: ActionJournalEntry): string {
+  const paths = [entry.oldPath, entry.newPath, entry.restoredPath, entry.classifiedPath].filter(Boolean);
+  return paths.join("\n");
+}
+
+function historyNamesLabel(entry: ActionJournalEntry): string {
+  const left = entry.oldName ?? "Nom source inconnu";
+  const right = entry.newName ?? "Nom cible inconnu";
+  return `${left} -> ${right}`;
+}
+
+function historyActionLabel(action: ActionJournalEntry["action"]): string {
+  switch (action) {
+    case "classify":
+      return "Classement";
+    case "undo-classify":
+      return "Annulation";
+  }
+}
+
+function historyStatusLabel(status: ActionJournalEntry["status"]): string {
+  switch (status) {
+    case "started":
+      return "Démarré";
+    case "completed":
+      return "Terminé";
+    case "failed":
+      return "Échec";
+  }
 }
 
 function createClassificationHeading(title: string, status: string): HTMLDivElement {
@@ -1097,7 +1446,24 @@ function canPrepareClassificationPlan(): boolean {
       state.naming.proposal?.isValid &&
       getEffectiveProposedFilename() &&
       state.destination.status === "available" &&
-      state.classification.status !== "preparing"
+      !isClassificationBusy()
+  );
+}
+
+function canExecuteClassification(): boolean {
+  return Boolean(
+    state.classification.status === "ready" &&
+      state.classification.plan?.status === "ready" &&
+      getActiveDocument() &&
+      !isClassificationBusy()
+  );
+}
+
+function isClassificationBusy(): boolean {
+  return (
+    state.classification.status === "preparing" ||
+    state.classification.status === "executing" ||
+    state.classification.status === "undoing"
   );
 }
 
@@ -1437,6 +1803,14 @@ function createIdleClassificationState(): ClassificationState {
     status: "idle",
     plan: null,
     error: null
+  };
+}
+
+function createIdleHistoryState(): HistoryState {
+  return {
+    entries: [],
+    isLoading: false,
+    errorMessage: ""
   };
 }
 
