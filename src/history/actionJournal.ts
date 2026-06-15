@@ -129,6 +129,35 @@ export async function readLastUndoableClassification(
   };
 }
 
+export async function readCompletedClassifications(
+  journalFilePath: string
+): Promise<ActionJournalReadResult<UndoableClassificationAction[]>> {
+  const entries = await readActionJournalEntries(journalFilePath);
+  if (!entries.ok) {
+    return entries;
+  }
+
+  const classifications = entries.value
+    .filter((entry) => entry.action === "classify" && entry.status === "completed")
+    .filter((entry) => !isActionAlreadyUndoneFromEntries(entries.value, entry.id))
+    .filter(hasClassificationPaths)
+    .map((entry) => ({
+      id: entry.id,
+      completedAt: entry.timestamp,
+      originalPath: entry.oldPath,
+      classifiedPath: entry.newPath,
+      originalName: entry.oldName,
+      classifiedName: entry.newName,
+      sourceHashSha256: entry.sourceHashSha256
+    }));
+
+  return {
+    ok: true,
+    value: classifications,
+    ignoredInvalidLines: entries.ignoredInvalidLines
+  };
+}
+
 export async function isActionAlreadyUndone(
   journalFilePath: string,
   actionId: string
@@ -204,6 +233,15 @@ function isActionAlreadyUndoneFromEntries(entries: ActionJournalEntry[], actionI
       entry.status === "completed" &&
       entry.originalActionId === actionId
   );
+}
+
+function hasClassificationPaths(entry: ActionJournalEntry): entry is ActionJournalEntry & {
+  oldPath: string;
+  newPath: string;
+  oldName: string;
+  newName: string;
+} {
+  return Boolean(entry.oldPath && entry.newPath && entry.oldName && entry.newName);
 }
 
 function isActionJournalEntry(value: unknown): value is ActionJournalEntry {

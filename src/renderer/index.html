@@ -45,6 +45,7 @@
             <h2>File d'attente</h2>
             <small id="queue-count">0 document</small>
           </div>
+          <button id="analyze-duplicates" type="button" disabled>Analyser les doublons exacts</button>
         </div>
         <div id="queue-state" class="empty-state">Aucun dossier source sélectionné</div>
         <ol id="document-list" class="document-list"></ol>
@@ -84,6 +85,15 @@
           <section class="detail-section" aria-label="Document actif">
             <h3>Document actif</h3>
             <div id="document-details" class="details-empty">Aucun document actif</div>
+          </section>
+
+          <section id="duplicate-panel" class="detail-section duplicate-panel" aria-label="Doublons exacts" hidden>
+            <h3>Doublons exacts</h3>
+            <div id="duplicate-details" class="duplicate-details"></div>
+            <div class="duplicate-actions">
+              <button id="ignore-duplicate" type="button">Ignorer pour l'instant</button>
+              <button id="keep-duplicate" type="button">Conserver quand même</button>
+            </div>
           </section>
 
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>

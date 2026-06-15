@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { prepareClassificationPlan } from "../classification/classificationPlan";
 import { discoverDocuments, type Result } from "../documents/documentDiscovery";
+import { analyzeExactDuplicates, type DuplicateSourceDocument } from "../duplicates/exactDuplicates";
 import { executeClassification, undoLastClassification } from "../file-ops/classifyFile";
 import {
   getActionJournalFilePath,
@@ -25,6 +26,7 @@ interface DirectorySelection {
 let selectedSourcePath: string | null = null;
 let selectedTargetPath: string | null = null;
 let queuedDocumentPaths = new Set<string>();
+let queuedDocuments: DuplicateSourceDocument[] = [];
 let lastUndoableAction: UndoableClassificationAction | null = null;
 
 function createMainWindow(): void {
@@ -102,6 +104,10 @@ function registerIpcHandlers(): void {
       if (result.ok) {
         lastUndoableAction = result.value.undoableAction;
         queuedDocumentPaths.delete(path.resolve(result.value.undoableAction.originalPath));
+        queuedDocuments = queuedDocuments.filter(
+          (documentItem) =>
+            path.resolve(documentItem.filePath) !== path.resolve(result.value.undoableAction.originalPath)
+        );
       }
 
       return result;
@@ -115,12 +121,17 @@ function registerIpcHandlers(): void {
 
     if (result.ok) {
       queuedDocumentPaths.add(path.resolve(result.value.restoredPath));
+      queuedDocuments.push({
+        filePath: result.value.restoredPath,
+        name: path.basename(result.value.restoredPath)
+      });
       lastUndoableAction = null;
     }
 
     return result;
   });
   ipcMain.handle("classification:getLastUndoableAction", () => getLastUndoableAction());
+  ipcMain.handle("duplicates:analyzeExact", () => analyzeQueuedExactDuplicates());
   ipcMain.handle("history:getRecent", (_event, limit: unknown) =>
     readRecentActions(
       getJournalFilePath(),
@@ -148,6 +159,7 @@ async function selectSourceDirectory(): Promise<Result<DirectorySelection | null
   if (selection.ok && selection.value) {
     selectedSourcePath = selection.value.path;
     queuedDocumentPaths = new Set();
+    queuedDocuments = [];
   }
 
   return selection;
@@ -165,6 +177,7 @@ async function selectTargetDirectory(): Promise<Result<DirectorySelection | null
 async function refreshSelectedSourceDocuments() {
   if (!selectedSourcePath) {
     queuedDocumentPaths = new Set();
+    queuedDocuments = [];
     return discoverDocuments(undefined);
   }
 
@@ -177,8 +190,13 @@ async function refreshSourceDocuments(sourcePath: string) {
     queuedDocumentPaths = new Set(
       result.value.documents.map((documentItem) => path.resolve(documentItem.filePath))
     );
+    queuedDocuments = result.value.documents.map((documentItem) => ({
+      filePath: documentItem.filePath,
+      name: documentItem.name
+    }));
   } else {
     queuedDocumentPaths = new Set();
+    queuedDocuments = [];
   }
 
   return result;
@@ -196,6 +214,23 @@ async function getLastUndoableAction(): Promise<UndoableClassificationAction | n
 
   lastUndoableAction = journalAction.value;
   return lastUndoableAction;
+}
+
+async function analyzeQueuedExactDuplicates() {
+  if (!selectedSourcePath) {
+    return {
+      ok: false,
+      error: {
+        code: "SOURCE_NOT_SELECTED",
+        message: "Aucun dossier source sélectionné."
+      }
+    };
+  }
+
+  return analyzeExactDuplicates({
+    sourceDocuments: queuedDocuments,
+    journalFilePath: getJournalFilePath()
+  });
 }
 
 function getJournalFilePath(): string {

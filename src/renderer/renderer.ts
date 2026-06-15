@@ -12,6 +12,7 @@ type DestinationCheckStatus =
   | "invalid"
   | "error";
 type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
+type DuplicateAnalysisStatus = "idle" | "analyzing" | "ready" | "error";
 
 interface AppError {
   code:
@@ -167,6 +168,57 @@ interface ActionJournalEntry {
   errorMessage?: string;
 }
 
+interface DuplicateFileReference {
+  filePath: string;
+  name: string;
+}
+
+interface SourceQueueDuplicateMatch {
+  type: "source-queue";
+  hash: string;
+  files: DuplicateFileReference[];
+  reliable: true;
+}
+
+interface HistoryDuplicateMatch {
+  type: "history";
+  hash: string;
+  sourceFile: DuplicateFileReference;
+  historyFile: DuplicateFileReference & {
+    originalName: string;
+    classifiedName: string;
+    actionId: string;
+  };
+  reliable: true;
+}
+
+type ExactDuplicateMatch = SourceQueueDuplicateMatch | HistoryDuplicateMatch;
+
+interface ExactDuplicateFileError {
+  filePath: string;
+  name: string;
+  code: "FILE_NOT_FOUND" | "FILE_HASH_FAILED";
+  message: string;
+}
+
+interface ExactDuplicateAnalysis {
+  analyzedAt: string;
+  sourceFileCount: number;
+  hashedSourceFileCount: number;
+  matches: ExactDuplicateMatch[];
+  fileErrors: ExactDuplicateFileError[];
+  ignoredHistoryCount: number;
+}
+
+interface DuplicateAnalysisState {
+  status: DuplicateAnalysisStatus;
+  matches: ExactDuplicateMatch[];
+  fileErrors: ExactDuplicateFileError[];
+  ignoredFilePaths: string[];
+  errorMessage: string;
+  analyzedAt: string;
+}
+
 interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
@@ -203,6 +255,7 @@ interface AppState {
   classification: ClassificationState;
   lastUndoableAction: UndoableClassificationAction | null;
   history: HistoryState;
+  duplicates: DuplicateAnalysisState;
 }
 
 interface RefreshOptions {
@@ -227,7 +280,8 @@ const state: AppState = {
   destination: createIdleDestinationCheckState(),
   classification: createIdleClassificationState(),
   lastUndoableAction: null,
-  history: createIdleHistoryState()
+  history: createIdleHistoryState(),
+  duplicates: createIdleDuplicateAnalysisState()
 };
 
 let previewRequestId = 0;
@@ -235,12 +289,14 @@ let pdfRenderRequestId = 0;
 let namingRequestId = 0;
 let destinationRequestId = 0;
 let classificationRequestId = 0;
+let duplicateAnalysisRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
 const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-source");
 const refreshSourceButton = document.querySelector<HTMLButtonElement>("#refresh-source");
 const selectTargetButton = document.querySelector<HTMLButtonElement>("#select-target");
+const analyzeDuplicatesButton = document.querySelector<HTMLButtonElement>("#analyze-duplicates");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
 const queueCount = document.querySelector<HTMLElement>("#queue-count");
@@ -258,6 +314,10 @@ const zoomInButton = document.querySelector<HTMLButtonElement>("#zoom-in");
 const rotatePreviewButton = document.querySelector<HTMLButtonElement>("#rotate-preview");
 const statusText = document.querySelector<HTMLElement>("#status-text");
 const documentDetails = document.querySelector<HTMLElement>("#document-details");
+const duplicatePanel = document.querySelector<HTMLElement>("#duplicate-panel");
+const duplicateDetails = document.querySelector<HTMLElement>("#duplicate-details");
+const ignoreDuplicateButton = document.querySelector<HTMLButtonElement>("#ignore-duplicate");
+const keepDuplicateButton = document.querySelector<HTMLButtonElement>("#keep-duplicate");
 const namingPanel = document.querySelector<HTMLElement>("#naming-panel");
 const namingDateInput = document.querySelector<HTMLInputElement>("#naming-date");
 const namingSubjectInput = document.querySelector<HTMLInputElement>("#naming-subject");
@@ -303,6 +363,10 @@ refreshSourceButton?.addEventListener("click", () => {
 
 selectTargetButton?.addEventListener("click", () => {
   void selectTargetDirectory();
+});
+
+analyzeDuplicatesButton?.addEventListener("click", () => {
+  void analyzeExactDuplicates();
 });
 
 previousPageButton?.addEventListener("click", () => {
@@ -389,6 +453,14 @@ undoLastActionButton?.addEventListener("click", () => {
   void undoLastClassificationAction();
 });
 
+ignoreDuplicateButton?.addEventListener("click", () => {
+  ignoreActiveDuplicateForSession();
+});
+
+keepDuplicateButton?.addEventListener("click", () => {
+  ignoreActiveDuplicateForSession();
+});
+
 refreshHistoryButton?.addEventListener("click", () => {
   void refreshRecentHistory();
 });
@@ -416,6 +488,7 @@ async function selectSourceDirectory(): Promise<void> {
   state.activeDocumentPath = null;
   state.preview = createIdlePreviewState();
   resetNamingState();
+  resetDuplicateAnalysisState();
   state.queueMessage = "Analyse du dossier source";
   render();
 
@@ -473,6 +546,7 @@ async function refreshDocuments(options: RefreshOptions): Promise<void> {
   clearPreviewResources();
   state.documents = result.value.documents;
   resetClassificationState();
+  resetDuplicateAnalysisState();
   const activeDocumentAfterRefresh = activeDocumentPathBeforeRefresh
     ? state.documents.find((documentItem) => documentItem.filePath === activeDocumentPathBeforeRefresh) ?? null
     : null;
@@ -515,6 +589,7 @@ function applyDiscoveryError(error: AppError): void {
   state.activeDocumentPath = null;
   state.preview = createIdlePreviewState();
   resetNamingState();
+  resetDuplicateAnalysisState();
   state.queueMessage = error.message;
 }
 
@@ -615,6 +690,11 @@ function setControlsDisabled(disabled: boolean): void {
   if (selectTargetButton) {
     selectTargetButton.disabled = shouldDisable;
   }
+
+  if (analyzeDuplicatesButton) {
+    analyzeDuplicatesButton.disabled =
+      shouldDisable || !state.sourcePath || state.documents.length === 0 || state.duplicates.status === "analyzing";
+  }
 }
 
 function render(): void {
@@ -637,6 +717,15 @@ function renderControls(): void {
 
   if (refreshSourceButton) {
     refreshSourceButton.disabled = !state.sourcePath || state.isLoading || isClassificationBusy();
+  }
+
+  if (analyzeDuplicatesButton) {
+    analyzeDuplicatesButton.disabled =
+      !state.sourcePath ||
+      state.documents.length === 0 ||
+      state.isLoading ||
+      state.duplicates.status === "analyzing" ||
+      isClassificationBusy();
   }
 
   if (prepareClassificationButton) {
@@ -699,6 +788,9 @@ function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
   if (documentItem.status === "missing") {
     button.classList.add("missing");
   }
+  if (documentItem.status !== "missing" && documentHasVisibleDuplicate(documentItem.filePath)) {
+    button.classList.add("duplicate");
+  }
 
   icon.className = "document-icon";
   icon.textContent = documentItem.extension.replace(".", "").toUpperCase();
@@ -707,8 +799,8 @@ function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
   title.title = documentItem.name;
   meta.textContent = `${documentItem.extension.toUpperCase()} · ${documentItem.sizeLabel}`;
   status.className = "status-badge";
-  status.textContent = statusLabel(documentItem.status);
-  status.title = statusLabel(documentItem.status);
+  status.textContent = documentQueueStatusLabel(documentItem);
+  status.title = documentQueueStatusLabel(documentItem);
 
   content.append(title, meta, status);
   button.append(icon, content);
@@ -838,6 +930,7 @@ function renderPdfPage(container: HTMLElement, pageNumber: number, zoom: number)
 
 function renderDetails(): void {
   if (!documentDetails) {
+    renderDuplicatePanel();
     renderNamingPanel(true);
     return;
   }
@@ -846,6 +939,7 @@ function renderDetails(): void {
   if (!activeDocument) {
     documentDetails.className = "details-empty";
     documentDetails.replaceChildren("Aucun document actif");
+    renderDuplicatePanel();
     renderNamingPanel(true);
     return;
   }
@@ -860,6 +954,7 @@ function renderDetails(): void {
     createDetailRow("Statut", statusLabel(activeDocument.status)),
     createDetailRow("Dossier cible", state.targetPath ?? "Aucun dossier cible sélectionné")
   );
+  renderDuplicatePanel();
   renderNamingPanel(true);
 }
 
@@ -874,6 +969,221 @@ function createDetailRow(label: string, value: string): HTMLDivElement {
   row.append(labelElement, valueElement);
 
   return row;
+}
+
+async function analyzeExactDuplicates(): Promise<void> {
+  if (
+    !state.sourcePath ||
+    state.documents.length === 0 ||
+    state.duplicates.status === "analyzing" ||
+    isClassificationBusy()
+  ) {
+    return;
+  }
+
+  const requestId = ++duplicateAnalysisRequestId;
+  state.duplicates = {
+    ...createIdleDuplicateAnalysisState(),
+    status: "analyzing"
+  };
+  state.queueMessage = "Analyse des doublons exacts...";
+  render();
+
+  const result = await window.docSorter.analyzeExactDuplicates();
+  if (requestId !== duplicateAnalysisRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    state.duplicates = {
+      ...createIdleDuplicateAnalysisState(),
+      status: "error",
+      errorMessage: result.error.message
+    };
+    state.queueMessage = result.error.message;
+    render();
+    return;
+  }
+
+  const analysis = result.value as ExactDuplicateAnalysis;
+  state.duplicates = {
+    status: "ready",
+    matches: analysis.matches,
+    fileErrors: analysis.fileErrors,
+    ignoredFilePaths: [],
+    errorMessage: "",
+    analyzedAt: analysis.analyzedAt
+  };
+
+  for (const fileError of analysis.fileErrors) {
+    markDocumentUnavailable(fileError.filePath);
+  }
+
+  state.queueMessage = duplicateAnalysisSummary(analysis);
+  render();
+}
+
+function ignoreActiveDuplicateForSession(): void {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || state.duplicates.ignoredFilePaths.includes(activeDocument.filePath)) {
+    return;
+  }
+
+  state.duplicates = {
+    ...state.duplicates,
+    ignoredFilePaths: [...state.duplicates.ignoredFilePaths, activeDocument.filePath]
+  };
+  render();
+}
+
+function renderDuplicatePanel(): void {
+  if (!duplicatePanel || !duplicateDetails) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  const matches = activeDocument ? getVisibleDuplicateMatchesForDocument(activeDocument.filePath) : [];
+  if (!activeDocument || matches.length === 0) {
+    duplicatePanel.hidden = true;
+    duplicateDetails.replaceChildren();
+    return;
+  }
+
+  duplicatePanel.hidden = false;
+  duplicateDetails.replaceChildren(
+    createDuplicateSummary(matches),
+    ...matches.map((match) => createDuplicateMatchItem(match, activeDocument.filePath))
+  );
+
+  const actionsDisabled = isClassificationBusy();
+  if (ignoreDuplicateButton) {
+    ignoreDuplicateButton.disabled = actionsDisabled;
+  }
+  if (keepDuplicateButton) {
+    keepDuplicateButton.disabled = actionsDisabled;
+  }
+}
+
+function createDuplicateSummary(matches: ExactDuplicateMatch[]): HTMLParagraphElement {
+  const summary = document.createElement("p");
+  summary.className = "duplicate-summary";
+  summary.textContent = `${matches.length} correspondance${
+    matches.length > 1 ? "s" : ""
+  } exacte${matches.length > 1 ? "s" : ""} par hash SHA-256. Aucune suppression automatique.`;
+  return summary;
+}
+
+function createDuplicateMatchItem(match: ExactDuplicateMatch, activeFilePath: string): HTMLDivElement {
+  const item = document.createElement("div");
+  const title = document.createElement("strong");
+  const description = document.createElement("p");
+  const hash = document.createElement("small");
+
+  item.className = "duplicate-match";
+  hash.textContent = `SHA-256 ${shortHash(match.hash)}`;
+
+  if (match.type === "source-queue") {
+    const otherFiles = match.files.filter((file) => file.filePath !== activeFilePath);
+    title.textContent = "Doublon dans la file source";
+    description.textContent = `Aussi présent : ${formatDuplicateNames(otherFiles)}`;
+    item.title = otherFiles.map((file) => file.filePath).join("\n");
+    item.append(title, description, hash);
+    return item;
+  }
+
+  title.textContent = "Doublon déjà classé";
+  description.textContent = `${match.historyFile.classifiedName} depuis ${match.historyFile.originalName}`;
+  item.title = match.historyFile.filePath;
+  item.append(title, description, hash);
+  return item;
+}
+
+function getVisibleDuplicateMatchesForDocument(filePath: string): ExactDuplicateMatch[] {
+  if (state.duplicates.ignoredFilePaths.includes(filePath)) {
+    return [];
+  }
+
+  return getDuplicateMatchesForDocument(filePath);
+}
+
+function getDuplicateMatchesForDocument(filePath: string): ExactDuplicateMatch[] {
+  if (state.duplicates.status !== "ready") {
+    return [];
+  }
+
+  return state.duplicates.matches.filter((match) =>
+    match.type === "source-queue"
+      ? match.files.some((file) => file.filePath === filePath)
+      : match.sourceFile.filePath === filePath
+  );
+}
+
+function documentHasVisibleDuplicate(filePath: string): boolean {
+  return getVisibleDuplicateMatchesForDocument(filePath).length > 0;
+}
+
+function documentQueueStatusLabel(documentItem: DocumentItem): string {
+  if (documentItem.status === "missing") {
+    return statusLabel(documentItem.status);
+  }
+
+  return documentHasVisibleDuplicate(documentItem.filePath)
+    ? "Doublon exact"
+    : statusLabel(documentItem.status);
+}
+
+function duplicateAnalysisSummary(analysis: ExactDuplicateAnalysis): string {
+  const duplicateDocumentCount = countDuplicateSourceDocuments(analysis.matches);
+  const parts = [
+    duplicateDocumentCount > 0
+      ? `Analyse terminée : ${duplicateDocumentCount} document${
+          duplicateDocumentCount > 1 ? "s" : ""
+        } en doublon exact.`
+      : "Analyse terminée : aucun doublon exact détecté."
+  ];
+
+  if (analysis.fileErrors.length > 0) {
+    parts.push(
+      `${analysis.fileErrors.length} document${
+        analysis.fileErrors.length > 1 ? "s" : ""
+      } indisponible${analysis.fileErrors.length > 1 ? "s" : ""}.`
+    );
+  }
+
+  if (analysis.ignoredHistoryCount > 0) {
+    parts.push(
+      `${analysis.ignoredHistoryCount} entrée${
+        analysis.ignoredHistoryCount > 1 ? "s" : ""
+      } d'historique ignorée${analysis.ignoredHistoryCount > 1 ? "s" : ""}.`
+    );
+  }
+
+  return parts.join(" ");
+}
+
+function countDuplicateSourceDocuments(matches: ExactDuplicateMatch[]): number {
+  const filePaths = new Set<string>();
+  for (const match of matches) {
+    if (match.type === "source-queue") {
+      match.files.forEach((file) => filePaths.add(file.filePath));
+    } else {
+      filePaths.add(match.sourceFile.filePath);
+    }
+  }
+
+  return filePaths.size;
+}
+
+function formatDuplicateNames(files: DuplicateFileReference[]): string {
+  if (files.length === 0) {
+    return "aucun autre document visible";
+  }
+
+  return files.map((file) => file.name).join(", ");
+}
+
+function shortHash(hash: string): string {
+  return hash.length > 16 ? `${hash.slice(0, 16)}...` : hash;
 }
 
 function createPlaceholder(message: string): HTMLDivElement {
@@ -1191,6 +1501,7 @@ function applySuccessfulClassification(classifiedDocumentPath: string): void {
     : createIdlePreviewState();
   resetNamingState();
   resetClassificationState();
+  resetDuplicateAnalysisState();
   render();
 
   if (!nextDocument) {
@@ -1253,6 +1564,13 @@ function renderClassificationSummary(): void {
       state.classification.status === "ready" ? "Plan prêt" : "Plan bloqué"
     ),
     createClassificationNotice("Simulation uniquement — aucun fichier n'a été modifié"),
+    ...(plan.status === "ready" && documentHasVisibleDuplicate(activeDocument.filePath)
+      ? [
+          createClassificationNotice(
+            "Attention : doublon exact détecté. Le classement réel conservera un fichier séparé, sans suppression ni remplacement."
+          )
+        ]
+      : []),
     ...(plan.status === "ready"
       ? [createClassificationNotice("Action réelle : le fichier sera renommé et déplacé.")]
       : []),
@@ -1446,6 +1764,7 @@ function canPrepareClassificationPlan(): boolean {
       state.naming.proposal?.isValid &&
       getEffectiveProposedFilename() &&
       state.destination.status === "available" &&
+      state.duplicates.status !== "analyzing" &&
       !isClassificationBusy()
   );
 }
@@ -1814,6 +2133,17 @@ function createIdleHistoryState(): HistoryState {
   };
 }
 
+function createIdleDuplicateAnalysisState(): DuplicateAnalysisState {
+  return {
+    status: "idle",
+    matches: [],
+    fileErrors: [],
+    ignoredFilePaths: [],
+    errorMessage: "",
+    analyzedAt: ""
+  };
+}
+
 function resetNamingState(): void {
   namingRequestId += 1;
   state.naming = createIdleNamingState();
@@ -1824,6 +2154,11 @@ function resetNamingState(): void {
 function resetClassificationState(): void {
   classificationRequestId += 1;
   state.classification = createIdleClassificationState();
+}
+
+function resetDuplicateAnalysisState(): void {
+  duplicateAnalysisRequestId += 1;
+  state.duplicates = createIdleDuplicateAnalysisState();
 }
 
 function clampPreviewZoom(zoom: number): number {

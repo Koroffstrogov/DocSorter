@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 4C : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent et annulation persistante de la dernière action.
+Lot 5A : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante de la dernière action et détection explicite des doublons exacts par hash SHA-256.
 
 ## Commandes
 
@@ -52,7 +52,15 @@ npm run dev
 - journal local sobre des actions de classement ;
 - historique récent des dernières actions utiles ;
 - rechargement de la dernière action annulable depuis le journal au démarrage ;
-- annulation de la dernière action réussie, même après redémarrage, si les chemins et le hash restent sûrs.
+- annulation de la dernière action réussie, même après redémarrage, si les chemins et le hash restent sûrs ;
+- bouton `Analyser les doublons exacts` déclenché explicitement par l'utilisateur ;
+- calcul local SHA-256 des fichiers de la dernière file scannée, sans upload ;
+- détection des doublons exacts entre fichiers présents dans la source ;
+- détection des doublons exacts avec les classements `completed` du journal, uniquement si l'action n'a pas été annulée et si le fichier classé existe encore avec le hash attendu ;
+- marquage visuel `Doublon exact` dans la file d'attente ;
+- panneau de détail des doublons exacts pour le document actif ;
+- avertissement avant classement réel si le document actif est un doublon exact ;
+- boutons de session `Ignorer pour l'instant` et `Conserver quand même`, sans suppression ni remplacement.
 
 ## Convention de nommage
 
@@ -89,6 +97,15 @@ Le journal contient les chemins source/cible nécessaires à l'annulation, les n
 
 Le journal est relu au démarrage pour retrouver la dernière action `classify completed` non déjà annulée. L'annulation refait les contrôles au clic : fichier classé présent, ancien chemin source libre, hash inchangé si disponible, puis déplacement inverse par `fs.rename`.
 
+## Doublons exacts
+
+L'analyse des doublons est volontairement explicite : elle ne se lance pas automatiquement au choix de la source. Elle calcule des empreintes SHA-256 localement et compare :
+
+- les fichiers actuellement présents dans la file scannée ;
+- les fichiers déjà classés présents dans le journal local, si le fichier classé existe encore et que son hash correspond au hash enregistré au moment du classement.
+
+Les entrées d'historique anciennes ou non fiables sont ignorées. L'application ne supprime rien, ne remplace rien et ne fusionne aucun fichier.
+
 ## Dépendances
 
 - `pdfjs-dist` : utilisé pour rendre localement les PDF dans un canvas. Cette dépendance est limitée au Lot 2 et ne fait pas d'OCR, d'extraction texte, d'upload ou d'analyse distante.
@@ -102,21 +119,22 @@ Le journal est relu au démarrage pour retrouver la dernière action `classify c
 - pas d'annulation multiple ;
 - pas de création de dossier cible ;
 - pas de fallback `copy + delete` pour les déplacements entre volumes ;
-- pas de doublons exacts complets ;
+- pas de suppression, remplacement ou fusion de doublons ;
+- pas de doublons probables ou similaires ;
 - pas de tri par métadonnées ni recherche dans la file ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
-Tester le Lot 4C d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
-Pour le Lot 4C, tester aussi la fermeture puis relance de l'application avant d'annuler.
+Tester le Lot 5A d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Pour le classement réel et l'annulation, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
 ## Passage futur recommandé
 
 Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
-- doublons exacts basés sur hash ;
+- filtres ou recherche dans la file d'attente ;
 - aide au choix de dossier cible, sans OCR ni upload.
 
 ## Validations manuelles
@@ -157,6 +175,14 @@ Un prochain lot pourra ajouter :
 - le bouton `Annuler dernière action` restaure le fichier si les chemins sont encore libres ;
 - l'historique récent affiche l'annulation ;
 - le journal local contient une action `undo-classify` après annulation ;
+- le bouton `Analyser les doublons exacts` reste désactivé tant qu'aucune source scannée n'est disponible ;
+- deux fichiers strictement identiques dans la source affichent `Doublon exact` dans la file ;
+- sélectionner un fichier doublon affiche le panneau `Doublons exacts` dans la colonne droite ;
+- un doublon avec un fichier déjà classé apparaît seulement si le fichier classé existe encore et si son hash n'a pas changé ;
+- `Ignorer pour l'instant` masque l'alerte du document actif pour la session ;
+- `Conserver quand même` masque aussi l'alerte du document actif pour la session, sans action disque ;
+- préparer puis valider un classement sur un doublon affiche un avertissement, mais ne supprime ni ne remplace aucun fichier ;
+- supprimer ou déplacer un fichier de la source avant l'analyse marque le document comme indisponible ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

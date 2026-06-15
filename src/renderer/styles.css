@@ -191,6 +191,24 @@ h2 {
   border-bottom: 1px solid var(--border);
 }
 
+.panel-header button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.15;
+}
+
+.queue-panel .panel-header button {
+  max-width: 168px;
+  text-align: center;
+  white-space: normal;
+}
+
 .document-list {
   display: grid;
   grid-row: 3;
@@ -235,6 +253,21 @@ h2 {
 .document-item.selected {
   border-color: #b7c7dd;
   background: var(--blue-soft);
+}
+
+.document-item.duplicate {
+  border-color: #d7bc5d;
+  background: #fff9e6;
+}
+
+.document-item.duplicate .document-icon {
+  background: #765d13;
+}
+
+.document-item.duplicate .status-badge {
+  border-color: #d7bc5d;
+  color: #765d13;
+  background: #fff2bf;
 }
 
 .document-item.missing {
@@ -480,6 +513,78 @@ h2 {
   margin: 0;
   font-size: 13px;
   font-weight: 760;
+}
+
+.duplicate-panel {
+  border: 1px solid #d7bc5d;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffaf0;
+}
+
+.duplicate-panel[hidden] {
+  display: none;
+}
+
+.duplicate-details {
+  display: grid;
+  gap: 8px;
+}
+
+.duplicate-summary {
+  color: #765d13;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.duplicate-match {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid #ead69b;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.duplicate-match strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.duplicate-match p {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.duplicate-match small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.duplicate-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.duplicate-actions button {
+  min-height: 32px;
+  border: 1px solid #d7bc5d;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #765d13;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.duplicate-actions button:last-child {
+  color: #ffffff;
+  background: #765d13;
 }
 
 .section-heading {
