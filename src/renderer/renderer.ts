@@ -24,7 +24,7 @@ interface DocumentItem {
   sizeBytes: number;
   sizeLabel: string;
   modifiedAt: string;
-  status: "pending";
+  status: "pending" | "missing";
 }
 
 interface RendererPreviewData {
@@ -56,6 +56,11 @@ interface AppState {
   preview: PreviewState;
 }
 
+interface RefreshOptions {
+  preserveSelection: boolean;
+  successMessage: string;
+}
+
 const minPreviewZoom = 0.5;
 const maxPreviewZoom = 3;
 const previewZoomStep = 0.25;
@@ -75,6 +80,7 @@ let pdfRenderRequestId = 0;
 
 const version = document.querySelector<HTMLElement>("#app-version");
 const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-source");
+const refreshSourceButton = document.querySelector<HTMLButtonElement>("#refresh-source");
 const selectTargetButton = document.querySelector<HTMLButtonElement>("#select-target");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
@@ -102,6 +108,13 @@ void window.docSorter.getVersion().then((value) => {
 
 selectSourceButton?.addEventListener("click", () => {
   void selectSourceDirectory();
+});
+
+refreshSourceButton?.addEventListener("click", () => {
+  void refreshDocuments({
+    preserveSelection: true,
+    successMessage: "Rafraîchissement réussi"
+  });
 });
 
 selectTargetButton?.addEventListener("click", () => {
@@ -177,7 +190,10 @@ async function selectSourceDirectory(): Promise<void> {
   state.queueMessage = "Analyse du dossier source";
   render();
 
-  await refreshDocuments();
+  await refreshDocuments({
+    preserveSelection: false,
+    successMessage: ""
+  });
 }
 
 async function selectTargetDirectory(): Promise<void> {
@@ -199,17 +215,21 @@ async function selectTargetDirectory(): Promise<void> {
   render();
 }
 
-async function refreshDocuments(): Promise<void> {
+async function refreshDocuments(options: RefreshOptions): Promise<void> {
   if (!state.sourcePath) {
     state.queueMessage = "Aucun dossier source sélectionné";
     render();
     return;
   }
 
+  const activeDocumentPathBeforeRefresh = options.preserveSelection ? state.activeDocumentPath : null;
   state.isLoading = true;
+  state.queueMessage = options.preserveSelection
+    ? "Rafraîchissement du dossier source"
+    : "Analyse du dossier source";
   render();
 
-  const result = await window.docSorter.listDocuments(state.sourcePath);
+  const result = await window.docSorter.refreshSourceDocuments();
   state.isLoading = false;
 
   if (!result.ok) {
@@ -220,10 +240,35 @@ async function refreshDocuments(): Promise<void> {
 
   clearPreviewResources();
   state.documents = result.value.documents;
+  const activeDocumentAfterRefresh = activeDocumentPathBeforeRefresh
+    ? state.documents.find((documentItem) => documentItem.filePath === activeDocumentPathBeforeRefresh) ?? null
+    : null;
+
+  if (activeDocumentAfterRefresh) {
+    state.activeDocumentPath = activeDocumentAfterRefresh.filePath;
+    state.preview = {
+      ...createIdlePreviewState(),
+      status: "loading"
+    };
+    state.queueMessage = options.successMessage;
+    render();
+    void loadActivePreview(activeDocumentAfterRefresh);
+    return;
+  }
+
   state.activeDocumentPath = null;
-  state.preview = createIdlePreviewState();
-  state.queueMessage =
-    state.documents.length === 0 ? "Aucun document PDF/JPG/PNG trouvé" : "";
+  state.preview =
+    activeDocumentPathBeforeRefresh && state.documents.length > 0
+      ? {
+          ...createIdlePreviewState(),
+          status: "error",
+          errorMessage: "Le document sélectionné n'est plus disponible"
+        }
+      : createIdlePreviewState();
+  state.queueMessage = refreshQueueMessage(
+    Boolean(activeDocumentPathBeforeRefresh),
+    options.successMessage
+  );
   render();
 }
 
@@ -259,6 +304,10 @@ async function loadActivePreview(documentItem: DocumentItem): Promise<void> {
   }
 
   if (!result.ok) {
+    if (shouldMarkDocumentUnavailable(result.error)) {
+      markDocumentUnavailable(documentItem.filePath);
+    }
+
     state.preview = {
       ...createIdlePreviewState(),
       status: "error",
@@ -317,16 +366,27 @@ function setControlsDisabled(disabled: boolean): void {
     selectSourceButton.disabled = disabled;
   }
 
+  if (refreshSourceButton) {
+    refreshSourceButton.disabled = disabled || !state.sourcePath;
+  }
+
   if (selectTargetButton) {
     selectTargetButton.disabled = disabled;
   }
 }
 
 function render(): void {
+  renderControls();
   renderPaths();
   renderQueue();
   renderPreview();
   renderDetails();
+}
+
+function renderControls(): void {
+  if (refreshSourceButton) {
+    refreshSourceButton.disabled = !state.sourcePath || state.isLoading;
+  }
 }
 
 function renderPaths(): void {
@@ -345,7 +405,7 @@ function renderQueue(): void {
 
   if (state.isLoading) {
     queueState.hidden = false;
-    queueState.replaceChildren("Analyse du dossier source");
+    queueState.replaceChildren(state.queueMessage || "Analyse du dossier source");
     return;
   }
 
@@ -369,6 +429,9 @@ function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
   if (documentItem.filePath === state.activeDocumentPath) {
     button.classList.add("selected");
   }
+  if (documentItem.status === "missing") {
+    button.classList.add("missing");
+  }
 
   icon.className = "document-icon";
   icon.textContent = documentItem.extension.replace(".", "").toUpperCase();
@@ -378,6 +441,7 @@ function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
   meta.textContent = `${documentItem.extension.toUpperCase()} · ${documentItem.sizeLabel}`;
   status.className = "status-badge";
   status.textContent = statusLabel(documentItem.status);
+  status.title = statusLabel(documentItem.status);
 
   content.append(title, meta, status);
   button.append(icon, content);
@@ -397,6 +461,12 @@ function renderPreview(): void {
   }
 
   const activeDocument = getActiveDocument();
+
+  if (!activeDocument && state.preview.status === "error") {
+    statusText?.replaceChildren("Document indisponible");
+    previewContent.replaceChildren(createPlaceholder(state.preview.errorMessage));
+    return;
+  }
 
   if (!activeDocument) {
     statusText?.replaceChildren("Lecture seule");
@@ -543,8 +613,39 @@ function createPlaceholder(message: string): HTMLDivElement {
   return placeholder;
 }
 
+function refreshQueueMessage(activeDocumentLost: boolean, successMessage: string): string {
+  if (activeDocumentLost) {
+    return "Le document sélectionné n'est plus disponible";
+  }
+
+  if (state.documents.length === 0) {
+    return "Aucun document PDF/JPG/PNG trouvé";
+  }
+
+  return successMessage;
+}
+
 function getActiveDocument(): DocumentItem | null {
   return state.documents.find((documentItem) => documentItem.filePath === state.activeDocumentPath) ?? null;
+}
+
+function markDocumentUnavailable(filePath: string): void {
+  state.documents = state.documents.map((documentItem) =>
+    documentItem.filePath === filePath
+      ? {
+          ...documentItem,
+          status: "missing"
+        }
+      : documentItem
+  );
+}
+
+function shouldMarkDocumentUnavailable(error: AppError): boolean {
+  return (
+    error.code === "FILE_NOT_FOUND" ||
+    error.code === "FILE_ACCESS_DENIED" ||
+    error.code === "FILE_UNAVAILABLE"
+  );
 }
 
 function updatePreviewZoom(zoom: number): void {
@@ -596,6 +697,8 @@ function statusLabel(status: DocumentItem["status"]): string {
   switch (status) {
     case "pending":
       return "À analyser";
+    case "missing":
+      return "Indisponible";
   }
 }
 

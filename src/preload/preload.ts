@@ -13,8 +13,8 @@ const api = {
     ipcRenderer.invoke("directory:selectSource"),
   selectTargetDirectory: (): Promise<Result<DirectorySelection | null>> =>
     ipcRenderer.invoke("directory:selectTarget"),
-  listDocuments: (sourcePath: string): Promise<Result<DocumentDiscoveryResult>> =>
-    ipcRenderer.invoke("documents:list", sourcePath),
+  refreshSourceDocuments: (): Promise<Result<DocumentDiscoveryResult>> =>
+    ipcRenderer.invoke("documents:refreshSource"),
   getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>
     ipcRenderer.invoke("preview:getData", documentPath)
 };

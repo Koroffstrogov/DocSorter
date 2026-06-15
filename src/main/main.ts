@@ -34,28 +34,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("directory:selectSource", () => selectSourceDirectory());
   ipcMain.handle("directory:selectTarget", () => selectTargetDirectory());
-
-  ipcMain.handle("documents:list", async (_event, sourcePath: unknown) => {
-    if (typeof sourcePath !== "string") {
-      return discoverDocuments(undefined);
-    }
-
-    if (!selectedSourcePath || path.resolve(sourcePath) !== path.resolve(selectedSourcePath)) {
-      queuedDocumentPaths = new Set();
-      return discoverDocuments(undefined);
-    }
-
-    const result = await discoverDocuments(sourcePath);
-    if (result.ok) {
-      queuedDocumentPaths = new Set(
-        result.value.documents.map((documentItem) => path.resolve(documentItem.filePath))
-      );
-    } else {
-      queuedDocumentPaths = new Set();
-    }
-
-    return result;
-  });
+  ipcMain.handle("documents:refreshSource", () => refreshSelectedSourceDocuments());
 
   ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {
@@ -89,6 +68,28 @@ async function selectTargetDirectory(): Promise<Result<DirectorySelection | null
   }
 
   return selection;
+}
+
+async function refreshSelectedSourceDocuments() {
+  if (!selectedSourcePath) {
+    queuedDocumentPaths = new Set();
+    return discoverDocuments(undefined);
+  }
+
+  return refreshSourceDocuments(selectedSourcePath);
+}
+
+async function refreshSourceDocuments(sourcePath: string) {
+  const result = await discoverDocuments(sourcePath);
+  if (result.ok) {
+    queuedDocumentPaths = new Set(
+      result.value.documents.map((documentItem) => path.resolve(documentItem.filePath))
+    );
+  } else {
+    queuedDocumentPaths = new Set();
+  }
+
+  return result;
 }
 
 async function selectDirectory(title: string): Promise<Result<DirectorySelection | null>> {

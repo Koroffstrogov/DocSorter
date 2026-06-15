@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 2 : source, cible, file d'attente réelle, document actif et prévisualisation locale PDF/image en lecture seule.
+Lot 2.5B : source, cible, file d'attente réelle, prévisualisation locale PDF/image, rafraîchissement manuel de la source et gestion visuelle des fichiers indisponibles.
 
 ## Commandes
 
@@ -22,6 +22,7 @@ npm run dev
 - choix d'un dossier source pendant la session ;
 - choix d'un dossier cible pendant la session ;
 - scan non récursif du dossier source ;
+- rafraîchissement manuel du dossier source déjà sélectionné ;
 - file d'attente réelle pour `.pdf`, `.jpg`, `.jpeg` et `.png` ;
 - exclusion des sous-dossiers, fichiers non supportés et fichiers temporaires Office `~$...` ;
 - sélection d'un document actif ;
@@ -31,6 +32,8 @@ npm run dev
 - zoom borné entre 50 % et 300 % ;
 - navigation page précédente/suivante pour PDF multipages ;
 - rotation visuelle des images.
+- marquage visuel `Indisponible` si un fichier disparaît avant sa prévisualisation ;
+- conservation du dossier cible pendant les rafraîchissements.
 
 ## Dépendances
 
@@ -43,6 +46,7 @@ npm run dev
 - pas de suppression ;
 - pas de configuration persistée ;
 - pas de cache ni historique ;
+- pas de watcher automatique du dossier source ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Validations manuelles
@@ -50,7 +54,10 @@ npm run dev
 - l'application démarre avec `npm run dev` ;
 - aucun faux document n'est affiché au démarrage ;
 - le bouton `Choisir source` permet de sélectionner un dossier ;
+- le bouton `Rafraîchir` est désactivé tant qu'aucune source n'est sélectionnée ;
 - les PDF/JPG/JPEG/PNG du dossier apparaissent dans la file d'attente ;
+- un nouveau PDF ou PNG ajouté au dossier apparaît après `Rafraîchir` ;
+- un fichier supprimé ou déplacé disparaît de la file après `Rafraîchir` ;
 - les fichiers non supportés et les sous-dossiers n'apparaissent pas ;
 - le bouton `Choisir cible` affiche le chemin cible sélectionné ;
 - une image sélectionnée s'affiche réellement ;
@@ -59,7 +66,7 @@ npm run dev
 - un PDF sélectionné affiche sa première page ;
 - les boutons page précédente/suivante fonctionnent sur un PDF multipage ;
 - les contrôles zoom PDF fonctionnent ;
-- si un fichier est déplacé ou supprimé après le scan, une erreur propre s'affiche ;
+- si un fichier est déplacé ou supprimé après le scan, une erreur propre s'affiche et le document peut être marqué `Indisponible` ;
 - aucun fichier n'est modifié, renommé, déplacé ou supprimé.
 
 ## Principes

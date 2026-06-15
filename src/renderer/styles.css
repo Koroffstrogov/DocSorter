@@ -176,7 +176,7 @@ h2 {
 
 .queue-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .panel-header,
@@ -192,6 +192,7 @@ h2 {
 
 .document-list {
   display: grid;
+  grid-row: 3;
   align-content: start;
   gap: 8px;
   margin: 0;
@@ -235,6 +236,16 @@ h2 {
   background: var(--blue-soft);
 }
 
+.document-item.missing {
+  border-color: #d6c6a6;
+  color: #7a5a19;
+  background: #fff8e8;
+}
+
+.document-item.missing .document-icon {
+  background: #8a6a2b;
+}
+
 .document-icon {
   display: grid;
   place-items: center;
@@ -251,6 +262,12 @@ h2 {
 .document-item small,
 .status-badge {
   display: block;
+}
+
+.document-item.missing .status-badge {
+  border-color: #c4a56a;
+  color: #6f4d00;
+  background: #fff1c7;
 }
 
 .document-item strong {
@@ -291,6 +308,10 @@ h2 {
   background: #fbfcfb;
   font-size: 14px;
   text-align: center;
+}
+
+.queue-panel .empty-state {
+  grid-row: 2;
 }
 
 .preview-panel {
