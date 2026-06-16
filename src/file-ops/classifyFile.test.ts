@@ -9,6 +9,11 @@ import {
   undoLastClassification,
   type ExecuteClassificationOptions
 } from "./classifyFile";
+import {
+  appendActionJournalEntry,
+  type ActionJournalResult
+} from "../history/actionJournal";
+import type { ActionJournalEntry } from "../history/historyTypes";
 
 const fixedNow = () => new Date("2026-06-15T12:00:00.000Z");
 
@@ -36,6 +41,54 @@ describe("executeClassification", () => {
       oldName: "source.pdf",
       newName: "2026-06-15_Facture_Energie.pdf"
     });
+  });
+
+  it("does not move the file when the started journal entry cannot be written", async () => {
+    const fixture = await createFixture();
+    let renameCalled = false;
+
+    const result = await executeClassification(
+      createExecuteOptions(fixture, {
+        appendJournalEntry: async () => journalWriteFailure(),
+        renameFile: async () => {
+          renameCalled = true;
+        }
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("JOURNAL_WRITE_FAILED");
+    }
+    expect(renameCalled).toBe(false);
+    await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
+    await expect(stat(fixture.destinationFile)).rejects.toThrow();
+  });
+
+  it("reports a journal warning when the file is moved but the completed entry fails", async () => {
+    const fixture = await createFixture();
+
+    const result = await executeClassification(
+      createExecuteOptions(fixture, {
+        appendJournalEntry: failMatchingJournalEntry(
+          (entry) => entry.action === "classify" && entry.status === "completed"
+        )
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.status).toBe("completed-with-journal-warning");
+      expect(result.value.status).not.toBe("completed");
+      expect(result.value.journalWarning?.code).toBe("CLASSIFIED_BUT_JOURNAL_INCOMPLETE");
+      expect(result.value.message).toBe("Le fichier a été classé, mais le journal n'a pas pu être finalisé.");
+      expect(result.value.undoableAction.classifiedPath).toBe(fixture.destinationFile);
+    }
+    await expect(stat(fixture.sourceFile)).rejects.toThrow();
+    await expect(readFile(fixture.destinationFile, "utf8")).resolves.toBe("source");
+
+    const journal = await readJournal(fixture.journalFile);
+    expect(journal.map((entry) => entry.status)).toEqual(["started"]);
   });
 
   it("refuses classification when the source disappeared", async () => {
@@ -165,6 +218,42 @@ describe("undoLastClassification", () => {
       restoredPath: fixture.sourceFile,
       classifiedPath: fixture.destinationFile
     });
+  });
+
+  it("reports a journal warning when undo restores the file but the completed entry fails", async () => {
+    const fixture = await createFixture();
+    const executeResult = await executeClassification(createExecuteOptions(fixture));
+    if (!executeResult.ok) {
+      throw new Error("Expected successful classification");
+    }
+
+    const result = await undoLastClassification({
+      undoableAction: executeResult.value.undoableAction,
+      journalFilePath: fixture.journalFile,
+      now: fixedNow,
+      createId: () => "undo-warning",
+      appendJournalEntry: failMatchingJournalEntry(
+        (entry) => entry.action === "undo-classify" && entry.status === "completed"
+      )
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.status).toBe("undo-completed-with-journal-warning");
+      expect(result.value.status).not.toBe("completed");
+      expect(result.value.journalWarning?.code).toBe("UNDO_COMPLETED_BUT_JOURNAL_INCOMPLETE");
+      expect(result.value.message).toBe(
+        "La dernière action a été annulée, mais le journal n'a pas pu être finalisé."
+      );
+    }
+    await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
+    await expect(stat(fixture.destinationFile)).rejects.toThrow();
+
+    const journal = await readJournal(fixture.journalFile);
+    expect(journal.map((entry) => `${entry.action}:${entry.status}`)).toEqual([
+      "classify:started",
+      "classify:completed"
+    ]);
   });
 
   it("restores the last classified file after reconstructing it from the journal", async () => {
@@ -351,4 +440,26 @@ async function readJournal(journalFile: string): Promise<Array<Record<string, un
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function failMatchingJournalEntry(
+  predicate: (entry: ActionJournalEntry) => boolean
+): (journalFilePath: string, entry: ActionJournalEntry) => Promise<ActionJournalResult> {
+  return (journalFilePath, entry) => {
+    if (predicate(entry)) {
+      return Promise.resolve(journalWriteFailure());
+    }
+
+    return appendActionJournalEntry(journalFilePath, entry);
+  };
+}
+
+function journalWriteFailure(): ActionJournalResult {
+  return {
+    ok: false,
+    error: {
+      code: "JOURNAL_WRITE_FAILED",
+      message: "Impossible d'écrire le journal d'action."
+    }
+  };
 }

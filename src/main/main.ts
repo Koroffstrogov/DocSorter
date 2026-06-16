@@ -34,6 +34,7 @@ let selectedTargetPath: string | null = null;
 let queuedDocumentPaths = new Set<string>();
 let queuedDocuments: DuplicateSourceDocument[] = [];
 let lastUndoableAction: UndoableClassificationAction | null = null;
+const physicallyUndoneActionIds = new Set<string>();
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -109,6 +110,7 @@ function registerIpcHandlers(): void {
 
       if (result.ok) {
         lastUndoableAction = result.value.undoableAction;
+        physicallyUndoneActionIds.delete(result.value.undoableAction.id);
         queuedDocumentPaths.delete(path.resolve(result.value.undoableAction.originalPath));
         queuedDocuments = queuedDocuments.filter(
           (documentItem) =>
@@ -126,6 +128,7 @@ function registerIpcHandlers(): void {
     });
 
     if (result.ok) {
+      physicallyUndoneActionIds.add(result.value.originalActionId);
       queuedDocumentPaths.add(path.resolve(result.value.restoredPath));
       queuedDocuments.push({
         filePath: result.value.restoredPath,
@@ -234,11 +237,20 @@ async function refreshSourceDocuments(sourcePath: string) {
 
 async function getLastUndoableAction(): Promise<UndoableClassificationAction | null> {
   if (lastUndoableAction) {
+    if (physicallyUndoneActionIds.has(lastUndoableAction.id)) {
+      lastUndoableAction = null;
+      return null;
+    }
+
     return lastUndoableAction;
   }
 
   const journalAction = await readLastUndoableClassification(getJournalFilePath());
   if (!journalAction.ok) {
+    return null;
+  }
+
+  if (journalAction.value && physicallyUndoneActionIds.has(journalAction.value.id)) {
     return null;
   }
 

@@ -7,8 +7,12 @@ import {
   type ClassificationPlanErrorCode,
   prepareClassificationPlan
 } from "../classification/classificationPlan";
-import { appendActionJournalEntry, readLastUndoableClassification } from "../history/actionJournal";
-import type { UndoableClassificationAction } from "../history/historyTypes";
+import {
+  appendActionJournalEntry,
+  readLastUndoableClassification,
+  type ActionJournalResult
+} from "../history/actionJournal";
+import type { ActionJournalEntry, UndoableClassificationAction } from "../history/historyTypes";
 import { calculateSha256 } from "./fileHash";
 
 export type ExecuteClassificationErrorCode =
@@ -39,10 +43,25 @@ export interface UndoClassificationError {
   message: string;
 }
 
+export type ExecuteClassificationStatus = "completed" | "completed-with-journal-warning";
+export type UndoClassificationStatus = "completed" | "undo-completed-with-journal-warning";
+
+export interface ClassificationJournalWarning {
+  code: "CLASSIFIED_BUT_JOURNAL_INCOMPLETE";
+  message: string;
+}
+
+export interface UndoJournalWarning {
+  code: "UNDO_COMPLETED_BUT_JOURNAL_INCOMPLETE";
+  message: string;
+}
+
 export interface ExecuteClassificationValue {
+  status: ExecuteClassificationStatus;
   plan: ClassificationPlan & { status: "ready" };
   undoableAction: UndoableClassificationAction;
   message: string;
+  journalWarning?: ClassificationJournalWarning;
 }
 
 export type ExecuteClassificationResult =
@@ -57,10 +76,12 @@ export type ExecuteClassificationResult =
     };
 
 export interface UndoClassificationValue {
+  status: UndoClassificationStatus;
   originalActionId: string;
   restoredPath: string;
   classifiedPath: string;
   message: string;
+  journalWarning?: UndoJournalWarning;
 }
 
 export type UndoClassificationResult =
@@ -82,6 +103,7 @@ export interface ExecuteClassificationOptions {
   now?: () => Date;
   createId?: () => string;
   renameFile?: (oldPath: string, newPath: string) => Promise<void>;
+  appendJournalEntry?: JournalEntryWriter;
 }
 
 export interface UndoClassificationOptions {
@@ -90,7 +112,13 @@ export interface UndoClassificationOptions {
   now?: () => Date;
   createId?: () => string;
   renameFile?: (oldPath: string, newPath: string) => Promise<void>;
+  appendJournalEntry?: JournalEntryWriter;
 }
+
+type JournalEntryWriter = (
+  journalFilePath: string,
+  entry: ActionJournalEntry
+) => Promise<ActionJournalResult>;
 
 export async function executeClassification(
   options: ExecuteClassificationOptions
@@ -98,6 +126,7 @@ export async function executeClassification(
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? randomUUID;
   const renameFile = options.renameFile ?? rename;
+  const appendJournalEntry = options.appendJournalEntry ?? appendActionJournalEntry;
   const actionId = createId();
   const timestamp = now().toISOString();
 
@@ -110,7 +139,7 @@ export async function executeClassification(
   });
 
   if (!planResult.ok) {
-    await writeClassifyFailure(options.journalFilePath, {
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp,
       plan: planResult.value,
@@ -130,7 +159,7 @@ export async function executeClassification(
       code: "INVALID_FILENAME" as const,
       message: "Extension proposée incohérente avec le document source."
     };
-    await writeClassifyFailure(options.journalFilePath, {
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp,
       plan,
@@ -146,7 +175,7 @@ export async function executeClassification(
 
   const hashResult = await calculateSha256(plan.sourcePath);
   if (!hashResult.ok) {
-    await writeClassifyFailure(options.journalFilePath, {
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp,
       plan,
@@ -165,7 +194,7 @@ export async function executeClassification(
       code: "DESTINATION_ALREADY_EXISTS" as const,
       message: "Le nom proposé est déjà utilisé."
     };
-    await writeClassifyFailure(options.journalFilePath, {
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp,
       plan,
@@ -180,7 +209,7 @@ export async function executeClassification(
     };
   }
 
-  const startedJournal = await appendActionJournalEntry(options.journalFilePath, {
+  const startedJournal = await appendJournalEntry(options.journalFilePath, {
     id: actionId,
     timestamp,
     action: "classify",
@@ -204,7 +233,7 @@ export async function executeClassification(
     await renameFile(plan.sourcePath, plan.destinationPath);
   } catch (error) {
     const operationError = moveErrorFromFsError(error);
-    await writeClassifyFailure(options.journalFilePath, {
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp: now().toISOString(),
       plan,
@@ -226,7 +255,7 @@ export async function executeClassification(
       code: "MOVE_FAILED" as const,
       message: "Classement impossible après déplacement incomplet."
     };
-    await writeClassifyFailure(options.journalFilePath, {
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp: now().toISOString(),
       plan,
@@ -252,7 +281,7 @@ export async function executeClassification(
     sourceHashSha256: hashResult.value
   };
 
-  await appendActionJournalEntry(options.journalFilePath, {
+  const completedJournal = await appendJournalEntry(options.journalFilePath, {
     id: actionId,
     timestamp: completedAt,
     action: "classify",
@@ -264,9 +293,26 @@ export async function executeClassification(
     sourceHashSha256: hashResult.value
   });
 
+  if (!completedJournal.ok) {
+    return {
+      ok: true,
+      value: {
+        status: "completed-with-journal-warning",
+        plan,
+        undoableAction,
+        message: "Le fichier a été classé, mais le journal n'a pas pu être finalisé.",
+        journalWarning: {
+          code: "CLASSIFIED_BUT_JOURNAL_INCOMPLETE",
+          message: "Le fichier a été classé, mais le journal n'a pas pu être finalisé."
+        }
+      }
+    };
+  }
+
   return {
     ok: true,
     value: {
+      status: "completed",
       plan,
       undoableAction,
       message: "Document classé"
@@ -280,6 +326,7 @@ export async function undoLastClassification(
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? randomUUID;
   const renameFile = options.renameFile ?? rename;
+  const appendJournalEntry = options.appendJournalEntry ?? appendActionJournalEntry;
   const undoId = createId();
   const timestamp = now().toISOString();
   const action = await resolveUndoableAction(options.undoableAction, options.journalFilePath);
@@ -306,7 +353,7 @@ export async function undoLastClassification(
       code: "UNDO_SOURCE_MISSING" as const,
       message: "Le fichier classé n'est plus disponible."
     };
-    await writeUndoFailure(options.journalFilePath, undoId, timestamp, action.value, error);
+    await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
     return {
       ok: false,
       error
@@ -320,7 +367,7 @@ export async function undoLastClassification(
         code: "UNDO_MOVE_FAILED" as const,
         message: "Annulation impossible."
       };
-      await writeUndoFailure(options.journalFilePath, undoId, timestamp, action.value, error);
+      await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
       return {
         ok: false,
         error
@@ -332,7 +379,7 @@ export async function undoLastClassification(
         code: "UNDO_HASH_MISMATCH" as const,
         message: "Annulation refusée car le fichier classé semble avoir changé."
       };
-      await writeUndoFailure(options.journalFilePath, undoId, timestamp, action.value, error);
+      await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
       return {
         ok: false,
         error
@@ -345,7 +392,7 @@ export async function undoLastClassification(
       code: "UNDO_DESTINATION_OCCUPIED" as const,
       message: "Annulation impossible : le chemin source est déjà occupé."
     };
-    await writeUndoFailure(options.journalFilePath, undoId, timestamp, action.value, error);
+    await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
     return {
       ok: false,
       error
@@ -359,7 +406,7 @@ export async function undoLastClassification(
       code: "UNDO_MOVE_FAILED" as const,
       message: "Annulation impossible."
     };
-    await writeUndoFailure(options.journalFilePath, undoId, now().toISOString(), action.value, error);
+    await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, now().toISOString(), action.value, error);
     return {
       ok: false,
       error
@@ -373,14 +420,14 @@ export async function undoLastClassification(
       code: "UNDO_MOVE_FAILED" as const,
       message: "Annulation impossible après déplacement incomplet."
     };
-    await writeUndoFailure(options.journalFilePath, undoId, now().toISOString(), action.value, error);
+    await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, now().toISOString(), action.value, error);
     return {
       ok: false,
       error
     };
   }
 
-  await appendActionJournalEntry(options.journalFilePath, {
+  const completedJournal = await appendJournalEntry(options.journalFilePath, {
     id: undoId,
     timestamp: now().toISOString(),
     action: "undo-classify",
@@ -393,9 +440,27 @@ export async function undoLastClassification(
     sourceHashSha256: action.value.sourceHashSha256
   });
 
+  if (!completedJournal.ok) {
+    return {
+      ok: true,
+      value: {
+        status: "undo-completed-with-journal-warning",
+        originalActionId: action.value.id,
+        restoredPath: action.value.originalPath,
+        classifiedPath: action.value.classifiedPath,
+        message: "La dernière action a été annulée, mais le journal n'a pas pu être finalisé.",
+        journalWarning: {
+          code: "UNDO_COMPLETED_BUT_JOURNAL_INCOMPLETE",
+          message: "La dernière action a été annulée, mais le journal n'a pas pu être finalisé."
+        }
+      }
+    };
+  }
+
   return {
     ok: true,
     value: {
+      status: "completed",
       originalActionId: action.value.id,
       restoredPath: action.value.originalPath,
       classifiedPath: action.value.classifiedPath,
@@ -439,6 +504,7 @@ async function resolveUndoableAction(
 }
 
 async function writeClassifyFailure(
+  appendJournalEntry: JournalEntryWriter,
   journalFilePath: string,
   details: {
     id: string;
@@ -449,7 +515,7 @@ async function writeClassifyFailure(
     sourceHashSha256?: string;
   }
 ): Promise<void> {
-  await appendActionJournalEntry(journalFilePath, {
+  await appendJournalEntry(journalFilePath, {
     id: details.id,
     timestamp: details.timestamp,
     action: "classify",
@@ -465,13 +531,14 @@ async function writeClassifyFailure(
 }
 
 async function writeUndoFailure(
+  appendJournalEntry: JournalEntryWriter,
   journalFilePath: string,
   id: string,
   timestamp: string,
   action: UndoableClassificationAction,
   error: UndoClassificationError
 ): Promise<void> {
-  await appendActionJournalEntry(journalFilePath, {
+  await appendJournalEntry(journalFilePath, {
     id,
     timestamp,
     action: "undo-classify",

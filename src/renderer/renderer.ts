@@ -2,7 +2,15 @@ type SupportedDocumentExtension = ".pdf" | ".jpg" | ".jpeg" | ".png";
 type PreviewKind = "image" | "pdf";
 type PreviewStatus = "idle" | "loading" | "ready" | "error";
 type NamingMessageLevel = "error" | "warning" | "info";
-type ClassificationPanelStatus = "idle" | "preparing" | "ready" | "blocked" | "executing" | "undoing";
+type ClassificationPanelStatus =
+  | "idle"
+  | "preparing"
+  | "ready"
+  | "blocked"
+  | "executing"
+  | "undoing"
+  | "completed-warning"
+  | "undo-warning";
 type DestinationCheckStatus =
   | "idle"
   | "checking"
@@ -149,6 +157,11 @@ interface ClassificationOperationError {
 
 interface UndoClassificationError {
   code: string;
+  message: string;
+}
+
+interface OperationJournalWarning {
+  code: "CLASSIFIED_BUT_JOURNAL_INCOMPLETE" | "UNDO_COMPLETED_BUT_JOURNAL_INCOMPLETE";
   message: string;
 }
 
@@ -310,6 +323,7 @@ interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
   error: ClassificationPlanError | ClassificationOperationError | UndoClassificationError | null;
+  journalWarning: OperationJournalWarning | null;
 }
 
 interface HistoryState {
@@ -2899,7 +2913,8 @@ async function prepareClassificationSimulation(): Promise<void> {
   state.classification = {
     status: "preparing",
     plan: null,
-    error: null
+    error: null,
+    journalWarning: null
   };
   render();
 
@@ -2912,7 +2927,8 @@ async function prepareClassificationSimulation(): Promise<void> {
     state.classification = {
       status: "ready",
       plan: result.value as ClassificationPlan,
-      error: null
+      error: null,
+      journalWarning: null
     };
     render();
     return;
@@ -2921,7 +2937,8 @@ async function prepareClassificationSimulation(): Promise<void> {
   state.classification = {
     status: "blocked",
     plan: result.value as ClassificationPlan,
-    error: result.error as ClassificationPlanError
+    error: result.error as ClassificationPlanError,
+    journalWarning: null
   };
   render();
 }
@@ -2937,7 +2954,8 @@ async function executeClassificationAction(): Promise<void> {
   state.classification = {
     status: "executing",
     plan: state.classification.plan,
-    error: null
+    error: null,
+    journalWarning: null
   };
   state.queueMessage = "Classement en cours...";
   render();
@@ -2951,7 +2969,8 @@ async function executeClassificationAction(): Promise<void> {
     state.classification = {
       status: "blocked",
       plan: (result.plan as ClassificationPlan | undefined) ?? state.classification.plan,
-      error: result.error as ClassificationOperationError
+      error: result.error as ClassificationOperationError,
+      journalWarning: null
     };
     state.queueMessage = result.error.message;
     render();
@@ -2961,8 +2980,19 @@ async function executeClassificationAction(): Promise<void> {
 
   state.lastUndoableAction = result.value.undoableAction as UndoableClassificationAction;
   state.queueMessage = result.value.message;
+  const classificationJournalWarning = result.value.journalWarning as OperationJournalWarning | undefined;
   void refreshRecentHistory();
   applySuccessfulClassification(activeDocument.filePath);
+  if (classificationJournalWarning) {
+    state.classification = {
+      status: "completed-warning",
+      plan: result.value.plan as ClassificationPlan,
+      error: null,
+      journalWarning: classificationJournalWarning
+    };
+    state.queueMessage = journalWarningQueueMessage(classificationJournalWarning);
+    render();
+  }
 }
 
 async function undoLastClassificationAction(): Promise<void> {
@@ -2974,7 +3004,8 @@ async function undoLastClassificationAction(): Promise<void> {
   state.classification = {
     status: "undoing",
     plan: null,
-    error: null
+    error: null,
+    journalWarning: null
   };
   state.queueMessage = "Annulation en cours...";
   render();
@@ -2988,7 +3019,8 @@ async function undoLastClassificationAction(): Promise<void> {
     state.classification = {
       status: "idle",
       plan: null,
-      error: result.error as UndoClassificationError
+      error: result.error as UndoClassificationError,
+      journalWarning: null
     };
     state.queueMessage = result.error.message;
     render();
@@ -2998,11 +3030,16 @@ async function undoLastClassificationAction(): Promise<void> {
 
   state.lastUndoableAction = null;
   state.queueMessage = result.value.message;
+  const undoJournalWarning = result.value.journalWarning as OperationJournalWarning | undefined;
   resetClassificationState();
   await refreshLastUndoableAction();
   await refreshRecentHistory();
 
   if (!state.sourcePath) {
+    if (undoJournalWarning) {
+      showUndoJournalWarning(undoJournalWarning);
+      return;
+    }
     render();
     return;
   }
@@ -3012,6 +3049,9 @@ async function undoLastClassificationAction(): Promise<void> {
     preferredSelectionPath: result.value.restoredPath,
     successMessage: result.value.message
   });
+  if (undoJournalWarning) {
+    showUndoJournalWarning(undoJournalWarning);
+  }
 }
 
 async function refreshLastUndoableAction(): Promise<void> {
@@ -3084,8 +3124,48 @@ function applySuccessfulClassification(classifiedDocumentPath: string): void {
   void loadActivePreview(nextDocument);
 }
 
+function showUndoJournalWarning(warning: OperationJournalWarning): void {
+  state.classification = {
+    status: "undo-warning",
+    plan: null,
+    error: null,
+    journalWarning: warning
+  };
+  state.queueMessage = journalWarningQueueMessage(warning);
+  render();
+}
+
 function renderClassificationSummary(): void {
   if (!classificationSummary) {
+    return;
+  }
+
+  if (
+    state.classification.status === "completed-warning" &&
+    state.classification.journalWarning
+  ) {
+    classificationSummary.hidden = false;
+    classificationSummary.replaceChildren(
+      createClassificationHeading("Classement réel", "Journal incomplet"),
+      createClassificationWarningMessage(state.classification.journalWarning.message),
+      createClassificationNotice("Le fichier a bien été déplacé."),
+      createClassificationNotice(
+        "L'historique persistant et l'annulation après redémarrage peuvent être incomplets."
+      ),
+      createClassificationNotice("L'annulation immédiate reste possible si le bouton est actif."),
+      ...(state.classification.plan ? [createClassificationDetails(state.classification.plan)] : [])
+    );
+    return;
+  }
+
+  if (state.classification.status === "undo-warning" && state.classification.journalWarning) {
+    classificationSummary.hidden = false;
+    classificationSummary.replaceChildren(
+      createClassificationHeading("Annulation", "Journal incomplet"),
+      createClassificationWarningMessage(state.classification.journalWarning.message),
+      createClassificationNotice("Le fichier a bien été restauré."),
+      createClassificationNotice("Le journal n'a pas pu être finalisé.")
+    );
     return;
   }
 
@@ -3265,6 +3345,13 @@ function createClassificationMessage(
   return message;
 }
 
+function createClassificationWarningMessage(messageText: string): HTMLParagraphElement {
+  const message = document.createElement("p");
+  message.className = "classification-message blocked";
+  message.textContent = messageText;
+  return message;
+}
+
 function createClassificationDetails(plan: ClassificationPlan): HTMLDListElement {
   const details = document.createElement("dl");
   details.className = "classification-details";
@@ -3324,6 +3411,23 @@ function classificationCheckStatusLabel(status: ClassificationPlanCheckStatus): 
     case "not-run":
       return "Non contrôlé";
   }
+}
+
+function journalWarningQueueMessage(warning: OperationJournalWarning): string {
+  if (warning.code === "CLASSIFIED_BUT_JOURNAL_INCOMPLETE") {
+    return [
+      warning.message,
+      "Le fichier a bien été déplacé.",
+      "L'annulation immédiate peut rester disponible dans cette session.",
+      "Après redémarrage, l'historique ou l'annulation peuvent être incomplets."
+    ].join(" ");
+  }
+
+  return [
+    warning.message,
+    "Le fichier a bien été restauré.",
+    "L'historique peut rester incomplet."
+  ].join(" ");
 }
 
 function canPrepareClassificationPlan(): boolean {
@@ -3702,7 +3806,8 @@ function createIdleClassificationState(): ClassificationState {
   return {
     status: "idle",
     plan: null,
-    error: null
+    error: null,
+    journalWarning: null
   };
 }
 

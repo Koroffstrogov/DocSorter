@@ -120,6 +120,27 @@ describe("actionJournal reads", () => {
     }
   });
 
+  it("does not treat a started-only classification as undoable", async () => {
+    const journalFile = path.join(await createRoot(), "history", "actions.jsonl");
+    await appendActionJournalEntry(journalFile, {
+      id: "classify-started",
+      timestamp: "2026-06-15T12:00:00.000Z",
+      action: "classify",
+      status: "started",
+      oldPath: "C:\\source\\a.pdf",
+      newPath: "C:\\target\\b.pdf",
+      oldName: "a.pdf",
+      newName: "b.pdf"
+    });
+
+    const undoable = await readLastUndoableClassification(journalFile);
+
+    expect(undoable.ok).toBe(true);
+    if (undoable.ok) {
+      expect(undoable.value).toBeNull();
+    }
+  });
+
   it("does not propose a classification that has already been undone", async () => {
     const journalFile = path.join(await createRoot(), "history", "actions.jsonl");
     await appendActionJournalEntry(journalFile, {
