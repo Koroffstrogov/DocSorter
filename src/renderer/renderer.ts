@@ -18,6 +18,7 @@ const state: AppState = {
   namingSuggestions: createIdleNamingSuggestionsState(),
   namingRules: createIdleNamingRulesState(),
   ocr: createIdleOcrState(),
+  ai: createIdleAiState(),
   shortcutsHelpVisible: false
 };
 
@@ -29,6 +30,7 @@ let duplicateAnalysisRequestId = 0;
 let textExtractionRequestId = 0;
 let targetFolderRequestId = 0;
 let ocrRequestId = 0;
+let aiRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
@@ -236,6 +238,22 @@ const ocrPanel = DocSorterOcrPanel.createOcrPanel({
   formatDate
 });
 
+const aiPanel = DocSorterAiPanel.createAiPanel({
+  getState: () => state.ai,
+  onDraftChange: updateAiDraft,
+  onSaveSettings: () => {
+    void saveAiSettingsFromPanel();
+  },
+  onTestConnection: () => {
+    void testAiConnectionFromPanel();
+  },
+  onRefreshStatus: () => {
+    void refreshAiStatus();
+  },
+  isActionsDisabled: isClassificationBusy,
+  formatDate
+});
+
 void window.docSorter.getVersion().then((value) => {
   if (version) {
     version.textContent = `v${value}`;
@@ -246,6 +264,7 @@ void refreshLastUndoableAction();
 void refreshRecentHistory();
 void refreshNamingRulesStatus();
 void refreshOcrStatus();
+void refreshAiStatus();
 
 selectSourceButton?.addEventListener("click", () => {
   void selectSourceDirectory();
@@ -307,6 +326,7 @@ function render(): void {
   renderDetails();
   renderRulesPanel();
   renderOcrPanel();
+  renderAiPanel();
   renderHistory();
   renderShortcutHelp();
 }

@@ -83,6 +83,16 @@ describe("preload API surface", () => {
     });
     await api.testOcrEngine();
     await api.runOcrForActiveImage("C:\\source\\image.png");
+    await api.getAiStatus();
+    await api.getAiSettings();
+    await api.saveAiSettings({
+      enabled: true,
+      provider: "ollama",
+      baseUrl: "http://localhost:11434/",
+      model: "llama3.2",
+      timeoutMs: 30_000
+    });
+    await api.testAiConnection();
     await api.getRecentHistory(8);
     await api.getRulesStatus();
     await api.getUserRulesCatalog();
@@ -119,6 +129,10 @@ describe("preload API surface", () => {
       IPC_CHANNELS.ocrSaveSettings,
       IPC_CHANNELS.ocrTestEngine,
       IPC_CHANNELS.ocrRunImage,
+      IPC_CHANNELS.aiGetStatus,
+      IPC_CHANNELS.aiGetSettings,
+      IPC_CHANNELS.aiSaveSettings,
+      IPC_CHANNELS.aiTestConnection,
       IPC_CHANNELS.historyGetRecent,
       IPC_CHANNELS.rulesGetStatus,
       IPC_CHANNELS.rulesGetUserCatalog,

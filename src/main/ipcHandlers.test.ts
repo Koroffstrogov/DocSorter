@@ -2,6 +2,13 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
+import type {
+  AiSettings,
+  AiSettingsInput,
+  AiSettingsResult,
+  AiStatus
+} from "../ai/ollamaSettings";
+import type { AiConnectionTestStatus } from "../ai/ollamaProvider";
 import type { PrepareClassificationPlanResult } from "../classification/classificationPlan";
 import type { Result } from "../documents/documentDiscovery";
 import type { ExactDuplicateAnalysisResult } from "../duplicates/exactDuplicates";
@@ -44,6 +51,7 @@ const TARGET_PATH = "C:\\target";
 const TARGET_FOLDER = "Vehicules/Renault-Captur";
 const USER_DATA_PATH = "C:\\user-data";
 const JOURNAL_PATH = path.join(USER_DATA_PATH, "history", "actions.jsonl");
+const AI_SETTINGS_PATH = path.join(USER_DATA_PATH, "config", "ai-settings.json");
 const TESSERACT_PATH = "C:\\Tools\\Tesseract-OCR\\tesseract.exe";
 const TESSDATA_PATH = "C:\\Tools\\Tesseract-OCR\\tessdata";
 const DOCUMENT_PATH = path.join(SOURCE_PATH, "document.pdf");
@@ -133,6 +141,26 @@ describe("sensitive IPC handler contract", () => {
       usesMainSource: true,
       usesUserDataPath: true,
       serviceName: "runImageOcrForDocument"
+    });
+    expect(contractFor(IPC_CHANNELS.aiGetStatus)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "getAiStatus"
+    });
+    expect(contractFor(IPC_CHANNELS.aiGetSettings)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "loadAiSettings"
+    });
+    expect(contractFor(IPC_CHANNELS.aiSaveSettings)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "saveAiSettings"
+    });
+    expect(contractFor(IPC_CHANNELS.aiTestConnection)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "testAiConnection"
     });
   });
 });
@@ -376,6 +404,29 @@ describe("registerIpcHandlers", () => {
     expect(services.saveOcrSettings).toHaveBeenCalledWith(USER_DATA_PATH, settings);
     expect(services.testOcrEngine).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(harness.appPathCalls).toEqual(["userData", "userData", "userData"]);
+  });
+
+  it("keeps AI configuration and tests under app userData", async () => {
+    const services = createServices();
+    const harness = createHarness({ services });
+    const settings: AiSettingsInput = {
+      enabled: true,
+      provider: "ollama",
+      baseUrl: "http://localhost:11434/",
+      model: "llama3.2",
+      timeoutMs: 30_000
+    };
+
+    await harness.invoke(IPC_CHANNELS.aiGetStatus, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.aiGetSettings, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.aiSaveSettings, settings, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.aiTestConnection, "C:\\renderer-config");
+
+    expect(services.getAiStatus).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.loadAiSettings).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.saveAiSettings).toHaveBeenCalledWith(USER_DATA_PATH, settings);
+    expect(services.testAiConnection).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(harness.appPathCalls).toEqual(["userData", "userData", "userData", "userData"]);
   });
 
   it("selects OCR paths through reviewed dialogs only", async () => {
@@ -656,6 +707,32 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
         warnings: []
       }
     } as ImageOcrResult)),
+    getAiStatus: vi.fn(async () => ({
+      ok: true,
+      value: createAiStatus()
+    } as AiSettingsResult<AiStatus>)),
+    loadAiSettings: vi.fn(async () => ({
+      ok: true,
+      value: createAiSettings()
+    } as AiSettingsResult<AiSettings>)),
+    saveAiSettings: vi.fn(async () => ({
+      ok: true,
+      value: createAiStatus()
+    } as AiSettingsResult<AiStatus>)),
+    testAiConnection: vi.fn(async () => ({
+      ok: true,
+      value: {
+        ...createAiStatus(),
+        connection: {
+          status: "ok",
+          version: "0.5.1",
+          model: "llama3.2",
+          availableModels: ["llama3.2"],
+          testedAt: "2026-06-16T10:00:00.000Z",
+          message: "Connexion Ollama locale OK."
+        }
+      }
+    } as AiSettingsResult<AiConnectionTestStatus>)),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()
@@ -711,6 +788,30 @@ function createOcrStatus(): OcrStatus {
     availableLanguages: [],
     missingLanguages: [],
     message: "OCR local configuré. Test Tesseract disponible.",
+    error: null
+  };
+}
+
+function createAiSettings(): AiSettings {
+  return {
+    enabled: true,
+    provider: "ollama",
+    baseUrl: "http://localhost:11434/",
+    model: "llama3.2",
+    timeoutMs: 30_000,
+    lastTestAt: "2026-06-16T10:00:00.000Z",
+    lastStatus: "ok",
+    lastError: null
+  };
+}
+
+function createAiStatus(): AiStatus {
+  const settings = createAiSettings();
+  return {
+    settingsPath: AI_SETTINGS_PATH,
+    settings,
+    status: "ok",
+    message: "Connexion Ollama locale OK.",
     error: null
   };
 }

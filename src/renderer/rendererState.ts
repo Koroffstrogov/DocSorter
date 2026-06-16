@@ -130,6 +130,22 @@ function createIdleOcrState(): OcrState {
   };
 }
 
+function createIdleAiState(): AiState {
+  return {
+    panelStatus: "loading",
+    status: null,
+    draft: {
+      enabled: false,
+      baseUrl: "http://localhost:11434/",
+      model: "",
+      timeoutMs: "30000"
+    },
+    message: "Chargement de la configuration IA locale...",
+    error: null,
+    dirty: false
+  };
+}
+
 function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
   return {
     status: "idle",

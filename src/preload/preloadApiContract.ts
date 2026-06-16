@@ -1,4 +1,11 @@
 import type { PrepareClassificationPlanResult } from "../classification/classificationPlan";
+import type { AiConnectionTestStatus } from "../ai/ollamaProvider";
+import type {
+  AiSettings,
+  AiSettingsInput,
+  AiSettingsResult,
+  AiStatus
+} from "../ai/ollamaSettings";
 import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
 import type { ExactDuplicateAnalysisResult } from "../duplicates/exactDuplicates";
 import type { PdfTextExtractionResult } from "../extraction/pdfTextExtraction";
@@ -62,6 +69,10 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "saveOcrSettings",
   "testOcrEngine",
   "runOcrForActiveImage",
+  "getAiStatus",
+  "getAiSettings",
+  "saveAiSettings",
+  "testAiConnection",
   "getRecentHistory",
   "getRulesStatus",
   "getUserRulesCatalog",
@@ -162,6 +173,16 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.ocrTestEngine) as Promise<OcrResult<OcrStatus>>,
     runOcrForActiveImage: (documentPath: string): Promise<ImageOcrResult> =>
       ipc.invoke(IPC_CHANNELS.ocrRunImage, documentPath) as Promise<ImageOcrResult>,
+    getAiStatus: (): Promise<AiSettingsResult<AiStatus>> =>
+      ipc.invoke(IPC_CHANNELS.aiGetStatus) as Promise<AiSettingsResult<AiStatus>>,
+    getAiSettings: (): Promise<AiSettingsResult<AiSettings>> =>
+      ipc.invoke(IPC_CHANNELS.aiGetSettings) as Promise<AiSettingsResult<AiSettings>>,
+    saveAiSettings: (settings: AiSettingsInput): Promise<AiSettingsResult<AiStatus>> =>
+      ipc.invoke(IPC_CHANNELS.aiSaveSettings, settings) as Promise<AiSettingsResult<AiStatus>>,
+    testAiConnection: (): Promise<AiSettingsResult<AiConnectionTestStatus>> =>
+      ipc.invoke(IPC_CHANNELS.aiTestConnection) as Promise<
+        AiSettingsResult<AiConnectionTestStatus>
+      >,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
         ActionJournalReadResult<ActionJournalEntry[]>

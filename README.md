@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 + IA-0 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG et contrat de classification IA avec provider simulé uniquement.
+Lot 7 + 8A + OCR-2 + IA-1 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA simulé et configuration/test Ollama local optionnel, désactivé par défaut.
 
 ## Commandes
 
@@ -115,6 +115,13 @@ npm run dev
 - provider IA simulé déterministe, sans modèle réel, sans réseau et sans prompt modèle ;
 - validation stricte des sorties IA : score borné, date valide, dossier cible relatif, listes bornées et source contrôlée ;
 - orchestrateur IA pur qui borne l'entrée, valide la sortie et n'applique jamais automatiquement les suggestions.
+- panneau `IA locale` pour activer optionnellement Ollama local, renseigner l'URL, le modèle et le timeout ;
+- configuration IA stockée uniquement sous `app.getPath("userData")/config/ai-settings.json` ;
+- IA locale désactivée par défaut avec URL par défaut `http://localhost:11434/` ;
+- validation main process des URL Ollama : seuls `localhost`, `127.0.0.1` et `::1` sont acceptés, sans chemin API ;
+- test manuel Ollama limité à `/api/version` et `/api/tags`, sans document, sans prompt et sans mutation ;
+- détection sobre d'un modèle absent, d'une erreur réseau ou d'un timeout ;
+- provider Ollama préparé côté domaine, mais non branché au flux document.
 
 ## Convention de nommage
 
@@ -247,9 +254,9 @@ app.getPath("userData")/cache/analysis
 
 Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli`, la version Tesseract détectée, la langue, le PSM, le texte OCR borné, l'extrait affichable, les suggestions locales calculées et la date d'analyse. Elle n'est pas écrite dans la source, la cible ou le journal. Si le cache est corrompu, il est ignoré et l'OCR est relancé.
 
-## IA locale simulée
+## IA locale
 
-IA-0 prépare seulement un contrat de classification pour une future IA locale. Aucun modèle réel n'est branché : pas d'Ollama, pas de `llama.cpp`, pas d'appel réseau, pas de prompt modèle et pas de nouvelle dépendance.
+IA-0 prépare un contrat de classification pour une future IA locale. IA-1 ajoute uniquement la configuration et le test de connexion d'un Ollama local optionnel. Aucun document n'est envoyé à un modèle dans ce lot.
 
 L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, les suggestions de règles locales déjà calculées, les dossiers relatifs connus, la convention de nommage et une date ou année détectée.
 
@@ -262,6 +269,18 @@ date?, documentType?, subject?, keywords[], targetFolder?, confidence, reasons[]
 Le validateur refuse les objets non JSON, les champs inconnus, les scores hors `0..100`, les dates invalides et les dossiers absolus, trop profonds ou avec traversée `..`. Les types, sujets et mots-clés sont normalisés avec la logique de nommage existante.
 
 Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Ces suggestions ne remplacent pas les règles utilisateur, ne modifient aucun fichier et ne déclenchent jamais de classement.
+
+La configuration Ollama est stockée localement dans :
+
+```text
+app.getPath("userData")/config/ai-settings.json
+```
+
+Elle contient seulement `enabled`, `provider`, `baseUrl`, `model`, `timeoutMs`, `lastTestAt`, `lastStatus` et `lastError`. Elle ne stocke pas de texte documentaire, pas de prompt, pas d'OCR, pas de cache, pas de journal et pas de chemin de document.
+
+Les URL Ollama sont refusées si elles pointent vers une machine externe, une IP LAN, un domaine public, des identifiants, une query string, un fragment ou un chemin comme `/api/generate`. Les codes principaux sont `AI_URL_NOT_LOCAL`, `AI_PROVIDER_DISABLED` et `AI_CONFIG_INVALID`.
+
+Le bouton `Tester Ollama` appelle seulement `/api/version` puis `/api/tags`. Il peut afficher connexion OK, modèle absent, erreur réseau ou timeout. Le provider Ollama est préparé pour un lot futur, mais il n'est pas utilisé par l'UI document et ne produit aucune suggestion IA dans IA-1.
 
 ## Raccourcis clavier
 
@@ -286,7 +305,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 ## Ce qui ne fonctionne pas encore
 
 - pas de suppression ;
-- pas de configuration persistée ;
+- pas de persistance des chemins source/cible ni des préférences UI générales ;
 - pas de watcher automatique du dossier source ;
 - pas d'annulation multiple ;
 - pas de fallback `copy + delete` pour les déplacements entre volumes ;
@@ -297,7 +316,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas d'application automatique des suggestions ;
 - pas d'éditeur JSON avancé ;
 - pas de gestion multi-profils de règles ;
-- pas d'OCR PDF, IA, doublons probables, packaging avancé ou DOCX.
+- pas d'OCR PDF, pas de suggestion IA sur document actif, pas de prompt modèle, pas de doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
@@ -310,7 +329,7 @@ Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR-3 pourra ajouter l'OCR limité des PDF scannés, dans un lot séparé et explicitement validé ;
-- IA-1 pourra ajouter un connecteur Ollama local optionnel, dans un lot séparé et explicitement validé ;
+- IA-2 pourra ajouter une suggestion IA locale sur document actif, dans un lot séparé et explicitement validé ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
@@ -418,6 +437,14 @@ Un prochain lot pourra ajouter :
 - un PDF ne déclenche pas l'OCR image et garde l'extraction texte native ;
 - après OCR image réussi, `Analyser les suggestions` puis `Appliquer aux champs vides` fonctionnent sans remplacer les champs déjà saisis ;
 - aucun OCR batch, aucune conversion PDF/image et aucune écriture source/cible ne sont déclenchés depuis OCR-2 ;
+- le panneau `IA locale` est visible et affiche `Aucun document n’est envoyé dans ce lot.` ;
+- au premier démarrage, l'IA locale est désactivée par défaut ;
+- activer l'IA locale avec `http://localhost:11434/`, saisir un modèle puis sauvegarder crée `userData/config/ai-settings.json` ;
+- avec Ollama lancé, `Tester Ollama` affiche une connexion OK si le modèle est présent ;
+- avec Ollama lancé mais modèle absent, `Tester Ollama` affiche un état modèle absent ;
+- avec Ollama arrêté, `Tester Ollama` affiche une erreur sobre ou un timeout ;
+- une URL externe ou LAN est refusée par la configuration IA ;
+- aucun bouton d'analyse IA documentaire n'est affiché et aucun document n'est envoyé à Ollama ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

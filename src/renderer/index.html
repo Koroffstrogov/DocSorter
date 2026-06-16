@@ -321,6 +321,49 @@
             </form>
           </section>
 
+          <section id="ai-panel" class="detail-section ai-panel" aria-label="IA locale">
+            <div class="section-heading">
+              <h3>IA locale</h3>
+              <button id="refresh-ai-status" type="button">Rafraîchir</button>
+            </div>
+            <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
+            <p class="ai-note">Aucun document n’est envoyé dans ce lot.</p>
+            <form id="ai-settings-form" class="ai-settings-form">
+              <label class="ai-checkbox">
+                <input id="ai-enabled" name="enabled" type="checkbox" />
+                <span class="field-label">
+                  Activer IA locale
+                  <span class="field-help" tabindex="0" title="Active uniquement le test de connexion Ollama local. Aucun document n'est envoyé à un modèle dans ce lot.">i</span>
+                </span>
+              </label>
+              <label>
+                <span class="field-label">
+                  URL Ollama
+                  <span class="field-help" tabindex="0" title="URL locale uniquement : localhost, 127.0.0.1 ou ::1. Aucun chemin comme /api/generate n'est accepté.">i</span>
+                </span>
+                <input id="ai-base-url" name="baseUrl" autocomplete="off" placeholder="http://localhost:11434/" />
+              </label>
+              <label>
+                <span class="field-label">
+                  Modèle
+                  <span class="field-help" tabindex="0" title="Nom du modèle Ollama à vérifier dans /api/tags. Exemple : llama3.2.">i</span>
+                </span>
+                <input id="ai-model" name="model" autocomplete="off" placeholder="llama3.2" />
+              </label>
+              <label>
+                <span class="field-label">
+                  Timeout
+                  <span class="field-help" tabindex="0" title="Durée maximale du test de connexion en millisecondes. Par défaut : 30000.">i</span>
+                </span>
+                <input id="ai-timeout" name="timeoutMs" type="number" min="1000" max="120000" step="1000" value="30000" />
+              </label>
+              <div class="ai-actions">
+                <button id="save-ai-settings" type="button" disabled>Sauvegarder</button>
+                <button id="test-ai-connection" type="button" disabled>Tester Ollama</button>
+              </div>
+            </form>
+          </section>
+
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
             <div class="section-heading">
               <h3>Renommage proposé</h3>
@@ -420,6 +463,7 @@
     <script src="./classificationPanel.js"></script>
     <script src="./rulesPanel.js"></script>
     <script src="./ocrPanel.js"></script>
+    <script src="./aiPanel.js"></script>
     <script src="../rules/defaultNamingSuggestionRules.js"></script>
     <script src="../rules/namingSuggestionRulesCatalog.js"></script>
     <script src="../rules/namingSuggestions.js"></script>
@@ -432,6 +476,7 @@
     <script src="./rendererDuplicateTextSuggestionsFlow.js"></script>
     <script src="./rendererRulesFlow.js"></script>
     <script src="./rendererOcrFlow.js"></script>
+    <script src="./rendererAiFlow.js"></script>
     <script src="./rendererNamingDestinationFlow.js"></script>
     <script src="./rendererClassificationFlow.js"></script>
     <script src="./rendererShortcutFlow.js"></script>

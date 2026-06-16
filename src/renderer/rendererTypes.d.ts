@@ -31,6 +31,8 @@ type TargetFolderStatus =
 type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
 type DuplicateAnalysisStatus = "idle" | "analyzing" | "ready" | "error";
 type OcrPanelStatus = "loading" | "ready" | "saving" | "testing" | "error";
+type AiPanelStatus = "loading" | "ready" | "saving" | "testing" | "error";
+type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
 
 interface AppError {
   code:
@@ -429,6 +431,56 @@ interface OcrState {
   dirty: boolean;
 }
 
+interface RendererAiError {
+  code:
+    | "AI_URL_NOT_LOCAL"
+    | "AI_PROVIDER_DISABLED"
+    | "AI_CONFIG_INVALID"
+    | "AI_CONFIG_READ_FAILED"
+    | "AI_CONFIG_WRITE_FAILED"
+    | "AI_CONNECTION_TIMEOUT"
+    | "AI_CONNECTION_FAILED"
+    | "AI_VERSION_FAILED"
+    | "AI_MODEL_NOT_FOUND"
+    | "UNKNOWN_ERROR";
+  message: string;
+}
+
+interface RendererAiSettings {
+  enabled: boolean;
+  provider: "ollama";
+  baseUrl: string;
+  model: string;
+  timeoutMs: number;
+  lastTestAt: string | null;
+  lastStatus: AiConnectionStatus | null;
+  lastError: string | null;
+}
+
+interface RendererAiStatus {
+  settingsPath: string;
+  settings: RendererAiSettings;
+  status: AiConnectionStatus;
+  message: string;
+  error: RendererAiError | null;
+}
+
+interface AiSettingsDraft {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  timeoutMs: string;
+}
+
+interface AiState {
+  panelStatus: AiPanelStatus;
+  status: RendererAiStatus | null;
+  draft: AiSettingsDraft;
+  message: string;
+  error: RendererAiError | null;
+  dirty: boolean;
+}
+
 interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
@@ -480,6 +532,7 @@ interface AppState {
   namingSuggestions: NamingSuggestionsState;
   namingRules: NamingRulesState;
   ocr: OcrState;
+  ai: AiState;
   shortcutsHelpVisible: boolean;
 }
 

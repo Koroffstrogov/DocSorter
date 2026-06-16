@@ -1,6 +1,19 @@
 import path from "node:path";
 
 import {
+  getAiStatus as getAiStatusService,
+  loadAiSettings as loadAiSettingsService,
+  saveAiSettings as saveAiSettingsService,
+  type AiSettings,
+  type AiSettingsInput,
+  type AiSettingsResult,
+  type AiStatus
+} from "../ai/ollamaSettings";
+import {
+  testAiConnection as testAiConnectionService,
+  type AiConnectionTestStatus
+} from "../ai/ollamaProvider";
+import {
   extractTextFromPdfDocumentWithAnalysisCache as extractTextFromPdfDocumentService
 } from "../analysis/pdfAnalysisCache";
 import {
@@ -191,6 +204,13 @@ export interface IpcHandlerServices {
     userDataPath: string;
     rulesCatalog: NamingSuggestionRulesCatalog;
   }) => Promise<ImageOcrResult>;
+  getAiStatus: (userDataPath: string) => Promise<AiSettingsResult<AiStatus>>;
+  loadAiSettings: (userDataPath: string) => Promise<AiSettingsResult<AiSettings>>;
+  saveAiSettings: (
+    userDataPath: string,
+    settings: AiSettingsInput
+  ) => Promise<AiSettingsResult<AiStatus>>;
+  testAiConnection: (userDataPath: string) => Promise<AiSettingsResult<AiConnectionTestStatus>>;
   loadMergedNamingRulesCatalog: (
     userDataPath: string
   ) => Promise<UserRulesResult<NamingRulesStatus>>;
@@ -334,6 +354,38 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "runImageOcrForDocument"
   },
   {
+    channel: IPC_CHANNELS.aiGetStatus,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "getAiStatus"
+  },
+  {
+    channel: IPC_CHANNELS.aiGetSettings,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "loadAiSettings"
+  },
+  {
+    channel: IPC_CHANNELS.aiSaveSettings,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "saveAiSettings"
+  },
+  {
+    channel: IPC_CHANNELS.aiTestConnection,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "testAiConnection"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -446,6 +498,10 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   saveOcrSettings: saveOcrSettingsService,
   testOcrEngine: testOcrEngineService,
   runImageOcrForDocument: runImageOcrForDocumentService,
+  getAiStatus: getAiStatusService,
+  loadAiSettings: loadAiSettingsService,
+  saveAiSettings: saveAiSettingsService,
+  testAiConnection: testAiConnectionService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
   saveUserRulesCatalog: saveUserRulesCatalogService
@@ -627,6 +683,18 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
       userDataPath: options.app.getPath("userData"),
       rulesCatalog: await getRulesCatalogForAnalysis(options.app, services)
     })
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiGetStatus, () =>
+    services.getAiStatus(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiGetSettings, () =>
+    services.loadAiSettings(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiSaveSettings, (_event, settings: unknown) =>
+    services.saveAiSettings(options.app.getPath("userData"), settings as AiSettingsInput)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiTestConnection, () =>
+    services.testAiConnection(options.app.getPath("userData"))
   );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(
