@@ -147,6 +147,8 @@ La recherche et les filtres s'appliquent uniquement aux documents déjà présen
 
 Le compteur de file affiche le nombre de documents visibles sur le total scanné. Si le document actif est masqué par la recherche ou un filtre, il reste sélectionné dans l'état réel et l'interface l'indique sobrement.
 
+Découpage interne : la logique pure recherche/filtre/tri/navigation est dans `src/documents/documentQueueView.ts`, tandis que le rendu DOM du panneau de file est isolé dans `src/renderer/queuePanel.ts`. `renderer.ts` reste le coordinateur principal.
+
 ## Texte PDF natif
 
 L'extraction texte est déclenchée manuellement sur le document PDF actif. Elle vérifie côté main process que le document appartient à la dernière file scannée, existe encore et possède l'extension `.pdf`.

@@ -423,18 +423,6 @@ const shortcutHelpPanel = document.querySelector<HTMLElement>("#shortcut-help");
 const analyzeDuplicatesButton = document.querySelector<HTMLButtonElement>("#analyze-duplicates");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
-const queueCount = document.querySelector<HTMLElement>("#queue-count");
-const queueState = document.querySelector<HTMLElement>("#queue-state");
-const documentList = document.querySelector<HTMLOListElement>("#document-list");
-const queueSearchInput = document.querySelector<HTMLInputElement>("#queue-search");
-const clearQueueSearchButton = document.querySelector<HTMLButtonElement>("#clear-queue-search");
-const queueFilterButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-queue-filter]")
-);
-const queueSortSelect = document.querySelector<HTMLSelectElement>("#queue-sort");
-const queueSortDirectionButton = document.querySelector<HTMLButtonElement>("#queue-sort-direction");
-const previousDocumentButton = document.querySelector<HTMLButtonElement>("#previous-document");
-const nextDocumentButton = document.querySelector<HTMLButtonElement>("#next-document");
 const previewContent = document.querySelector<HTMLElement>("#preview-content");
 const previewControls = document.querySelector<HTMLElement>("#preview-controls");
 const pdfPageControls = document.querySelector<HTMLElement>("#pdf-page-controls");
@@ -505,6 +493,32 @@ const refreshHistoryButton = document.querySelector<HTMLButtonElement>("#refresh
 const historyState = document.querySelector<HTMLElement>("#history-state");
 const historyList = document.querySelector<HTMLOListElement>("#history-list");
 
+const queuePanel = DocSorterQueuePanel.createQueuePanel<DocumentItem>({
+  getState: () => ({
+    documents: state.documents,
+    activeDocumentPath: state.activeDocumentPath,
+    queueMessage: state.queueMessage,
+    queueView: state.queueView,
+    isLoading: state.isLoading,
+    duplicateFilePaths: getDuplicateDocumentPathList()
+  }),
+  onSelectDocument: selectDocument,
+  onSearchChange: (query) => {
+    state.queueView.query = query;
+  },
+  onFilterChange: (filter) => {
+    state.queueView.filter = filter;
+  },
+  onSortChange: (sortKey) => {
+    state.queueView.sortKey = sortKey;
+  },
+  onSortDirectionChange: (sortDirection) => {
+    state.queueView.sortDirection = sortDirection;
+  },
+  hasVisibleDuplicate: documentHasVisibleDuplicate,
+  getStatusLabel: documentQueueStatusLabel
+});
+
 void window.docSorter.getVersion().then((value) => {
   if (version) {
     version.textContent = `v${value}`;
@@ -536,49 +550,6 @@ shortcutHelpToggleButton?.addEventListener("click", () => {
 
 analyzeDuplicatesButton?.addEventListener("click", () => {
   void analyzeExactDuplicates();
-});
-
-queueSearchInput?.addEventListener("input", () => {
-  state.queueView.query = queueSearchInput.value;
-  renderQueue();
-});
-
-clearQueueSearchButton?.addEventListener("click", () => {
-  clearQueueSearch();
-});
-
-queueFilterButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const filter = button.dataset.queueFilter;
-    if (!isQueueFilter(filter)) {
-      return;
-    }
-
-    setQueueFilter(filter);
-  });
-});
-
-queueSortSelect?.addEventListener("change", () => {
-  const sortKey = queueSortSelect.value;
-  if (!isQueueSortKey(sortKey)) {
-    return;
-  }
-
-  state.queueView.sortKey = sortKey;
-  renderQueue();
-});
-
-queueSortDirectionButton?.addEventListener("click", () => {
-  state.queueView.sortDirection = state.queueView.sortDirection === "asc" ? "desc" : "asc";
-  renderQueue();
-});
-
-previousDocumentButton?.addEventListener("click", () => {
-  navigateVisibleQueue("previous");
-});
-
-nextDocumentButton?.addEventListener("click", () => {
-  navigateVisibleQueue("next");
 });
 
 previousPageButton?.addEventListener("click", () => {
@@ -1085,7 +1056,7 @@ function executeKeyboardShortcut(action: KeyboardShortcutAction): void {
       clearQueueSearch();
       return;
     case "blur-search":
-      queueSearchInput?.blur();
+      queuePanel.blurSearch();
       return;
     case "toggle-duplicates-filter":
       setQueueFilter(state.queueView.filter === "duplicates" ? "all" : "duplicates");
@@ -1155,142 +1126,7 @@ function renderPaths(): void {
 }
 
 function renderQueue(): void {
-  const visibleQueue = getVisibleQueue();
-  queueCount?.replaceChildren(
-    `${visibleQueue.visibleCount} / ${visibleQueue.totalCount} document${
-      visibleQueue.totalCount > 1 ? "s" : ""
-    } affiché${visibleQueue.visibleCount > 1 ? "s" : ""}`
-  );
-  documentList?.replaceChildren(...visibleQueue.documents.map(createDocumentListItem));
-  renderQueueTools(visibleQueue);
-
-  if (!queueState) {
-    return;
-  }
-
-  if (state.isLoading) {
-    queueState.hidden = false;
-    queueState.replaceChildren(state.queueMessage || "Analyse du dossier source");
-    return;
-  }
-
-  const messages: string[] = [];
-  if (state.queueMessage) {
-    messages.push(state.queueMessage);
-  }
-
-  if (state.documents.length > 0 && visibleQueue.visibleCount === 0) {
-    messages.push("Aucun document ne correspond aux filtres.");
-  } else if (state.activeDocumentPath && !visibleQueue.activeDocumentVisible) {
-    messages.push("Le document actif est masqué par la recherche ou le filtre.");
-  }
-
-  queueState.hidden = messages.length === 0;
-  queueState.replaceChildren(messages.join(" "));
-}
-
-function createDocumentListItem(documentItem: DocumentItem): HTMLLIElement {
-  const listItem = document.createElement("li");
-  const button = document.createElement("button");
-  const icon = document.createElement("span");
-  const content = document.createElement("span");
-  const title = document.createElement("strong");
-  const meta = document.createElement("small");
-  const status = document.createElement("span");
-
-  button.type = "button";
-  button.className = "document-item";
-  button.title = documentItem.name;
-  button.ariaPressed = String(documentItem.filePath === state.activeDocumentPath);
-  if (documentItem.filePath === state.activeDocumentPath) {
-    button.classList.add("selected");
-  }
-  if (documentItem.status === "missing") {
-    button.classList.add("missing");
-  }
-  if (documentItem.status !== "missing" && documentHasVisibleDuplicate(documentItem.filePath)) {
-    button.classList.add("duplicate");
-  }
-
-  icon.className = "document-icon";
-  icon.textContent = documentItem.extension.replace(".", "").toUpperCase();
-
-  title.textContent = documentItem.name;
-  title.title = documentItem.name;
-  meta.textContent = `${documentItem.extension.toUpperCase()} · ${documentItem.sizeLabel}`;
-  status.className = "status-badge";
-  status.textContent = documentQueueStatusLabel(documentItem);
-  status.title = documentQueueStatusLabel(documentItem);
-
-  content.append(title, meta, status);
-  button.append(icon, content);
-  button.addEventListener("click", () => {
-    selectDocument(documentItem);
-  });
-
-  listItem.append(button);
-  return listItem;
-}
-
-function renderQueueTools(visibleQueue: QueueViewResult<DocumentItem>): void {
-  const toolsDisabled = state.documents.length === 0 || state.isLoading;
-
-  if (queueSearchInput) {
-    queueSearchInput.disabled = toolsDisabled;
-    queueSearchInput.value = state.queueView.query;
-  }
-
-  if (clearQueueSearchButton) {
-    clearQueueSearchButton.disabled = toolsDisabled || state.queueView.query.length === 0;
-  }
-
-  queueFilterButtons.forEach((button) => {
-    const filter = button.dataset.queueFilter;
-    const isActive = filter === state.queueView.filter;
-    button.disabled = toolsDisabled;
-    button.ariaPressed = String(isActive);
-  });
-
-  if (queueSortSelect) {
-    queueSortSelect.disabled = toolsDisabled;
-    queueSortSelect.value = state.queueView.sortKey;
-  }
-
-  if (queueSortDirectionButton) {
-    queueSortDirectionButton.disabled = toolsDisabled;
-    queueSortDirectionButton.replaceChildren(queueSortDirectionLabel());
-    queueSortDirectionButton.title =
-      state.queueView.sortDirection === "asc" ? "Tri ascendant" : "Tri descendant";
-  }
-
-  const previousPath = DocSorterQueueView.findAdjacentVisibleDocumentPath(
-    visibleQueue.documents,
-    state.activeDocumentPath,
-    "previous"
-  );
-  const nextPath = DocSorterQueueView.findAdjacentVisibleDocumentPath(
-    visibleQueue.documents,
-    state.activeDocumentPath,
-    "next"
-  );
-
-  if (previousDocumentButton) {
-    previousDocumentButton.disabled = toolsDisabled || !previousPath;
-  }
-  if (nextDocumentButton) {
-    nextDocumentButton.disabled = toolsDisabled || !nextPath;
-  }
-}
-
-function getVisibleQueue(): QueueViewResult<DocumentItem> {
-  return DocSorterQueueView.buildVisibleQueue(state.documents, {
-    query: state.queueView.query,
-    filter: state.queueView.filter,
-    sortKey: state.queueView.sortKey,
-    sortDirection: state.queueView.sortDirection,
-    duplicateFilePaths: getDuplicateDocumentPathList(),
-    activeDocumentPath: state.activeDocumentPath
-  });
+  queuePanel.render();
 }
 
 function getDuplicateDocumentPathList(): string[] {
@@ -1313,50 +1149,23 @@ function getDuplicateDocumentPathList(): string[] {
 }
 
 function navigateVisibleQueue(direction: QueueViewNavigationDirection): void {
-  const visibleQueue = getVisibleQueue();
-  const targetPath = DocSorterQueueView.findAdjacentVisibleDocumentPath(
-    visibleQueue.documents,
-    state.activeDocumentPath,
-    direction
-  );
-  if (!targetPath) {
-    return;
-  }
-
-  selectDocumentByPath(targetPath);
+  queuePanel.navigate(direction);
 }
 
 function navigateVisibleQueueByOffset(offset: number): void {
-  const visibleDocuments = getVisibleQueue().documents;
-  if (visibleDocuments.length === 0) {
-    return;
-  }
-
-  const activeIndex = state.activeDocumentPath
-    ? visibleDocuments.findIndex((documentItem) => documentItem.filePath === state.activeDocumentPath)
-    : -1;
-  const targetIndex =
-    activeIndex < 0 ? 0 : Math.min(visibleDocuments.length - 1, Math.max(0, activeIndex + offset));
-  selectDocument(visibleDocuments[targetIndex]);
+  queuePanel.navigateByOffset(offset);
 }
 
 function focusQueueSearch(): void {
-  if (!queueSearchInput) {
-    return;
-  }
-
-  queueSearchInput.focus();
-  queueSearchInput.select();
+  queuePanel.focusSearch();
 }
 
 function clearQueueSearch(): void {
-  state.queueView.query = "";
-  renderQueue();
+  queuePanel.clearSearch();
 }
 
 function setQueueFilter(filter: QueueViewFilter): void {
-  state.queueView.filter = filter;
-  renderQueue();
+  queuePanel.setFilter(filter);
 }
 
 function selectDocumentByPath(filePath: string): void {
@@ -1366,35 +1175,6 @@ function selectDocumentByPath(filePath: string): void {
   }
 
   selectDocument(documentItem);
-}
-
-function queueSortDirectionLabel(): string {
-  if (state.queueView.sortKey === "name") {
-    return state.queueView.sortDirection === "asc" ? "A → Z" : "Z → A";
-  }
-
-  return state.queueView.sortDirection === "asc" ? "Asc" : "Desc";
-}
-
-function isQueueFilter(value: string | undefined): value is QueueViewFilter {
-  return (
-    value === "all" ||
-    value === "pdf" ||
-    value === "images" ||
-    value === "duplicates" ||
-    value === "missing" ||
-    value === "pending"
-  );
-}
-
-function isQueueSortKey(value: string): value is QueueViewSortKey {
-  return (
-    value === "name" ||
-    value === "modifiedAt" ||
-    value === "sizeBytes" ||
-    value === "extension" ||
-    value === "status"
-  );
 }
 
 function renderPreview(): void {
