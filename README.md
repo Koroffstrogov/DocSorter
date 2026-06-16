@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 6A : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs et extraction locale du texte PDF natif sans OCR.
+Lot 6B : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif sans OCR et suggestions locales de nommage en mémoire uniquement.
 
 ## Commandes
 
@@ -73,7 +73,12 @@ npm run dev
 - extraction locale du texte natif des PDF via `pdfjs-dist`, sans OCR ;
 - affichage d'un extrait limité, du nombre de caractères et du nombre de pages analysées ;
 - message clair si aucun texte exploitable n'est détecté dans un PDF scanné ;
-- texte extrait conservé uniquement en mémoire pendant la session.
+- texte extrait conservé uniquement en mémoire pendant la session ;
+- bouton explicite `Analyser les suggestions` après extraction texte d'un PDF ;
+- suggestions locales de date, sujet, type et mots-clés depuis l'extrait texte et le nom de fichier ;
+- score indicatif et raisons sobres pour contrôler les suggestions ;
+- bouton `Appliquer aux champs vides` qui ne remplace jamais une saisie déjà présente ;
+- recalcul du nom proposé et du contrôle cible après application des suggestions.
 
 ## Convention de nommage
 
@@ -129,7 +134,15 @@ Le compteur de file affiche le nombre de documents visibles sur le total scanné
 
 L'extraction texte est déclenchée manuellement sur le document PDF actif. Elle vérifie côté main process que le document appartient à la dernière file scannée, existe encore et possède l'extension `.pdf`.
 
-Le texte extrait n'est pas persisté, pas ajouté au journal et pas utilisé automatiquement pour suggérer un nom, un type ou un dossier. Les PDF scannés sans couche texte affichent un message indiquant qu'un OCR sera nécessaire plus tard.
+Le texte extrait n'est pas persisté et pas ajouté au journal. Les PDF scannés sans couche texte affichent un message indiquant qu'un OCR sera nécessaire plus tard.
+
+## Suggestions locales
+
+Les suggestions sont déclenchées manuellement après extraction du texte PDF natif. Elles utilisent uniquement l'extrait conservé en mémoire et le nom du fichier actif comme signal secondaire.
+
+L'application peut proposer une date documentaire, un sujet, un type et jusqu'à cinq mots-clés. Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides, puis relance le calcul du nom proposé et le contrôle cible. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
+
+Ces règles restent prudentes : elles ne créent pas de cache, n'écrivent pas dans le journal, ne modifient aucun fichier et ne lancent ni OCR, ni IA, ni appel réseau.
 
 ## Raccourcis clavier
 
@@ -165,12 +178,12 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas de recherche globale dans les documents classés ;
 - pas de recherche plein texte dans les PDF ou images ;
 - pas d'extraction texte pour les images ;
-- pas de suggestion automatique basée sur le texte extrait ;
+- pas d'application automatique des suggestions ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
-Tester le Lot 6A d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Tester le Lot 6B d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
 Pour le classement réel et l'annulation, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
 ## Passage futur recommandé
@@ -179,6 +192,7 @@ Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR local optionnel pour PDF scannés, dans un lot séparé et explicitement validé ;
+- amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
 - aide au choix de dossier cible, sans OCR ni upload.
 
@@ -255,6 +269,13 @@ Un prochain lot pourra ajouter :
 - cliquer sur `Extraire le texte PDF` affiche un extrait lisible pour un PDF contenant du texte natif ;
 - l'extrait PDF affiche le nombre de caractères et de pages analysées ;
 - un PDF scanné sans texte affiche `Aucun texte exploitable détecté — OCR nécessaire plus tard` ;
+- après extraction texte, le bouton `Analyser les suggestions` devient disponible ;
+- cliquer sur `Analyser les suggestions` affiche date, sujet, type, mots-clés, score et raisons sobres si des signaux sont trouvés ;
+- un PDF sans texte exploitable n'affiche aucune suggestion ;
+- `Appliquer aux champs vides` remplit seulement les champs vides du panneau `Renommage proposé` ;
+- les champs déjà saisis manuellement ne sont pas remplacés par une suggestion ;
+- après application, le nom proposé et le contrôle cible sont recalculés ;
+- les suggestions ne créent pas de cache, ne modifient pas le journal et ne modifient aucun fichier ;
 - une image sélectionnée ne permet pas l'extraction texte PDF ;
 - supprimer ou déplacer un PDF après scan puis lancer l'extraction affiche une erreur propre ;
 - l'extraction texte ne crée pas de cache, ne modifie pas le journal et ne modifie aucun fichier ;

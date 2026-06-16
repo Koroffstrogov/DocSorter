@@ -220,6 +220,7 @@ interface DuplicateAnalysisState {
 }
 
 type TextExtractionStatus = "idle" | "extracting" | "text-found" | "empty" | "error";
+type NamingSuggestionStatus = "idle" | "ready" | "empty";
 
 interface PdfTextExtraction {
   status: "text-found" | "empty";
@@ -253,6 +254,16 @@ interface TextExtractionDocumentState {
 
 interface TextExtractionState {
   byDocumentPath: Record<string, TextExtractionDocumentState>;
+}
+
+interface NamingSuggestionDocumentState {
+  status: NamingSuggestionStatus;
+  suggestions: NamingSuggestions | null;
+  message: string;
+}
+
+interface NamingSuggestionsState {
+  byDocumentPath: Record<string, NamingSuggestionDocumentState>;
 }
 
 interface ClassificationState {
@@ -301,6 +312,7 @@ interface AppState {
   history: HistoryState;
   duplicates: DuplicateAnalysisState;
   textExtraction: TextExtractionState;
+  namingSuggestions: NamingSuggestionsState;
   shortcutsHelpVisible: boolean;
 }
 
@@ -330,6 +342,7 @@ const state: AppState = {
   history: createIdleHistoryState(),
   duplicates: createIdleDuplicateAnalysisState(),
   textExtraction: createIdleTextExtractionState(),
+  namingSuggestions: createIdleNamingSuggestionsState(),
   shortcutsHelpVisible: false
 };
 
@@ -382,6 +395,11 @@ const keepDuplicateButton = document.querySelector<HTMLButtonElement>("#keep-dup
 const textExtractionPanel = document.querySelector<HTMLElement>("#text-extraction-panel");
 const extractPdfTextButton = document.querySelector<HTMLButtonElement>("#extract-pdf-text");
 const textExtractionDetails = document.querySelector<HTMLElement>("#text-extraction-details");
+const suggestionsPanel = document.querySelector<HTMLElement>("#suggestions-panel");
+const analyzeSuggestionsButton = document.querySelector<HTMLButtonElement>("#analyze-suggestions");
+const suggestionsDetails = document.querySelector<HTMLElement>("#suggestions-details");
+const applySuggestionsEmptyButton =
+  document.querySelector<HTMLButtonElement>("#apply-suggestions-empty");
 const namingPanel = document.querySelector<HTMLElement>("#naming-panel");
 const namingDateInput = document.querySelector<HTMLInputElement>("#naming-date");
 const namingSubjectInput = document.querySelector<HTMLInputElement>("#naming-subject");
@@ -574,6 +592,14 @@ keepDuplicateButton?.addEventListener("click", () => {
 
 extractPdfTextButton?.addEventListener("click", () => {
   void extractTextFromActivePdf();
+});
+
+analyzeSuggestionsButton?.addEventListener("click", () => {
+  analyzeNamingSuggestionsForActiveDocument();
+});
+
+applySuggestionsEmptyButton?.addEventListener("click", () => {
+  applyNamingSuggestionsToEmptyFields();
 });
 
 refreshHistoryButton?.addEventListener("click", () => {
@@ -858,6 +884,14 @@ function renderControls(): void {
 
   if (extractPdfTextButton) {
     extractPdfTextButton.disabled = !canExtractTextFromActivePdf();
+  }
+
+  if (analyzeSuggestionsButton) {
+    analyzeSuggestionsButton.disabled = !canAnalyzeNamingSuggestions();
+  }
+
+  if (applySuggestionsEmptyButton) {
+    applySuggestionsEmptyButton.disabled = !canApplyNamingSuggestionsToEmptyFields();
   }
 
   if (executeClassificationButton) {
@@ -1344,6 +1378,7 @@ function renderDetails(): void {
   if (!documentDetails) {
     renderDuplicatePanel();
     renderTextExtractionPanel();
+    renderNamingSuggestionsPanel();
     renderNamingPanel(true);
     return;
   }
@@ -1354,6 +1389,7 @@ function renderDetails(): void {
     documentDetails.replaceChildren("Aucun document actif");
     renderDuplicatePanel();
     renderTextExtractionPanel();
+    renderNamingSuggestionsPanel();
     renderNamingPanel(true);
     return;
   }
@@ -1370,6 +1406,7 @@ function renderDetails(): void {
   );
   renderDuplicatePanel();
   renderTextExtractionPanel();
+  renderNamingSuggestionsPanel();
   renderNamingPanel(true);
 }
 
@@ -1638,6 +1675,7 @@ async function extractTextFromActivePdf(): Promise<void> {
   }
 
   const requestId = ++textExtractionRequestId;
+  clearNamingSuggestionStateForDocument(activeDocument.filePath);
   setTextExtractionState(activeDocument.filePath, {
     status: "extracting",
     result: null,
@@ -1665,6 +1703,7 @@ async function extractTextFromActivePdf(): Promise<void> {
   }
 
   const extraction = result.value as PdfTextExtraction;
+  clearNamingSuggestionStateForDocument(activeDocument.filePath);
   setTextExtractionState(activeDocument.filePath, {
     status: extraction.status,
     result: extraction,
@@ -1804,6 +1843,322 @@ function textExtractionQueueLabel(documentItem: DocumentItem): string | null {
     case "idle":
       return null;
   }
+}
+
+function renderNamingSuggestionsPanel(): void {
+  if (!suggestionsPanel || !suggestionsDetails) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || activeDocument.extension !== ".pdf") {
+    suggestionsPanel.hidden = true;
+    suggestionsDetails.replaceChildren();
+    return;
+  }
+
+  const extractionState = getTextExtractionState(activeDocument.filePath);
+  const suggestionState = getNamingSuggestionState(activeDocument.filePath);
+  suggestionsPanel.hidden = false;
+
+  if (analyzeSuggestionsButton) {
+    analyzeSuggestionsButton.disabled = !canAnalyzeNamingSuggestions(activeDocument);
+  }
+
+  if (applySuggestionsEmptyButton) {
+    applySuggestionsEmptyButton.disabled = !canApplyNamingSuggestionsToEmptyFields();
+  }
+
+  if (extractionState.status === "idle") {
+    suggestionsDetails.replaceChildren("Extrais le texte PDF pour obtenir des suggestions locales.");
+    return;
+  }
+
+  if (extractionState.status === "extracting") {
+    suggestionsDetails.replaceChildren("Extraction du texte en cours...");
+    return;
+  }
+
+  if (extractionState.status === "error") {
+    suggestionsDetails.replaceChildren("Texte PDF indisponible pour les suggestions locales.");
+    return;
+  }
+
+  if (extractionState.status === "empty" || !extractionState.result?.excerpt.trim()) {
+    suggestionsDetails.replaceChildren("Aucune suggestion disponible : aucun texte exploitable détecté.");
+    return;
+  }
+
+  if (suggestionState.status === "idle") {
+    suggestionsDetails.replaceChildren(
+      "Texte extrait disponible. Lance l'analyse locale pour préparer des suggestions."
+    );
+    return;
+  }
+
+  if (suggestionState.status === "empty" || !suggestionState.suggestions) {
+    suggestionsDetails.replaceChildren(
+      suggestionState.message || "Aucune suggestion locale exploitable détectée."
+    );
+    return;
+  }
+
+  suggestionsDetails.replaceChildren(
+    createNamingSuggestionsSummary(suggestionState.suggestions, suggestionState.message)
+  );
+}
+
+function createNamingSuggestionsSummary(
+  suggestions: NamingSuggestions,
+  message: string
+): HTMLDivElement {
+  const container = document.createElement("div");
+  const confidence = document.createElement("div");
+  const score = document.createElement("span");
+  const source = document.createElement("span");
+
+  container.className = "suggestion-summary";
+  confidence.className = "suggestions-confidence";
+  score.textContent = `Score ${formatSuggestionConfidence(suggestions.confidence)}`;
+  source.textContent = "Mémoire locale uniquement";
+  confidence.append(score, source);
+
+  container.append(confidence, createSuggestionGrid(suggestions));
+
+  if (message) {
+    const messageElement = document.createElement("p");
+    messageElement.textContent = message;
+    container.append(messageElement);
+  }
+
+  if (suggestions.reasons.length > 0) {
+    const reasons = document.createElement("ul");
+    reasons.className = "suggestion-reasons";
+    reasons.replaceChildren(
+      ...suggestions.reasons.map((reason) => {
+        const item = document.createElement("li");
+        item.textContent = reason;
+        return item;
+      })
+    );
+    container.append(reasons);
+  }
+
+  return container;
+}
+
+function createSuggestionGrid(suggestions: NamingSuggestions): HTMLDListElement {
+  const grid = document.createElement("dl");
+  grid.className = "suggestion-grid";
+  grid.append(
+    createSuggestionRow("Date", suggestions.date),
+    createSuggestionRow("Sujet", suggestions.subject),
+    createSuggestionRow("Type", suggestions.documentType),
+    createSuggestionRow("Mots-clés", createKeywordsSuggestion(suggestions.keywords))
+  );
+
+  return grid;
+}
+
+function createSuggestionRow(
+  label: string,
+  suggestion: SuggestedNamingField | null
+): HTMLDivElement {
+  const row = document.createElement("div");
+  const labelElement = document.createElement("dt");
+  const valueElement = document.createElement("dd");
+
+  labelElement.textContent = label;
+
+  if (!suggestion) {
+    valueElement.textContent = "Aucune suggestion";
+  } else {
+    const value = document.createElement("strong");
+    const meta = document.createElement("small");
+    value.textContent = suggestion.value;
+    value.title = suggestion.reason;
+    meta.textContent = `${formatSuggestionConfidence(suggestion.confidence)} - ${suggestionSourceLabel(
+      suggestion.source
+    )}`;
+    valueElement.append(value, meta);
+  }
+
+  row.append(labelElement, valueElement);
+  return row;
+}
+
+function createKeywordsSuggestion(keywords: SuggestedNamingField[]): SuggestedNamingField | null {
+  if (keywords.length === 0) {
+    return null;
+  }
+
+  const confidence =
+    keywords.reduce((total, keyword) => total + keyword.confidence, 0) / keywords.length;
+  const hasText = keywords.some((keyword) => keyword.source === "text" || keyword.source === "filename+text");
+  const hasFilename = keywords.some(
+    (keyword) => keyword.source === "filename" || keyword.source === "filename+text"
+  );
+
+  return {
+    value: keywords.map((keyword) => keyword.value).join(" "),
+    confidence,
+    reason: "Mots-clés détectés localement.",
+    source: sourceFromSuggestionBooleans(hasText, hasFilename)
+  };
+}
+
+function analyzeNamingSuggestionsForActiveDocument(): void {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canAnalyzeNamingSuggestions(activeDocument)) {
+    return;
+  }
+
+  const extraction = getTextExtractionState(activeDocument.filePath).result;
+  if (!extraction) {
+    return;
+  }
+
+  const suggestions = DocSorterNamingSuggestions.buildNamingSuggestions({
+    filename: activeDocument.name,
+    extractedText: extraction.excerpt
+  });
+  const hasSuggestions = namingSuggestionsHaveContent(suggestions);
+
+  setNamingSuggestionState(activeDocument.filePath, {
+    status: hasSuggestions ? "ready" : "empty",
+    suggestions: hasSuggestions ? suggestions : null,
+    message: hasSuggestions
+      ? "Suggestions générées localement depuis le texte extrait et le nom de fichier."
+      : "Aucune suggestion locale exploitable détectée."
+  });
+  render();
+}
+
+function applyNamingSuggestionsToEmptyFields(): void {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canApplyNamingSuggestionsToEmptyFields()) {
+    return;
+  }
+
+  const suggestionState = getNamingSuggestionState(activeDocument.filePath);
+  if (!suggestionState.suggestions) {
+    return;
+  }
+
+  const result = DocSorterNamingSuggestions.applySuggestionsToEmptyFields(
+    state.naming.draft,
+    suggestionState.suggestions
+  );
+  setNamingSuggestionState(activeDocument.filePath, {
+    ...suggestionState,
+    message:
+      result.appliedFields.length > 0
+        ? "Suggestions appliquées aux champs vides. Les champs déjà remplis n'ont pas été modifiés."
+        : "Aucun champ vide à compléter."
+  });
+
+  if (result.appliedFields.length === 0) {
+    render();
+    return;
+  }
+
+  state.naming.draft = result.draft;
+  state.naming.overrideFilename = null;
+  state.naming.isLoading = true;
+  resetClassificationState();
+  resetDestinationCheck();
+  render();
+  void updateNamingProposal(activeDocument.extension, ++namingRequestId);
+}
+
+function canAnalyzeNamingSuggestions(documentItem = getActiveDocument()): boolean {
+  if (!documentItem) {
+    return false;
+  }
+
+  const extractionState = getTextExtractionState(documentItem.filePath);
+  return Boolean(
+    documentItem.extension === ".pdf" &&
+      documentItem.status !== "missing" &&
+      extractionState.status === "text-found" &&
+      extractionState.result?.excerpt.trim() &&
+      !isClassificationBusy()
+  );
+}
+
+function canApplyNamingSuggestionsToEmptyFields(): boolean {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || state.naming.isLoading || isClassificationBusy()) {
+    return false;
+  }
+
+  const suggestions = getNamingSuggestionState(activeDocument.filePath).suggestions;
+  return Boolean(suggestions && hasEmptyFieldForSuggestion(state.naming.draft, suggestions));
+}
+
+function hasEmptyFieldForSuggestion(draft: NamingDraft, suggestions: NamingSuggestions): boolean {
+  return (
+    (!draft.documentDate.trim() && Boolean(suggestions.date?.value)) ||
+    (!draft.subject.trim() && Boolean(suggestions.subject?.value)) ||
+    (!draft.documentType.trim() && Boolean(suggestions.documentType?.value)) ||
+    (!draft.keywords.trim() && suggestions.keywords.length > 0)
+  );
+}
+
+function namingSuggestionsHaveContent(suggestions: NamingSuggestions): boolean {
+  return Boolean(
+    suggestions.date || suggestions.subject || suggestions.documentType || suggestions.keywords.length > 0
+  );
+}
+
+function getNamingSuggestionState(filePath: string): NamingSuggestionDocumentState {
+  return state.namingSuggestions.byDocumentPath[filePath] ?? createIdleNamingSuggestionDocumentState();
+}
+
+function setNamingSuggestionState(filePath: string, value: NamingSuggestionDocumentState): void {
+  state.namingSuggestions = {
+    byDocumentPath: {
+      ...state.namingSuggestions.byDocumentPath,
+      [filePath]: value
+    }
+  };
+}
+
+function clearNamingSuggestionStateForDocument(filePath: string): void {
+  if (!state.namingSuggestions.byDocumentPath[filePath]) {
+    return;
+  }
+
+  const { [filePath]: _removed, ...remaining } = state.namingSuggestions.byDocumentPath;
+  state.namingSuggestions = {
+    byDocumentPath: remaining
+  };
+}
+
+function formatSuggestionConfidence(confidence: number): string {
+  return `${Math.round(confidence * 100)} %`;
+}
+
+function suggestionSourceLabel(source: NamingSuggestionSource): string {
+  switch (source) {
+    case "text":
+      return "texte extrait";
+    case "filename":
+      return "nom de fichier";
+    case "filename+text":
+      return "texte + nom";
+  }
+}
+
+function sourceFromSuggestionBooleans(
+  textMatch: boolean,
+  filenameMatch: boolean
+): NamingSuggestionSource {
+  if (textMatch && filenameMatch) {
+    return "filename+text";
+  }
+
+  return textMatch ? "text" : "filename";
 }
 
 function createPlaceholder(message: string): HTMLDivElement {
@@ -2780,11 +3135,25 @@ function createIdleTextExtractionState(): TextExtractionState {
   };
 }
 
+function createIdleNamingSuggestionsState(): NamingSuggestionsState {
+  return {
+    byDocumentPath: {}
+  };
+}
+
 function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
   return {
     status: "idle",
     result: null,
     error: null
+  };
+}
+
+function createIdleNamingSuggestionDocumentState(): NamingSuggestionDocumentState {
+  return {
+    status: "idle",
+    suggestions: null,
+    message: ""
   };
 }
 
@@ -2808,6 +3177,11 @@ function resetDuplicateAnalysisState(): void {
 function resetTextExtractionState(): void {
   textExtractionRequestId += 1;
   state.textExtraction = createIdleTextExtractionState();
+  resetNamingSuggestionsState();
+}
+
+function resetNamingSuggestionsState(): void {
+  state.namingSuggestions = createIdleNamingSuggestionsState();
 }
 
 function clampPreviewZoom(zoom: number): number {

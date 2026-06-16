@@ -156,6 +156,17 @@
             <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
           </section>
 
+          <section id="suggestions-panel" class="detail-section suggestions-panel" aria-label="Suggestions locales" hidden>
+            <div class="section-heading">
+              <h3>Suggestions locales</h3>
+              <button id="analyze-suggestions" type="button" disabled>Analyser les suggestions</button>
+            </div>
+            <div id="suggestions-details" class="suggestions-details">
+              Extrais le texte PDF pour obtenir des suggestions locales.
+            </div>
+            <button id="apply-suggestions-empty" type="button" disabled>Appliquer aux champs vides</button>
+          </section>
+
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
             <div class="section-heading">
               <h3>Renommage proposé</h3>
@@ -230,6 +241,7 @@
     <script src="./imagePreview.js"></script>
     <script src="./pdfPreview.js"></script>
     <script src="../documents/documentQueueView.js"></script>
+    <script src="../rules/namingSuggestions.js"></script>
     <script src="./keyboardShortcuts.js"></script>
     <script src="./renderer.js"></script>
   </body>
