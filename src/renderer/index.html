@@ -180,7 +180,10 @@
               <ol id="user-rules-list" class="user-rules-list"></ol>
               <form id="user-rule-form" class="user-rule-form">
                 <label>
-                  Catégorie
+                  <span class="field-label">
+                    Catégorie
+                    <span class="field-help" tabindex="0" title="Choisir ce que la règle doit produire : un type de document, un sujet ou un mot-clé.">i</span>
+                  </span>
                   <select id="user-rule-category" name="category">
                     <option value="documentType">Type de document</option>
                     <option value="subject">Sujet</option>
@@ -188,44 +191,74 @@
                   </select>
                 </label>
                 <label>
-                  Identifiant
+                  <span class="field-label">
+                    Identifiant
+                    <span class="field-help" tabindex="0" title="Nom technique unique de la règle. Un préfixe user: sera ajouté automatiquement si besoin. Exemple : garage-maintenance.">i</span>
+                  </span>
                   <input id="user-rule-id" name="id" autocomplete="off" placeholder="garage-maintenance" />
                 </label>
                 <label>
-                  Libellé
+                  <span class="field-label">
+                    Libellé
+                    <span class="field-help" tabindex="0" title="Nom lisible affiché dans la liste des règles et dans les raisons de suggestion.">i</span>
+                  </span>
                   <input id="user-rule-label" name="label" autocomplete="off" />
                 </label>
                 <label>
-                  Tous les mots requis
+                  <span class="field-label">
+                    Tous les mots requis
+                    <span class="field-help" tabindex="0" title="Tous ces termes doivent être présents pour que la règle s'applique. Séparer plusieurs termes par des virgules.">i</span>
+                  </span>
                   <input id="user-rule-all-of" name="allOf" autocomplete="off" placeholder="facture" />
                 </label>
                 <label>
-                  Au moins un mot
+                  <span class="field-label">
+                    Au moins un mot
+                    <span class="field-help" tabindex="0" title="Au moins un de ces termes doit être présent. Séparer plusieurs termes par des virgules.">i</span>
+                  </span>
                   <input id="user-rule-any-of" name="anyOf" autocomplete="off" placeholder="garage, vidange" />
                 </label>
                 <label>
-                  Mots interdits
+                  <span class="field-label">
+                    Mots interdits
+                    <span class="field-help" tabindex="0" title="Si un de ces termes est présent, la règle ne s'applique pas. Champ optionnel.">i</span>
+                  </span>
                   <input id="user-rule-none-of" name="noneOf" autocomplete="off" />
                 </label>
                 <label>
-                  Sortie type
+                  <span class="field-label">
+                    Sortie type
+                    <span class="field-help" tabindex="0" title="Type de document proposé par une règle de catégorie Type. Exemple : facture-entretien.">i</span>
+                  </span>
                   <input id="user-rule-document-type" name="documentType" autocomplete="off" placeholder="facture-entretien" />
                 </label>
                 <label>
-                  Sortie sujet
+                  <span class="field-label">
+                    Sortie sujet
+                    <span class="field-help" tabindex="0" title="Sujet proposé par une règle de catégorie Sujet. Exemple générique : Garage.">i</span>
+                  </span>
                   <input id="user-rule-subject" name="subject" autocomplete="off" />
                 </label>
                 <label>
-                  Mots-clés de sortie
+                  <span class="field-label">
+                    Mots-clés de sortie
+                    <span class="field-help" tabindex="0" title="Mots-clés ajoutés à la suggestion. Séparer plusieurs mots-clés par des virgules.">i</span>
+                  </span>
                   <input id="user-rule-keywords" name="keywords" autocomplete="off" placeholder="entretien" />
                 </label>
                 <label>
-                  Confiance
+                  <span class="field-label">
+                    Confiance
+                    <span class="field-help" tabindex="0" title="Score indicatif entre 0 et 100. Plus il est élevé, plus la règle pèse dans la suggestion.">i</span>
+                  </span>
                   <input id="user-rule-confidence" name="confidence" type="number" min="0" max="100" step="1" value="70" />
                 </label>
                 <label class="rules-checkbox">
                   <input id="user-rule-enabled" name="enabled" type="checkbox" checked />
-                  Actif
+                  <span class="field-label">
+                    Actif
+                    <span class="field-help" tabindex="0" title="Décochez pour conserver la règle dans le fichier utilisateur sans l'utiliser dans les suggestions.">i</span>
+                  </span>
                 </label>
                 <ul id="user-rule-errors" class="user-rule-errors"></ul>
                 <div class="rules-actions">

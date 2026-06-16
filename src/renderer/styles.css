@@ -1008,6 +1008,34 @@ h2 {
   font-weight: 720;
 }
 
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-help {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 1px solid #9aa8b7;
+  border-radius: 50%;
+  color: var(--blue);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+}
+
+.field-help:focus {
+  outline: 2px solid rgba(47, 94, 158, 0.28);
+  outline-offset: 2px;
+}
+
 .user-rule-form input,
 .user-rule-form select {
   width: 100%;
