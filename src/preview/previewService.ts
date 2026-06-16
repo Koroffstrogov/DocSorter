@@ -1,6 +1,8 @@
+import type { Stats } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { MAX_PREVIEW_FILE_BYTES } from "../config/processingLimits";
 import {
   failure,
   isSupportedExtension,
@@ -19,11 +21,21 @@ export interface PreviewAccessContext {
   queuedDocumentPaths: ReadonlySet<string>;
 }
 
+export interface PreviewReadOptions {
+  maxPreviewFileBytes?: number;
+  statFile?: (filePath: string) => Promise<Pick<Stats, "isFile" | "size">>;
+  readFileBytes?: (filePath: string) => Promise<Buffer>;
+}
+
 export async function getPreviewData(
   documentPath: string | undefined,
-  context: PreviewAccessContext
+  context: PreviewAccessContext,
+  options: PreviewReadOptions = {}
 ): Promise<PreviewDataResult> {
   const normalizedDocumentPath = documentPath?.trim();
+  const statFile = options.statFile ?? stat;
+  const readFileBytes = options.readFileBytes ?? readFile;
+  const maxPreviewFileBytes = options.maxPreviewFileBytes ?? MAX_PREVIEW_FILE_BYTES;
 
   if (!context.sourcePath) {
     return failure("SOURCE_NOT_SELECTED");
@@ -48,20 +60,21 @@ export async function getPreviewData(
   }
 
   try {
-    const fileStats = await stat(normalizedDocumentPath);
+    const fileStats = await statFile(normalizedDocumentPath);
     if (!fileStats.isFile()) {
       return failure("FILE_NOT_FOUND");
+    }
+
+    if (fileStats.size > maxPreviewFileBytes) {
+      return failure("PREVIEW_FILE_TOO_LARGE");
     }
   } catch (error) {
     return failure(mapPreviewFileSystemError(error));
   }
 
   try {
-    const fileBuffer = await readFile(normalizedDocumentPath);
-    const bytes = fileBuffer.buffer.slice(
-      fileBuffer.byteOffset,
-      fileBuffer.byteOffset + fileBuffer.byteLength
-    );
+    const fileBuffer = await readFileBytes(normalizedDocumentPath);
+    const bytes = new Uint8Array(fileBuffer).buffer;
 
     return {
       ok: true,
@@ -95,6 +108,7 @@ function mapPreviewFileSystemError(error: unknown): AppErrorCode {
     case "FILE_UNAVAILABLE":
     case "UNSUPPORTED_FILE_TYPE":
     case "PREVIEW_NOT_ALLOWED":
+    case "PREVIEW_FILE_TOO_LARGE":
       return mappedError;
   }
 }

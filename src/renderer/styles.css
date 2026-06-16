@@ -807,6 +807,12 @@ h2 {
   font-weight: 720;
 }
 
+.text-extraction-limit {
+  margin: 0;
+  color: var(--warning);
+  font-weight: 720;
+}
+
 .text-extraction-excerpt {
   max-height: 220px;
   overflow: auto;

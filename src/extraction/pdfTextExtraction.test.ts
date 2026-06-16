@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   aggregatePageText,
+  aggregatePageTextWithinLimit,
   buildPdfTextExtraction,
   createTextExcerpt,
   extractTextFromPdfDocument,
@@ -26,6 +27,13 @@ describe("pdf text extraction helpers", () => {
     expect(aggregatePageText([" Page 1   texte ", "", "Page\t2 texte"])).toBe(
       "Page 1 texte\n\nPage 2 texte"
     );
+  });
+
+  it("aggregates page text within a maximum character limit", () => {
+    expect(aggregatePageTextWithinLimit(["abcdef", "ghij"], 8)).toEqual({
+      text: "abcdef",
+      truncated: true
+    });
   });
 
   it("limits excerpts", () => {
@@ -72,6 +80,47 @@ describe("pdf text extraction helpers", () => {
       characterCount: 10,
       excerpt: "abcde",
       excerptCharacterCount: 5,
+      truncated: true
+    });
+  });
+
+  it("marks the result as truncated when not all PDF pages were analyzed", () => {
+    const result = buildPdfTextExtraction(
+      {
+        pageCount: 60,
+        pagesAnalyzed: 50,
+        pageTexts: ["Texte"]
+      },
+      {
+        maxExcerptLength: 100,
+        extractedAt: "2026-06-16T10:00:00.000Z"
+      }
+    );
+
+    expect(result).toMatchObject({
+      pageCount: 60,
+      pagesAnalyzed: 50,
+      truncated: true
+    });
+  });
+
+  it("bounds extracted text kept for renderer metadata", () => {
+    const result = buildPdfTextExtraction(
+      {
+        pageCount: 1,
+        pagesAnalyzed: 1,
+        pageTexts: ["abcdefghij"]
+      },
+      {
+        maxExcerptLength: 100,
+        maxExtractedTextChars: 4,
+        extractedAt: "2026-06-16T10:00:00.000Z"
+      }
+    );
+
+    expect(result).toMatchObject({
+      characterCount: 4,
+      excerpt: "abcd",
       truncated: true
     });
   });
@@ -130,6 +179,77 @@ describe("extractTextFromPdfDocument", () => {
         message: "Document non présent dans la dernière file scannée."
       }
     });
+  });
+
+  it("refuses a PDF above the extraction size limit before loading the extractor", async () => {
+    const filePath = await createTempFile("large.pdf", "%PDF");
+    let extractorCalled = false;
+    const extractor: PdfTextExtractor = {
+      extractText: async () => {
+        extractorCalled = true;
+        return {
+          pageCount: 1,
+          pagesAnalyzed: 1,
+          pageTexts: ["Texte"]
+        };
+      }
+    };
+
+    const result = await extractTextFromPdfDocument(
+      {
+        documentPath: filePath,
+        queuedDocumentPaths: [filePath],
+        maxFileBytes: 10,
+        statFile: async () => ({
+          isFile: () => true,
+          size: 11
+        }),
+        now: fixedNow
+      },
+      extractor
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "PDF_TOO_LARGE_FOR_TEXT_EXTRACTION",
+        message: "Extraction non lancée : PDF trop volumineux."
+      }
+    });
+    expect(extractorCalled).toBe(false);
+  });
+
+  it("passes the page limit to the PDF text extractor", async () => {
+    const filePath = await createTempFile("document.pdf", "%PDF");
+    let receivedMaxPages = 0;
+    const extractor: PdfTextExtractor = {
+      extractText: async (_documentPath, options) => {
+        receivedMaxPages = options.maxPages;
+        return {
+          pageCount: 60,
+          pagesAnalyzed: options.maxPages,
+          pageTexts: ["Texte"]
+        };
+      }
+    };
+
+    const result = await extractTextFromPdfDocument(
+      {
+        documentPath: filePath,
+        queuedDocumentPaths: [filePath],
+        maxPages: 50,
+        now: fixedNow
+      },
+      extractor
+    );
+
+    expect(receivedMaxPages).toBe(50);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.pagesAnalyzed).toBe(50);
+      expect(result.value.pageCount).toBe(60);
+      expect(result.value.truncated).toBe(true);
+    }
   });
 
   it("returns empty status when the injected extractor finds no text", async () => {

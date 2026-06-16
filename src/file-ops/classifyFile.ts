@@ -8,6 +8,10 @@ import {
   prepareClassificationPlan
 } from "../classification/classificationPlan";
 import {
+  checkTargetDirectoryWritable as defaultCheckTargetDirectoryWritable,
+  type TargetDirectoryWritableChecker
+} from "../filesystem/targetDirectoryAccess";
+import {
   appendActionJournalEntry,
   readLastUndoableClassification,
   type ActionJournalResult
@@ -104,6 +108,7 @@ export interface ExecuteClassificationOptions {
   createId?: () => string;
   renameFile?: (oldPath: string, newPath: string) => Promise<void>;
   appendJournalEntry?: JournalEntryWriter;
+  checkTargetDirectoryWritable?: TargetDirectoryWritableChecker;
 }
 
 export interface UndoClassificationOptions {
@@ -127,6 +132,8 @@ export async function executeClassification(
   const createId = options.createId ?? randomUUID;
   const renameFile = options.renameFile ?? rename;
   const appendJournalEntry = options.appendJournalEntry ?? appendActionJournalEntry;
+  const checkTargetDirectoryWritable =
+    options.checkTargetDirectoryWritable ?? defaultCheckTargetDirectoryWritable;
   const actionId = createId();
   const timestamp = now().toISOString();
 
@@ -135,6 +142,7 @@ export async function executeClassification(
     proposedFilename: options.proposedFilename,
     selectedTargetPath: options.selectedTargetPath,
     queuedDocumentPaths: options.queuedDocumentPaths,
+    checkTargetDirectoryWritable,
     now
   });
 
@@ -185,6 +193,27 @@ export async function executeClassification(
     return {
       ok: false,
       error: hashResult.error,
+      plan
+    };
+  }
+
+  const targetWritable = await checkTargetDirectoryWritable(plan.targetPath);
+  if (!targetWritable.ok) {
+    const error = {
+      code: targetWritable.error.code as ExecuteClassificationErrorCode,
+      message: targetWritable.error.message
+    };
+    await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
+      id: actionId,
+      timestamp,
+      plan,
+      sourceHashSha256: hashResult.value,
+      errorCode: error.code,
+      errorMessage: error.message
+    });
+    return {
+      ok: false,
+      error,
       plan
     };
   }

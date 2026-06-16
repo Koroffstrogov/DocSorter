@@ -130,6 +130,24 @@ describe("checkDestinationNameAvailability", () => {
     }
   });
 
+  it("returns TARGET_NOT_WRITABLE when the target directory is not writable", async () => {
+    const result = await checkDestinationNameAvailability("C:\\target", "facture.pdf", {
+      checkTargetDirectoryWritable: async () => ({
+        ok: false,
+        error: {
+          code: "TARGET_NOT_WRITABLE",
+          message: "Contrôle cible indisponible : écriture refusée."
+        }
+      })
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_NOT_WRITABLE");
+      expect(result.error.message).toBe("Contrôle cible indisponible : écriture refusée.");
+    }
+  });
+
   it("reads the target directory and reports an available name", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "docsorter-target-"));
     const target = path.join(tempRoot, "target");

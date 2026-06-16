@@ -1,7 +1,11 @@
-import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  checkTargetDirectoryWritable as defaultCheckTargetDirectoryWritable,
+  type TargetDirectoryAccessErrorCode,
+  type TargetDirectoryWritableChecker
+} from "../filesystem/targetDirectoryAccess";
 import {
   checkDestinationNameAvailability,
   validateDestinationFilename
@@ -18,6 +22,7 @@ export type ClassificationPlanErrorCode =
   | "TARGET_NOT_FOUND"
   | "TARGET_NOT_DIRECTORY"
   | "TARGET_ACCESS_DENIED"
+  | "TARGET_NOT_WRITABLE"
   | "INVALID_FILENAME"
   | "DESTINATION_ALREADY_EXISTS"
   | "UNKNOWN_ERROR";
@@ -28,6 +33,7 @@ export type ClassificationPlanCheckCode =
   | "SOURCE_DOCUMENT_EXISTS"
   | "TARGET_SELECTED"
   | "TARGET_ACCESSIBLE"
+  | "TARGET_WRITABLE"
   | "FILENAME_VALID"
   | "DESTINATION_AVAILABLE"
   | "SIMULATION_ONLY";
@@ -45,6 +51,7 @@ export type TargetDirectoryStatus =
   | "not-found"
   | "not-directory"
   | "access-denied"
+  | "not-writable"
   | "unknown";
 
 export type DestinationCollisionStatus =
@@ -99,6 +106,7 @@ export interface PrepareClassificationPlanOptions {
   selectedTargetPath: string | null | undefined;
   queuedDocumentPaths: Iterable<string>;
   now?: () => Date;
+  checkTargetDirectoryWritable?: TargetDirectoryWritableChecker;
 }
 
 const CHECK_ORDER: ClassificationPlanCheckCode[] = [
@@ -107,6 +115,7 @@ const CHECK_ORDER: ClassificationPlanCheckCode[] = [
   "SOURCE_DOCUMENT_EXISTS",
   "TARGET_SELECTED",
   "TARGET_ACCESSIBLE",
+  "TARGET_WRITABLE",
   "FILENAME_VALID",
   "DESTINATION_AVAILABLE",
   "SIMULATION_ONLY"
@@ -117,7 +126,8 @@ const CHECK_LABELS: Record<ClassificationPlanCheckCode, string> = {
   SOURCE_DOCUMENT_IN_QUEUE: "Document issu de la file scannée",
   SOURCE_DOCUMENT_EXISTS: "Document encore présent",
   TARGET_SELECTED: "Cible sélectionnée",
-  TARGET_ACCESSIBLE: "Cible encore accessible",
+  TARGET_ACCESSIBLE: "Dossier cible existant",
+  TARGET_WRITABLE: "Dossier cible accessible en écriture",
   FILENAME_VALID: "Nom proposé valide",
   DESTINATION_AVAILABLE: "Nom disponible dans la cible",
   SIMULATION_ONLY: "Aucune action disque exécutée"
@@ -130,6 +140,8 @@ export async function prepareClassificationPlan(
   const sourcePath = options.documentPath.trim() ? path.resolve(options.documentPath) : "";
   const proposedFilename = options.proposedFilename;
   const targetPath = options.selectedTargetPath?.trim() ?? "";
+  const checkTargetDirectoryWritable =
+    options.checkTargetDirectoryWritable ?? defaultCheckTargetDirectoryWritable;
   const checks: ClassificationPlanCheck[] = [];
   let sourceFileStatus: SourceFileStatus = "unknown";
   let targetDirectoryStatus: TargetDirectoryStatus = "unknown";
@@ -217,15 +229,24 @@ export async function prepareClassificationPlan(
 
   checks.push(createCheck("TARGET_SELECTED", "ok", "Dossier cible sélectionné."));
 
-  const targetExists = await checkTargetDirectory(targetPath);
-  if (!targetExists.ok) {
-    targetDirectoryStatus = targetExists.status;
-    checks.push(createCheck("TARGET_ACCESSIBLE", "blocking", targetExists.message));
-    return block(targetExists.errorCode, targetExists.message);
+  const targetAccess = await checkTargetDirectoryWritable(targetPath);
+  if (!targetAccess.ok) {
+    const targetError = mapTargetDirectoryAccessError(targetAccess.error.code);
+    targetDirectoryStatus = targetError.targetDirectoryStatus;
+
+    if (targetAccess.error.code === "TARGET_NOT_WRITABLE") {
+      checks.push(createCheck("TARGET_ACCESSIBLE", "ok", "Dossier cible encore disponible."));
+      checks.push(createCheck("TARGET_WRITABLE", "blocking", targetError.message));
+    } else {
+      checks.push(createCheck("TARGET_ACCESSIBLE", "blocking", targetError.message));
+    }
+
+    return block(targetError.errorCode, targetError.message);
   }
 
   targetDirectoryStatus = "available";
-  checks.push(createCheck("TARGET_ACCESSIBLE", "ok", "Dossier cible encore accessible."));
+  checks.push(createCheck("TARGET_ACCESSIBLE", "ok", "Dossier cible encore disponible."));
+  checks.push(createCheck("TARGET_WRITABLE", "ok", "Dossier cible accessible en écriture."));
 
   const filenameValidation = validateDestinationFilename(proposedFilename);
   if (!filenameValidation.ok) {
@@ -239,7 +260,10 @@ export async function prepareClassificationPlan(
 
   const destinationAvailability = await checkDestinationNameAvailability(
     targetPath,
-    filenameValidation.value
+    filenameValidation.value,
+    {
+      checkTargetDirectoryWritable: async () => targetAccess
+    }
   );
   if (!destinationAvailability.ok) {
     const error = mapDestinationError(destinationAvailability.error.code);
@@ -363,60 +387,6 @@ async function checkSourceFile(
   }
 }
 
-async function checkTargetDirectory(
-  targetPath: string
-): Promise<
-  | {
-      ok: true;
-    }
-  | {
-      ok: false;
-      errorCode: ClassificationPlanErrorCode;
-      status: TargetDirectoryStatus;
-      message: string;
-    }
-> {
-  try {
-    const targetStats = await stat(targetPath);
-    if (!targetStats.isDirectory()) {
-      return {
-        ok: false,
-        errorCode: "TARGET_NOT_DIRECTORY",
-        status: "not-directory",
-        message: "Le dossier cible n'est plus disponible."
-      };
-    }
-
-    await access(targetPath, constants.R_OK);
-    return { ok: true };
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return {
-        ok: false,
-        errorCode: "TARGET_NOT_FOUND",
-        status: "not-found",
-        message: "Le dossier cible n'est plus disponible."
-      };
-    }
-
-    if (isAccessDeniedError(error)) {
-      return {
-        ok: false,
-        errorCode: "TARGET_ACCESS_DENIED",
-        status: "access-denied",
-        message: "Le dossier cible n'est plus disponible."
-      };
-    }
-
-    return {
-      ok: false,
-      errorCode: "UNKNOWN_ERROR",
-      status: "unknown",
-      message: "Le dossier cible n'est plus disponible."
-    };
-  }
-}
-
 function mapDestinationError(code: string): {
   errorCode: ClassificationPlanErrorCode;
   checkCode: ClassificationPlanCheckCode;
@@ -450,8 +420,15 @@ function mapDestinationError(code: string): {
       return {
         errorCode: "TARGET_ACCESS_DENIED",
         checkCode: "TARGET_ACCESSIBLE",
-        message: "Le dossier cible n'est plus disponible.",
+        message: "Accès refusé au dossier cible.",
         targetDirectoryStatus: "access-denied"
+      };
+    case "TARGET_NOT_WRITABLE":
+      return {
+        errorCode: "TARGET_NOT_WRITABLE",
+        checkCode: "TARGET_WRITABLE",
+        message: "Le dossier cible n'est pas accessible en écriture.",
+        targetDirectoryStatus: "not-writable"
       };
     case "INVALID_FILENAME":
       return {
@@ -476,12 +453,53 @@ function mapDestinationError(code: string): {
   }
 }
 
-function isMissingPathError(error: unknown): boolean {
-  return isNodeError(error) && (error.code === "ENOENT" || error.code === "ENOTDIR");
+function mapTargetDirectoryAccessError(code: TargetDirectoryAccessErrorCode): {
+  errorCode: ClassificationPlanErrorCode;
+  targetDirectoryStatus: TargetDirectoryStatus;
+  message: string;
+} {
+  switch (code) {
+    case "TARGET_NOT_SELECTED":
+      return {
+        errorCode: "TARGET_NOT_SELECTED",
+        targetDirectoryStatus: "not-selected",
+        message: "Aucun dossier cible sélectionné."
+      };
+    case "TARGET_NOT_FOUND":
+      return {
+        errorCode: "TARGET_NOT_FOUND",
+        targetDirectoryStatus: "not-found",
+        message: "Le dossier cible n'est plus disponible."
+      };
+    case "TARGET_NOT_DIRECTORY":
+      return {
+        errorCode: "TARGET_NOT_DIRECTORY",
+        targetDirectoryStatus: "not-directory",
+        message: "Le dossier cible n'est plus disponible."
+      };
+    case "TARGET_ACCESS_DENIED":
+      return {
+        errorCode: "TARGET_ACCESS_DENIED",
+        targetDirectoryStatus: "access-denied",
+        message: "Accès refusé au dossier cible."
+      };
+    case "TARGET_NOT_WRITABLE":
+      return {
+        errorCode: "TARGET_NOT_WRITABLE",
+        targetDirectoryStatus: "not-writable",
+        message: "Le dossier cible n'est pas accessible en écriture."
+      };
+    case "UNKNOWN_ERROR":
+      return {
+        errorCode: "UNKNOWN_ERROR",
+        targetDirectoryStatus: "unknown",
+        message: "Contrôle du dossier cible impossible."
+      };
+  }
 }
 
-function isAccessDeniedError(error: unknown): boolean {
-  return isNodeError(error) && (error.code === "EACCES" || error.code === "EPERM");
+function isMissingPathError(error: unknown): boolean {
+  return isNodeError(error) && (error.code === "ENOENT" || error.code === "ENOTDIR");
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

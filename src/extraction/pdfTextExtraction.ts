@@ -1,5 +1,13 @@
+import type { Stats } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+
+import {
+  MAX_EXTRACTED_TEXT_CHARS,
+  MAX_EXTRACTED_TEXT_PREVIEW_CHARS,
+  MAX_PDF_TEXT_EXTRACTION_BYTES,
+  MAX_PDF_TEXT_EXTRACTION_PAGES
+} from "../config/processingLimits";
 
 export type PdfTextExtractionStatus = "text-found" | "empty";
 
@@ -8,6 +16,7 @@ export type PdfTextExtractionErrorCode =
   | "DOCUMENT_NOT_IN_QUEUE"
   | "DOCUMENT_NOT_FOUND"
   | "DOCUMENT_NOT_PDF"
+  | "PDF_TOO_LARGE_FOR_TEXT_EXTRACTION"
   | "PDF_TEXT_EMPTY"
   | "PDF_PROTECTED_OR_UNREADABLE"
   | "PDF_EXTRACTION_FAILED"
@@ -41,6 +50,10 @@ export interface ExtractTextFromPdfDocumentOptions {
   documentPath: string;
   queuedDocumentPaths: Iterable<string>;
   maxExcerptLength?: number;
+  maxFileBytes?: number;
+  maxPages?: number;
+  maxExtractedTextChars?: number;
+  statFile?: (filePath: string) => Promise<Pick<Stats, "isFile" | "size">>;
   now?: () => Date;
 }
 
@@ -51,7 +64,10 @@ export interface RawPdfTextExtraction {
 }
 
 export interface PdfTextExtractor {
-  extractText: (documentPath: string) => Promise<RawPdfTextExtraction>;
+  extractText: (
+    documentPath: string,
+    options: { maxPages: number }
+  ) => Promise<RawPdfTextExtraction>;
 }
 
 interface PdfJsModule {
@@ -84,8 +100,6 @@ interface PdfTextItem {
   str: string;
 }
 
-const defaultMaxExcerptLength = 5000;
-
 export async function extractTextFromPdfDocument(
   options: ExtractTextFromPdfDocumentOptions,
   extractor: PdfTextExtractor = {
@@ -93,6 +107,10 @@ export async function extractTextFromPdfDocument(
   }
 ): Promise<PdfTextExtractionResult> {
   const normalizedDocumentPath = options.documentPath.trim();
+  const statFile = options.statFile ?? stat;
+  const maxFileBytes = options.maxFileBytes ?? MAX_PDF_TEXT_EXTRACTION_BYTES;
+  const maxPages = options.maxPages ?? MAX_PDF_TEXT_EXTRACTION_PAGES;
+  const maxExtractedTextChars = options.maxExtractedTextChars ?? MAX_EXTRACTED_TEXT_CHARS;
   if (!normalizedDocumentPath) {
     return pdfTextExtractionFailure("DOCUMENT_NOT_SELECTED");
   }
@@ -105,16 +123,22 @@ export async function extractTextFromPdfDocument(
     return pdfTextExtractionFailure("DOCUMENT_NOT_PDF");
   }
 
-  if (!(await isReadableFile(normalizedDocumentPath))) {
+  const fileCheck = await checkReadablePdfFile(normalizedDocumentPath, statFile);
+  if (!fileCheck.ok) {
     return pdfTextExtractionFailure("DOCUMENT_NOT_FOUND");
   }
 
+  if (fileCheck.size > maxFileBytes) {
+    return pdfTextExtractionFailure("PDF_TOO_LARGE_FOR_TEXT_EXTRACTION");
+  }
+
   try {
-    const rawExtraction = await extractor.extractText(normalizedDocumentPath);
+    const rawExtraction = await extractor.extractText(normalizedDocumentPath, { maxPages });
     return {
       ok: true,
       value: buildPdfTextExtraction(rawExtraction, {
-        maxExcerptLength: options.maxExcerptLength ?? defaultMaxExcerptLength,
+        maxExcerptLength: options.maxExcerptLength ?? MAX_EXTRACTED_TEXT_PREVIEW_CHARS,
+        maxExtractedTextChars,
         extractedAt: (options.now ?? (() => new Date()))().toISOString()
       })
     };
@@ -127,10 +151,15 @@ export function buildPdfTextExtraction(
   rawExtraction: RawPdfTextExtraction,
   options: {
     maxExcerptLength: number;
+    maxExtractedTextChars?: number;
     extractedAt: string;
   }
 ): PdfTextExtraction {
-  const text = aggregatePageText(rawExtraction.pageTexts);
+  const boundedText = aggregatePageTextWithinLimit(
+    rawExtraction.pageTexts,
+    options.maxExtractedTextChars ?? MAX_EXTRACTED_TEXT_CHARS
+  );
+  const text = boundedText.text;
   const excerpt = createTextExcerpt(text, options.maxExcerptLength);
 
   return {
@@ -140,13 +169,55 @@ export function buildPdfTextExtraction(
     characterCount: text.length,
     excerpt,
     excerptCharacterCount: excerpt.length,
-    truncated: excerpt.length < text.length,
+    truncated:
+      rawExtraction.pagesAnalyzed < rawExtraction.pageCount ||
+      boundedText.truncated ||
+      excerpt.length < text.length,
     extractedAt: options.extractedAt
   };
 }
 
 export function aggregatePageText(pageTexts: string[]): string {
-  return pageTexts.map(normalizeExtractedText).filter(Boolean).join("\n\n").trim();
+  return aggregatePageTextWithinLimit(pageTexts, Number.POSITIVE_INFINITY).text;
+}
+
+export function aggregatePageTextWithinLimit(
+  pageTexts: string[],
+  maxLength: number
+): { text: string; truncated: boolean } {
+  if (Number.isNaN(maxLength) || maxLength <= 0) {
+    return {
+      text: "",
+      truncated: pageTexts.some((pageText) => normalizeExtractedText(pageText).length > 0)
+    };
+  }
+
+  const effectiveMaxLength = Number.isFinite(maxLength) ? maxLength : Number.POSITIVE_INFINITY;
+  let text = "";
+  let truncated = false;
+
+  for (const pageText of pageTexts) {
+    const normalizedPageText = normalizeExtractedText(pageText);
+    if (!normalizedPageText) {
+      continue;
+    }
+
+    const separator = text ? "\n\n" : "";
+    const nextChunk = `${separator}${normalizedPageText}`;
+    const remaining = effectiveMaxLength - text.length;
+    if (nextChunk.length > remaining) {
+      text = `${text}${nextChunk.slice(0, Math.max(0, remaining))}`.trimEnd();
+      truncated = true;
+      break;
+    }
+
+    text = `${text}${nextChunk}`;
+  }
+
+  return {
+    text: text.trim(),
+    truncated
+  };
 }
 
 export function normalizeExtractedText(value: string): string {
@@ -177,7 +248,10 @@ export function pdfTextExtractionFailure(
   };
 }
 
-async function extractNativePdfText(documentPath: string): Promise<RawPdfTextExtraction> {
+async function extractNativePdfText(
+  documentPath: string,
+  options: { maxPages: number }
+): Promise<RawPdfTextExtraction> {
   const pdfJs = await loadPdfJs();
   const fileBuffer = await readFile(documentPath);
   const bytes = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
@@ -190,8 +264,12 @@ async function extractNativePdfText(documentPath: string): Promise<RawPdfTextExt
   try {
     const documentProxy = await loadingTask.promise;
     const pageTexts: string[] = [];
+    const pagesToAnalyze = Math.min(
+      documentProxy.numPages,
+      Math.max(0, Math.floor(options.maxPages))
+    );
 
-    for (let pageNumber = 1; pageNumber <= documentProxy.numPages; pageNumber += 1) {
+    for (let pageNumber = 1; pageNumber <= pagesToAnalyze; pageNumber += 1) {
       const page = await documentProxy.getPage(pageNumber);
       const textContent = await page.getTextContent();
       pageTexts.push(extractTextItems(textContent));
@@ -218,12 +296,22 @@ function extractTextItems(textContent: PdfTextContent): string {
     .join(" ");
 }
 
-async function isReadableFile(filePath: string): Promise<boolean> {
+async function checkReadablePdfFile(
+  filePath: string,
+  statFile: (filePath: string) => Promise<Pick<Stats, "isFile" | "size">>
+): Promise<{ ok: true; size: number } | { ok: false }> {
   try {
-    const fileStats = await stat(filePath);
-    return fileStats.isFile();
+    const fileStats = await statFile(filePath);
+    if (!fileStats.isFile()) {
+      return { ok: false };
+    }
+
+    return {
+      ok: true,
+      size: fileStats.size
+    };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
@@ -264,6 +352,8 @@ function pdfTextExtractionErrorMessage(code: PdfTextExtractionErrorCode): string
       return "Document PDF indisponible.";
     case "DOCUMENT_NOT_PDF":
       return "Extraction texte disponible uniquement pour les PDF.";
+    case "PDF_TOO_LARGE_FOR_TEXT_EXTRACTION":
+      return "Extraction non lancée : PDF trop volumineux.";
     case "PDF_TEXT_EMPTY":
       return "Aucun texte exploitable détecté — OCR nécessaire plus tard.";
     case "PDF_PROTECTED_OR_UNREADABLE":

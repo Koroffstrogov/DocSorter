@@ -146,6 +146,51 @@ describe("executeClassification", () => {
     await expect(readFile(fixture.destinationFile, "utf8")).resolves.toBe("existing");
   });
 
+  it("refuses classification before rename when the final target write check fails", async () => {
+    const fixture = await createFixture();
+    let writableCheckCount = 0;
+    let renameCalled = false;
+
+    const result = await executeClassification(
+      createExecuteOptions(fixture, {
+        checkTargetDirectoryWritable: async () => {
+          writableCheckCount += 1;
+          if (writableCheckCount === 1) {
+            return {
+              ok: true,
+              value: fixture.targetDir
+            };
+          }
+
+          return {
+            ok: false,
+            error: {
+              code: "TARGET_NOT_WRITABLE",
+              message: "Le dossier cible n'est pas accessible en écriture."
+            }
+          };
+        },
+        renameFile: async () => {
+          renameCalled = true;
+        }
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_NOT_WRITABLE");
+    }
+    expect(renameCalled).toBe(false);
+    await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
+    await expect(stat(fixture.destinationFile)).rejects.toThrow();
+
+    const journal = await readJournal(fixture.journalFile);
+    expect(journal.map((entry) => entry.status)).toEqual(["failed"]);
+    expect(journal.at(-1)).toMatchObject({
+      errorCode: "TARGET_NOT_WRITABLE"
+    });
+  });
+
   it("refuses classification when the proposed name is invalid", async () => {
     const fixture = await createFixture();
 

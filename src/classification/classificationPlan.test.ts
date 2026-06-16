@@ -135,6 +135,35 @@ describe("prepareClassificationPlan", () => {
     }
   });
 
+  it("refuses the plan when the target directory is not writable", async () => {
+    const fixture = await createFixture();
+
+    const result = await prepareClassificationPlan({
+      documentPath: fixture.sourceFile,
+      proposedFilename: "2026-06-15_Facture_Energie.pdf",
+      selectedTargetPath: fixture.targetDir,
+      queuedDocumentPaths: [fixture.sourceFile],
+      now: fixedNow,
+      checkTargetDirectoryWritable: async () => ({
+        ok: false,
+        error: {
+          code: "TARGET_NOT_WRITABLE",
+          message: "Le dossier cible n'est pas accessible en écriture."
+        }
+      })
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_NOT_WRITABLE");
+      expect(result.value.targetDirectoryStatus).toBe("not-writable");
+      expect(result.value.checks.find((check) => check.code === "TARGET_WRITABLE")).toMatchObject({
+        status: "blocking",
+        message: "Le dossier cible n'est pas accessible en écriture."
+      });
+    }
+  });
+
   it("refuses the plan when the proposed filename is invalid", async () => {
     const fixture = await createFixture();
 

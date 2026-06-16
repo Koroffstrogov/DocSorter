@@ -29,6 +29,7 @@ npm run dev
 - affichage des métadonnées de base en lecture seule ;
 - prévisualisation locale des images JPG/JPEG/PNG ;
 - prévisualisation locale des PDF via canvas ;
+- refus sobre de prévisualisation pour les fichiers trop volumineux ;
 - zoom borné entre 50 % et 300 % ;
 - navigation page précédente/suivante pour PDF multipages ;
 - rotation visuelle des images ;
@@ -71,6 +72,8 @@ npm run dev
 - protection des champs de saisie : les raccourcis globaux ne se déclenchent pas pendant la saisie, sauf `Ctrl+F` et `Escape` dans la recherche ;
 - bouton explicite `Extraire le texte PDF` pour le PDF actif ;
 - extraction locale du texte natif des PDF via `pdfjs-dist`, sans OCR ;
+- refus sobre d'extraction texte pour les PDF trop volumineux ;
+- analyse texte PDF limitée aux premières pages pour éviter les blocages sur gros fichiers ou NAS ;
 - affichage d'un extrait limité, du nombre de caractères et du nombre de pages analysées ;
 - message clair si aucun texte exploitable n'est détecté dans un PDF scanné ;
 - texte extrait conservé uniquement en mémoire pendant la session ;
@@ -140,6 +143,13 @@ Le compteur de file affiche le nombre de documents visibles sur le total scanné
 L'extraction texte est déclenchée manuellement sur le document PDF actif. Elle vérifie côté main process que le document appartient à la dernière file scannée, existe encore et possède l'extension `.pdf`.
 
 Le texte extrait n'est pas persisté et pas ajouté au journal. Les PDF scannés sans couche texte affichent un message indiquant qu'un OCR sera nécessaire plus tard.
+
+Garde-fous MVP :
+
+- la prévisualisation locale refuse les fichiers de plus de 50 Mo ;
+- l'extraction texte PDF refuse les PDF de plus de 30 Mo ;
+- l'extraction texte PDF analyse au maximum les 50 premières pages ;
+- l'extrait affiché reste limité à 5 000 caractères.
 
 ## Suggestions locales
 

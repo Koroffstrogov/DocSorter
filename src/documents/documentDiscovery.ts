@@ -15,6 +15,7 @@ export type AppErrorCode =
   | "FILE_UNAVAILABLE"
   | "UNSUPPORTED_FILE_TYPE"
   | "PREVIEW_NOT_ALLOWED"
+  | "PREVIEW_FILE_TOO_LARGE"
   | "UNKNOWN_ERROR";
 
 export interface AppError {
@@ -169,6 +170,8 @@ function errorMessageByCode(code: AppErrorCode): string {
       return "Format de prévisualisation non supporté.";
     case "PREVIEW_NOT_ALLOWED":
       return "Aperçu non autorisé pour ce fichier.";
+    case "PREVIEW_FILE_TOO_LARGE":
+      return "Aperçu désactivé : fichier trop volumineux.";
     case "UNKNOWN_ERROR":
       return "Impossible de lire le dossier source.";
   }

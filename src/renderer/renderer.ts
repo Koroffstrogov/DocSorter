@@ -33,6 +33,7 @@ interface AppError {
     | "FILE_UNAVAILABLE"
     | "UNSUPPORTED_FILE_TYPE"
     | "PREVIEW_NOT_ALLOWED"
+    | "PREVIEW_FILE_TOO_LARGE"
     | "UNKNOWN_ERROR";
   message: string;
 }
@@ -88,6 +89,7 @@ interface DestinationAvailabilityError {
     | "TARGET_NOT_FOUND"
     | "TARGET_NOT_DIRECTORY"
     | "TARGET_ACCESS_DENIED"
+    | "TARGET_NOT_WRITABLE"
     | "INVALID_FILENAME"
     | "TOO_MANY_COLLISIONS"
     | "UNKNOWN_ERROR";
@@ -252,6 +254,7 @@ interface PdfTextExtractionError {
     | "DOCUMENT_NOT_IN_QUEUE"
     | "DOCUMENT_NOT_FOUND"
     | "DOCUMENT_NOT_PDF"
+    | "PDF_TOO_LARGE_FOR_TEXT_EXTRACTION"
     | "PDF_TEXT_EMPTY"
     | "PDF_PROTECTED_OR_UNREADABLE"
     | "PDF_EXTRACTION_FAILED"
@@ -1887,6 +1890,7 @@ function renderTextExtractionPanel(): void {
   if (!extractionState.result || extractionState.status === "empty") {
     textExtractionDetails.replaceChildren(
       createTextExtractionMeta(extractionState.result),
+      ...createTextExtractionLimitNoticeNodes(extractionState.result),
       "Aucun texte exploitable détecté — OCR nécessaire plus tard."
     );
     return;
@@ -1894,6 +1898,7 @@ function renderTextExtractionPanel(): void {
 
   textExtractionDetails.replaceChildren(
     createTextExtractionMeta(extractionState.result),
+    ...createTextExtractionLimitNoticeNodes(extractionState.result),
     createTextExtractionExcerpt(extractionState.result)
   );
 }
@@ -1933,6 +1938,17 @@ function createTextExtractionExcerpt(extraction: PdfTextExtraction): HTMLDivElem
   container.append(heading, excerpt);
 
   return container;
+}
+
+function createTextExtractionLimitNoticeNodes(extraction: PdfTextExtraction | null): HTMLElement[] {
+  if (!extraction || extraction.pagesAnalyzed >= extraction.pageCount) {
+    return [];
+  }
+
+  const notice = document.createElement("p");
+  notice.className = "text-extraction-limit";
+  notice.textContent = `Analyse limitée aux ${extraction.pagesAnalyzed} premières pages.`;
+  return [notice];
 }
 
 function canExtractTextFromActivePdf(documentItem = getActiveDocument()): boolean {
@@ -3680,6 +3696,8 @@ function destinationErrorLabel(error: DestinationAvailabilityError): string {
       return "Cible invalide";
     case "TARGET_ACCESS_DENIED":
       return "Accès cible refusé";
+    case "TARGET_NOT_WRITABLE":
+      return "Écriture cible refusée";
     case "TOO_MANY_COLLISIONS":
       return "Trop de collisions";
     case "UNKNOWN_ERROR":
@@ -3916,6 +3934,10 @@ function clampPreviewZoom(zoom: number): number {
 }
 
 function previewErrorMessage(error: AppError, extension: SupportedDocumentExtension): string {
+  if (error.code === "PREVIEW_FILE_TOO_LARGE") {
+    return "Aperçu désactivé : fichier trop volumineux.";
+  }
+
   if (extension === ".pdf" && error.code === "UNKNOWN_ERROR") {
     return "Aperçu PDF indisponible";
   }

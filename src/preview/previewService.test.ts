@@ -51,6 +51,41 @@ describe("getPreviewData", () => {
     }
   });
 
+  it("refuses a queued file above the preview size limit before reading it", async () => {
+    const directory = await createTempDirectory();
+    const pdfPath = path.join(directory, "large.pdf");
+    await writeFile(pdfPath, "%PDF-1.7");
+    let readCalled = false;
+
+    const result = await getPreviewData(
+      pdfPath,
+      {
+        sourcePath: directory,
+        queuedDocumentPaths: new Set([path.resolve(pdfPath)])
+      },
+      {
+        maxPreviewFileBytes: 10,
+        statFile: async () => ({
+          isFile: () => true,
+          size: 11
+        }),
+        readFileBytes: async () => {
+          readCalled = true;
+          return Buffer.from("%PDF-1.7");
+        }
+      }
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "PREVIEW_FILE_TOO_LARGE",
+        message: "Aperçu désactivé : fichier trop volumineux."
+      }
+    });
+    expect(readCalled).toBe(false);
+  });
+
   it("refuses a file that was not part of the queue", async () => {
     const directory = await createTempDirectory();
     const imagePath = path.join(directory, "receipt.png");

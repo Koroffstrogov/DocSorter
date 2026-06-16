@@ -1,12 +1,17 @@
-import { constants } from "node:fs";
-import { access, readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
+
+import {
+  checkTargetDirectoryWritable,
+  type TargetDirectoryWritableChecker
+} from "../filesystem/targetDirectoryAccess";
 
 export type DestinationAvailabilityErrorCode =
   | "TARGET_NOT_SELECTED"
   | "TARGET_NOT_FOUND"
   | "TARGET_NOT_DIRECTORY"
   | "TARGET_ACCESS_DENIED"
+  | "TARGET_NOT_WRITABLE"
   | "INVALID_FILENAME"
   | "TOO_MANY_COLLISIONS"
   | "UNKNOWN_ERROR";
@@ -38,6 +43,10 @@ type DestinationAvailabilityFailure = {
   error: DestinationAvailabilityError;
 };
 
+export interface CheckDestinationNameAvailabilityOptions {
+  checkTargetDirectoryWritable?: TargetDirectoryWritableChecker;
+}
+
 const MAX_FILENAME_LENGTH = 255;
 const MAX_COLLISION_SUFFIX = 99;
 const WINDOWS_FORBIDDEN_CHARS = /[<>:"/\\|?*\u0000-\u001F]/;
@@ -68,7 +77,8 @@ const RESERVED_WINDOWS_NAMES = new Set([
 
 export async function checkDestinationNameAvailability(
   targetPath: string | null | undefined,
-  proposedFilename: string
+  proposedFilename: string,
+  options: CheckDestinationNameAvailabilityOptions = {}
 ): Promise<DestinationAvailabilityResult> {
   if (!targetPath) {
     return createError(
@@ -82,9 +92,11 @@ export async function checkDestinationNameAvailability(
     return filenameValidation;
   }
 
-  const targetDirectory = await validateTargetDirectory(targetPath);
+  const targetDirectoryWritable =
+    options.checkTargetDirectoryWritable ?? checkTargetDirectoryWritable;
+  const targetDirectory = await targetDirectoryWritable(targetPath);
   if (!targetDirectory.ok) {
-    return targetDirectory;
+    return createError(targetDirectory.error.code, targetDirectory.error.message);
   }
 
   let existingNames: string[];
@@ -212,34 +224,6 @@ export function validateDestinationFilename(
     ok: true,
     value: proposedFilename
   };
-}
-
-async function validateTargetDirectory(
-  targetPath: string
-): Promise<
-  | {
-      ok: true;
-      value: string;
-    }
-  | {
-      ok: false;
-      error: DestinationAvailabilityError;
-    }
-> {
-  try {
-    const targetStats = await stat(targetPath);
-    if (!targetStats.isDirectory()) {
-      return createError("TARGET_NOT_DIRECTORY", "La cible sélectionnée n'est pas un dossier.");
-    }
-
-    await access(targetPath, constants.R_OK);
-    return {
-      ok: true,
-      value: targetPath
-    };
-  } catch (error) {
-    return createErrorFromFsError(error);
-  }
 }
 
 function isReservedWindowsName(fileName: string): boolean {
