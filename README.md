@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 + IA-2.5 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif et gestion du chargement/libération du modèle Ollama.
+Lot 7 + 8A + OCR-2 + IA-2.5 + Nommage v2 Lot B : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif, gestion du chargement/libération du modèle Ollama, générateur pur de nommage v2 et référentiels locaux simples en lecture seule.
 
 ## Commandes
 
@@ -159,6 +159,20 @@ Règles principales :
 - date documentaire et sujet requis pour générer un nom final ;
 - le classement réel renomme et déplace uniquement après validation explicite.
 
+Le nommage v2 est préparé dans une brique pure séparée, sans branchement UI complet pour l'instant. Sa convention cible est :
+
+```text
+DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext
+```
+
+Exemple :
+
+```text
+2024-03-05_captur_facture-entretien_renault_vidange.pdf
+```
+
+Le générateur v2 est testable sans Electron et n'effectue aucune opération fichier.
+
 ## Journal local
 
 Les actions sont journalisées au format JSONL dans le dossier utilisateur Electron :
@@ -228,6 +242,32 @@ app.getPath("userData")/config/naming-suggestion-rules.json
 L'application crée ce fichier s'il est absent avec un catalogue vide. Le renderer ne reçoit pas d'accès `fs` et ne fournit jamais le chemin du fichier au main process.
 
 Ces règles restent prudentes : elles n'écrivent pas dans le journal, ne modifient aucun fichier et ne lancent ni OCR, ni IA, ni appel réseau.
+
+## Référentiels locaux
+
+Lot B ajoute une brique technique de référentiels locaux contrôlés pour alimenter plus tard le nommage v2. Elle est séparée des règles de suggestion existantes et n'est pas encore branchée à l'interface.
+
+Emplacement prévu sous le dossier utilisateur Electron :
+
+```text
+app.getPath("userData")/config/reference-data/
+```
+
+Fichiers lus en lecture seule si présents :
+
+```text
+entities/people.json
+entities/vehicles.json
+entities/properties.json
+entities/providers.json
+document-types.json
+```
+
+Le loader ne crée pas ces fichiers automatiquement. Si les fichiers d'entités sont absents, les listes restent vides. Si `document-types.json` est absent, DocSorter utilise des types documentaires par défaut embarqués comme `facture-entretien`, `avis-imposition`, `certificat-scolarite` et `carnet-vaccination`.
+
+La détection est locale et déterministe : elle cherche des alias normalisés dans le nom du fichier et dans un texte déjà extrait. Elle retourne des candidats avec score et raisons sobres pour `target`, `documentType` et `issuer`. Elle ne fait pas de fuzzy matching, n'apprend rien, n'appelle pas l'IA, ne lit aucun document et ne modifie aucun fichier.
+
+Pour les personnes, une date de naissance configurée peut servir uniquement d'indice de détection. Elle n'est jamais injectée dans un alias de nommage, un dossier, un détail ou un nom de fichier.
 
 ## Cache local d'analyse
 
@@ -339,6 +379,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas d'application automatique des suggestions ;
 - pas d'éditeur JSON avancé ;
 - pas de gestion multi-profils de règles ;
+- pas de branchement UI des référentiels locaux de nommage v2 ;
 - pas d'OCR PDF, pas de fusion automatique IA/règles, pas de suggestion IA batch, pas de doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
@@ -353,6 +394,7 @@ Un prochain lot pourra ajouter :
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR-3 pourra ajouter l'OCR limité des PDF scannés, dans un lot séparé et explicitement validé ;
 - IA-3 pourra ajouter une fusion contrôlée entre suggestions IA et règles locales, avec arbitrage explicite des conflits ;
+- un lot de nommage pourra brancher les référentiels locaux au brouillon de nommage v2, avec choix explicite des candidats ;
 - amélioration des diagnostics modèles Ollama si certains modèles ne respectent pas le JSON mode attendu ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;

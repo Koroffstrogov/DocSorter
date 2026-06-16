@@ -127,6 +127,79 @@ Ces suggestions restent locales, sans appel réseau.
 
 Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides. Il ne remplace jamais une valeur saisie manuellement.
 
+## Référentiels Locaux Contrôlés
+
+DocSorter prépare aussi des référentiels locaux simples pour le nommage v2.
+
+Ils servent à reconnaître de façon déterministe :
+
+- une cible de classement logique : personne, véhicule, foyer ou bien ;
+- un type documentaire contrôlé ;
+- un émetteur ou organisme ;
+- plus tard, certains détails.
+
+Ces référentiels sont distincts :
+
+- des règles de suggestion ;
+- de l'IA locale ;
+- du journal ;
+- du cache d'analyse.
+
+Ils sont lus localement, sans réseau et sans apprentissage, depuis un emplacement prévu sous :
+
+```text
+app.getPath("userData")/config/reference-data/
+```
+
+Fichiers prévus :
+
+```text
+entities/people.json
+entities/vehicles.json
+entities/properties.json
+entities/providers.json
+document-types.json
+```
+
+Chaque entrée expose un `fileAlias` contrôlé. C'est cet alias qui pourra alimenter le futur nommage v2.
+
+Exemple :
+
+```json
+{
+  "id": "captur",
+  "label": "Renault Captur",
+  "fileAlias": "captur",
+  "folderAlias": "Vehicules/Captur",
+  "aliases": ["renault captur", "captur"]
+}
+```
+
+Si le texte contient `Renault Captur`, le référentiel peut proposer :
+
+```text
+target = captur
+```
+
+Pour les personnes, une date de naissance peut servir uniquement d'indice de détection. Elle ne doit jamais devenir un morceau du nom de fichier, du dossier, de l'émetteur ou du détail.
+
+Exemple :
+
+```json
+{
+  "id": "lea",
+  "label": "Léa",
+  "fileAlias": "lea",
+  "aliases": ["Léa"],
+  "birthDate": "2012-06-16",
+  "useBirthDateForDetectionOnly": true
+}
+```
+
+Même si `16/06/2012` est détecté dans un document, le nom peut utiliser `lea`, jamais la date de naissance.
+
+À ce stade, cette brique est préparatoire : elle ne modifie pas encore l'interface et ne déclenche aucun classement.
+
 ## Sous-Dossier Cible
 
 Le sous-dossier cible est toujours relatif à la racine cible choisie par l'utilisateur.
@@ -441,4 +514,3 @@ Le fichier n'est déplacé qu'après validation explicite.
 - Aucun remplacement automatique des champs déjà saisis.
 - Aucun log de contenu documentaire sensible.
 - Validation finale toujours humaine.
-
