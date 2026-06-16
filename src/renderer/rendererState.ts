@@ -1,0 +1,174 @@
+function createIdleQueueViewState(): QueueUiState {
+  return {
+    query: "",
+    filter: "all",
+    sortKey: "name",
+    sortDirection: "asc"
+  };
+}
+
+function createIdlePreviewState(): PreviewState {
+  return {
+    status: "idle",
+    data: null,
+    errorMessage: "",
+    zoom: 1,
+    rotation: 0,
+    pdfPage: 1,
+    pdfPageCount: 1,
+    pdfFitZoom: 1
+  };
+}
+
+function createIdleNamingState(): NamingState {
+  return {
+    draft: {
+      documentDate: "",
+      subject: "",
+      documentType: "",
+      keywords: ""
+    },
+    proposal: null,
+    overrideFilename: null,
+    isLoading: false
+  };
+}
+
+function createIdleDestinationCheckState(): DestinationCheckState {
+  return {
+    status: "idle",
+    result: null,
+    error: null,
+    checkedFilename: ""
+  };
+}
+
+function createIdleClassificationState(): ClassificationState {
+  return {
+    status: "idle",
+    plan: null,
+    error: null,
+    journalWarning: null
+  };
+}
+
+function createIdleHistoryState(): HistoryState {
+  return {
+    entries: [],
+    isLoading: false,
+    errorMessage: ""
+  };
+}
+
+function createIdleDuplicateAnalysisState(): DuplicateAnalysisState {
+  return {
+    status: "idle",
+    matches: [],
+    fileErrors: [],
+    ignoredFilePaths: [],
+    errorMessage: "",
+    analyzedAt: ""
+  };
+}
+
+function createIdleTextExtractionState(): TextExtractionState {
+  return {
+    byDocumentPath: {}
+  };
+}
+
+function createIdleNamingRulesState(): NamingRulesState {
+  const defaultCatalog =
+    globalThis.DocSorterNamingSuggestionRulesCatalog?.getDefaultNamingSuggestionRulesCatalog() ??
+    createEmptyRulesCatalog();
+
+  return {
+    panelStatus: "loading",
+    panelOpen: false,
+    userRulesPath: "",
+    userCatalog: createEmptyRulesCatalog(),
+    mergedCatalog: defaultCatalog,
+    defaultRuleCount: countRules(defaultCatalog),
+    userRuleCount: 0,
+    message: "Chargement des règles...",
+    warning: null,
+    draft: DocSorterUserRuleEditor.createEmptyUserRuleDraft(),
+    editingTarget: null,
+    draftErrors: [],
+    dirty: false
+  };
+}
+
+function createIdleNamingSuggestionsState(): NamingSuggestionsState {
+  return {
+    byDocumentPath: {}
+  };
+}
+
+function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
+  return {
+    status: "idle",
+    result: null,
+    error: null
+  };
+}
+
+function createIdleNamingSuggestionDocumentState(): NamingSuggestionDocumentState {
+  return {
+    status: "idle",
+    suggestions: null,
+    message: ""
+  };
+}
+
+function cloneRulesCatalog(catalog: NamingSuggestionRulesCatalog): NamingSuggestionRulesCatalog {
+  return {
+    version: 1,
+    documentTypeRules: catalog.documentTypeRules.map((rule) => ({
+      ...rule,
+      match: cloneRuleMatch(rule.match),
+      output: {
+        ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
+        ...(rule.output.subject ? { subject: rule.output.subject } : {}),
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+      }
+    })),
+    subjectRules: catalog.subjectRules.map((rule) => ({
+      ...rule,
+      match: cloneRuleMatch(rule.match),
+      output: {
+        ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
+        ...(rule.output.subject ? { subject: rule.output.subject } : {}),
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+      }
+    })),
+    keywordRules: catalog.keywordRules.map((rule) => ({
+      ...rule,
+      aliases: [...rule.aliases],
+      ...(rule.match ? { match: cloneRuleMatch(rule.match) } : {})
+    })),
+    stopWords: [...catalog.stopWords]
+  };
+}
+
+function cloneRuleMatch(match: SuggestionRuleMatch): SuggestionRuleMatch {
+  return {
+    ...(match.allOf ? { allOf: [...match.allOf] } : {}),
+    ...(match.anyOf ? { anyOf: [...match.anyOf] } : {}),
+    ...(match.noneOf ? { noneOf: [...match.noneOf] } : {})
+  };
+}
+
+function countRules(catalog: NamingSuggestionRulesCatalog): number {
+  return catalog.documentTypeRules.length + catalog.subjectRules.length + catalog.keywordRules.length;
+}
+
+function createEmptyRulesCatalog(): NamingSuggestionRulesCatalog {
+  return {
+    version: 1,
+    documentTypeRules: [],
+    subjectRules: [],
+    keywordRules: [],
+    stopWords: []
+  };
+}

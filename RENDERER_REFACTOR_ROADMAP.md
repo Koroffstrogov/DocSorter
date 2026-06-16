@@ -1,347 +1,143 @@
-# Renderer Refactor Roadmap
+# Renderer Refactor State
 
-Etat mesure le 2026-06-16 apres R1/R2.
+Etat mesure le 2026-06-16 apres refactor R1 a R11 et extraction des flux
+renderer.
 
-Objectif : ramener chaque fichier TypeScript sous 600 lignes de code non vides,
-sans changer le comportement utilisateur et sans introduire de bundling renderer.
+Objectif du document : formaliser l'etat de `src/renderer/renderer.ts`,
+les modules crees, les validations realisees et les pistes restantes pour
+maintenir chaque fichier sous 600 lignes non vides.
 
-## Mesure actuelle
+## Synthese
 
-Commande de mesure :
-
-```powershell
-$files = Get-ChildItem -Path src -Recurse -File -Include *.ts
-$files | ForEach-Object {
-  $content = Get-Content -LiteralPath $_.FullName
-  [PSCustomObject]@{
-    Path = $_.FullName.Substring((Get-Location).Path.Length + 1)
-    NonBlankLines = ($content | Where-Object { $_.Trim().Length -gt 0 }).Count
-  }
-} | Sort-Object NonBlankLines -Descending
-```
-
-Fichiers a traiter ou surveiller :
+`src/renderer/renderer.ts` est repasse sous le seuil cible.
 
 | Fichier | Lignes totales | Lignes non vides | Etat |
 | --- | ---: | ---: | --- |
-| `src/renderer/renderer.ts` | 3630 | 3126 | A decouper en priorite |
-| `src/rules/namingSuggestions.ts` | 829 | 715 | A decouper apres le renderer |
-| `src/main/ipcHandlers.ts` | 630 | 584 | Sous le seuil hors whitespace, a surveiller |
-| `src/file-ops/classifyFile.ts` | 620 | 568 | Sous le seuil hors whitespace, a surveiller |
-| `src/renderer/queuePanel.ts` | 402 | 344 | OK |
-| `src/renderer/duplicatePanel.ts` | 205 | 172 | OK |
+| `src/renderer/renderer.ts` | 315 | 271 | OK |
+| `src/renderer/rulesPanel.ts` | 374 | 329 | OK |
+| `src/renderer/rendererTypes.d.ts` | 381 | 338 | OK |
+| `src/renderer/rendererDuplicateTextSuggestionsFlow.ts` | 340 | 288 | OK |
+| `src/renderer/namingPanel.ts` | 323 | 289 | OK |
+| `src/renderer/rendererDocumentFlow.ts` | 316 | 267 | OK |
+| `src/renderer/rendererClassificationFlow.ts` | 290 | 257 | OK |
+| `src/renderer/previewPanel.ts` | 262 | 214 | OK |
+| `src/renderer/classificationPanel.ts` | 247 | 211 | OK |
+
+Point hors renderer a traiter separement si l'objectif devient repo-wide :
+
+| Fichier | Lignes non vides | Remarque |
+| --- | ---: | --- |
+| `src/rules/namingSuggestions.ts` | 715 | Au-dessus de 600, candidat prioritaire hors renderer |
+| `src/main/ipcHandlers.ts` | 584 | Sous le seuil, a surveiller |
+| `src/file-ops/classifyFile.ts` | 568 | Sous le seuil, a surveiller |
 
 ## Etat de `renderer.ts`
 
-`renderer.ts` reste le coordinateur principal de l'interface, mais concentre
-encore trop de responsabilites :
-
-- types renderer, etat global, create/reset state ;
-- bootstrap DOM et binding des evenements ;
-- coordination IPC source/cible/refresh ;
-- selection de document et chargement preview ;
-- rendu preview PDF/image et controles zoom/pages ;
-- panneau details document ;
-- extraction texte PDF et panneau texte extrait ;
-- suggestions locales et panneau suggestions ;
-- panneau regles utilisateur et formulaire minimal ;
-- renommage propose ;
-- controle destination ;
-- simulation, classement reel, annulation ;
-- historique recent ;
-- raccourcis clavier et helpers transverses.
-
-Deja extrait :
-
-- `src/documents/documentQueueView.ts` : logique pure recherche/filtre/tri/navigation ;
-- `src/renderer/queuePanel.ts` : DOM et interactions de la file ;
-- `src/renderer/duplicatePanel.ts` : DOM et interactions du panneau doublons ;
-- `src/renderer/keyboardShortcuts.ts` : resolution pure des raccourcis.
-
-## Regles de refactor
-
-- Garder le modele actuel de scripts globaux dans `index.html`.
-- Ne pas ajouter `import` / `export` runtime dans les scripts renderer charges par le navigateur.
-- Verifier apres chaque lot que le JS compile ne contient pas `exports`, `Object.defineProperty` ou `require(`.
-- Injecter les dependances par callbacks et `getState()`, comme `queuePanel` et `duplicatePanel`.
-- Garder `renderer.ts` coordinateur tant que possible : IPC, decisions de flux, mutations d'etat global.
-- Extraire d'abord le rendu DOM et les helpers UI, puis seulement ensuite les petits controleurs.
-- Chaque nouveau fichier doit viser 450 lignes non vides maximum pour garder une marge.
-- Aucun lot de refactor ne doit modifier IPC, preload, main process, file-ops, journal ou CSS sauf besoin explicite.
-
-## Lots recommandes
-
-### R3 - Extraire l'historique recent
-
-Creer `src/renderer/historyPanel.ts`.
-
-Deplacer :
-
-- `renderHistory`;
-- `createHistoryItem`;
-- `historyEntryTitle`;
-- `historyNamesLabel`;
-- `historyActionLabel`;
-- `historyStatusLabel`.
-
-Garder dans `renderer.ts` :
-
-- `refreshRecentHistory`;
-- appel IPC `getRecentHistory`;
-- etat `state.history`;
-- action `undoLastClassificationAction`.
-
-Interface cible :
-
-```ts
-DocSorterHistoryPanel.createHistoryPanel({
-  getState,
-  formatDate
-}).render()
-```
-
-Gain estime : 80 a 120 lignes non vides.
-
-### R4 - Extraire le panneau texte PDF
-
-Creer `src/renderer/textExtractionPanel.ts`.
-
-Deplacer :
-
-- `renderTextExtractionPanel`;
-- `createTextExtractionMeta`;
-- `createTextExtractionExcerpt`;
-- `createTextExtractionLimitNoticeNodes`;
-- `textExtractionQueueLabel` si le module expose aussi un helper de label.
-
-Garder dans `renderer.ts` :
-
-- `extractTextFromActivePdf`;
-- appel IPC `extractTextFromActivePdf`;
-- state `textExtraction`;
-- `canExtractTextFromActivePdf` si utilise par `renderControls`.
-
-Interface cible :
-
-```ts
-DocSorterTextExtractionPanel.createTextExtractionPanel({
-  getState,
-  canExtract,
-  onExtract,
-  formatDate
-})
-```
-
-Gain estime : 120 a 180 lignes non vides.
-
-### R5 - Extraire le panneau suggestions locales
-
-Creer `src/renderer/namingSuggestionsPanel.ts`.
-
-Deplacer :
-
-- `renderNamingSuggestionsPanel`;
-- `createNamingSuggestionsSummary`;
-- `createSuggestionGrid`;
-- `createSuggestionRow`;
-- `createKeywordsSuggestion`;
-- `formatSuggestionConfidence`;
-- `suggestionSourceLabel`;
-- helpers UI associes.
-
-Garder dans `renderer.ts` :
-
-- `analyzeNamingSuggestionsForActiveDocument`;
-- `applyNamingSuggestionsToEmptyFields`;
-- mutations des champs de renommage ;
-- state `namingSuggestions`.
-
-Gain estime : 180 a 260 lignes non vides.
-
-### R6 - Extraire l'aperçu PDF/image
-
-Creer `src/renderer/previewPanel.ts`.
-
-Deplacer :
-
-- rendu preview ;
-- controles zoom/pages/rotation ;
-- `renderPdfPage`;
-- `updatePreviewZoom`;
-- `clearPreviewResources`;
-- `clampPreviewZoom`;
-- `previewErrorMessage`.
-
-Garder dans `renderer.ts` au premier passage :
-
-- `loadActivePreview`;
-- appel IPC `getPreviewData`;
-- decision de marquer un document indisponible.
-
-Interface cible :
-
-```ts
-DocSorterPreviewPanel.createPreviewPanel({
-  getState,
-  setPreviewState,
-  nextPdfRenderRequestId,
-  imagePreview: window.docSorterImagePreview,
-  pdfPreview: window.docSorterPdfPreview
-})
-```
-
-Risque : plus eleve que R3-R5, car ce panneau gere des ressources canvas/blob,
-des requetes asynchrones et des IDs de rendu.
-
-Gain estime : 250 a 350 lignes non vides.
-
-### R7 - Extraire le document actif
-
-Creer `src/renderer/documentDetailsPanel.ts`.
-
-Deplacer :
-
-- `renderDetails` pour la partie details document ;
-- `createDetailRow`;
-- coordination locale d'affichage des panneaux enfants si possible.
-
-Garder dans `renderer.ts` :
-
-- orchestration globale `render`;
-- selection et chargement du document actif.
-
-Gain estime : 60 a 100 lignes non vides.
-
-### R8 - Extraire renommage et controle destination
-
-Creer deux modules plutot qu'un seul gros fichier :
-
-- `src/renderer/namingPanel.ts`;
-- `src/renderer/destinationCheckPanel.ts`.
-
-Deplacer dans `namingPanel.ts` :
-
-- rendu du formulaire de renommage ;
-- synchronisation des inputs ;
-- rendu messages de nommage.
-
-Deplacer dans `destinationCheckPanel.ts` :
-
-- `renderDestinationCheck`;
-- `destinationErrorLabel`;
-- rendu cible / chemin final / alternative.
-
-Garder dans `renderer.ts` :
-
-- appels IPC `createInitialNamingDraft`, `buildNamingProposal`, `checkDestinationAvailability`;
-- debouncing `scheduleDestinationCheck`;
-- mutations `state.naming` et `state.destination`.
-
-Gain estime : 300 a 450 lignes non vides.
-
-### R9 - Extraire classification et historique d'action
-
-Creer `src/renderer/classificationPanel.ts`.
-
-Deplacer :
-
-- `renderClassificationSummary`;
-- rendu details/checks/messages ;
-- `classificationCheckStatusLabel`;
-- `journalWarningQueueMessage`;
-- helpers UI classification.
-
-Garder dans `renderer.ts` :
-
-- `prepareClassificationSimulation`;
-- `executeClassificationAction`;
-- `undoLastClassificationAction`;
-- `refreshLastUndoableAction`;
-- `applySuccessfulClassification`.
-
-Gain estime : 250 a 350 lignes non vides.
-
-### R10 - Extraire regles utilisateur
-
-Creer deux modules pour rester sous 600 lignes :
-
-- `src/renderer/rulesPanel.ts` pour rendu statut, liste et boutons ;
-- `src/renderer/userRuleFormPanel.ts` pour formulaire, sync inputs et edition.
-
-Garder dans `renderer.ts` :
-
-- appels IPC `getRulesStatus`, `saveUserRulesCatalog`, `reloadNamingRules`;
-- decisions de reset des suggestions ;
-- state `namingRules`.
-
-Gain estime : 500 a 700 lignes non vides, probablement le plus gros gain apres l'aperçu.
-
-### R11 - Extraire types et etat initial
-
-Creer :
-
-- `src/renderer/rendererTypes.d.ts` pour les interfaces/types globaux renderer ;
-- `src/renderer/rendererState.ts` pour factories d'etat initial/reset, exposees via `DocSorterRendererState`.
-
-Garder dans `renderer.ts` :
-
-- l'instance `state`;
-- les fonctions de haut niveau qui mutent l'etat.
-
-Raison : cette etape rend possible le passage final de `renderer.ts` sous 600 lignes.
-
-Gain estime : 400 a 550 lignes non vides.
-
-## Cible finale
-
-Structure visee :
-
-| Fichier | Cible non vide |
-| --- | ---: |
-| `src/renderer/renderer.ts` | 450-580 |
-| `src/renderer/rendererTypes.d.ts` | 250-400 |
-| `src/renderer/rendererState.ts` | 180-260 |
-| `src/renderer/previewPanel.ts` | 300-450 |
-| `src/renderer/namingPanel.ts` | 250-400 |
-| `src/renderer/destinationCheckPanel.ts` | 180-300 |
-| `src/renderer/classificationPanel.ts` | 250-400 |
-| `src/renderer/rulesPanel.ts` | 250-400 |
-| `src/renderer/userRuleFormPanel.ts` | 250-450 |
-| `src/renderer/textExtractionPanel.ts` | 180-300 |
-| `src/renderer/namingSuggestionsPanel.ts` | 250-400 |
-| `src/renderer/historyPanel.ts` | 120-220 |
-| `src/renderer/documentDetailsPanel.ts` | 120-220 |
-| `src/renderer/queuePanel.ts` | 344 actuel, OK |
-| `src/renderer/duplicatePanel.ts` | 172 actuel, OK |
-
-Avec cette sequence, chaque fichier renderer peut rester sous 600 lignes non vides.
-
-## Validation obligatoire a chaque lot
-
-```bash
+`renderer.ts` est maintenant un assembleur :
+
+- etat global renderer ;
+- references DOM de haut niveau ;
+- creation des panneaux et flux ;
+- listeners des actions principales ;
+- `render()` et `renderControls()`.
+
+Il ne contient plus directement :
+
+- le rendu des panneaux details, historique, doublons, texte extrait, suggestions, renommage, classification, regles ;
+- les flux source/cible/refresh/preview ;
+- les flux doublons, extraction texte, suggestions ;
+- les flux regles utilisateur ;
+- les flux renommage/destination ;
+- les flux classification/historique/annulation ;
+- les helpers de types et fabriques d'etat.
+
+## Modules renderer crees
+
+Panneaux UI :
+
+- `src/renderer/queuePanel.ts`
+- `src/renderer/duplicatePanel.ts`
+- `src/renderer/historyPanel.ts`
+- `src/renderer/textExtractionPanel.ts`
+- `src/renderer/namingSuggestionsPanel.ts`
+- `src/renderer/previewPanel.ts`
+- `src/renderer/documentDetailsPanel.ts`
+- `src/renderer/namingPanel.ts`
+- `src/renderer/classificationPanel.ts`
+- `src/renderer/rulesPanel.ts`
+
+Flux renderer :
+
+- `src/renderer/rendererDocumentFlow.ts`
+- `src/renderer/rendererQueueFlow.ts`
+- `src/renderer/rendererDuplicateTextSuggestionsFlow.ts`
+- `src/renderer/rendererRulesFlow.ts`
+- `src/renderer/rendererNamingDestinationFlow.ts`
+- `src/renderer/rendererClassificationFlow.ts`
+- `src/renderer/rendererShortcutFlow.ts`
+- `src/renderer/rendererResetFlow.ts`
+
+Support :
+
+- `src/renderer/rendererTypes.d.ts`
+- `src/renderer/rendererState.ts`
+
+Tous les scripts renderer restent charges comme scripts globaux dans
+`src/renderer/index.html`. Aucun bundling ni `import` / `export` runtime n'a
+ete introduit.
+
+## Risques et conventions
+
+- Les modules de flux partagent le meme scope global renderer. C'est coherent
+  avec le modele actuel sans bundling, mais il faut eviter d'y ajouter des noms
+  generiques.
+- Les panneaux UI utilisent des factories globales explicites et des callbacks.
+- Les flux renderer conservent les noms de fonctions historiques pour limiter
+  le risque de regression.
+- Aucun changement IPC, preload, main process, file-ops, journal ou CSS n'a ete
+  introduit dans ce refactor.
+
+## Pistes restantes
+
+1. Renforcer progressivement les flux en factories explicites.
+   Les fichiers `rendererDocumentFlow.ts`, `rendererRulesFlow.ts` et
+   `rendererClassificationFlow.ts` pourraient recevoir un `create...Flow(...)`
+   avec `getState`, setters et callbacks, comme les panneaux UI. Ce serait plus
+   verbeux mais mieux borne.
+
+2. Scinder `src/rules/namingSuggestions.ts`.
+   C'est le seul fichier mesure au-dessus de 600 lignes non vides. Decoupage
+   possible :
+   - normalisation et matching texte ;
+   - scoring ;
+   - construction des suggestions ;
+   - application des suggestions au brouillon ;
+   - helpers de dates et mots-cles.
+
+3. Surveiller `src/main/ipcHandlers.ts`.
+   Il reste sous 600 nonblank mais proche du seuil. Si de nouveaux IPC sont
+   ajoutes, extraire les handlers par domaine.
+
+4. Surveiller `src/file-ops/classifyFile.ts`.
+   Il reste sous 600 nonblank. Si l'annulation ou le journal evoluent, extraire
+   les controles pre-mutation et la journalisation dans des modules dedies.
+
+## Commandes de validation
+
+Commandes executees apres refactor :
+
+```powershell
 npm run typecheck
 npm test
 npm run build
-npm run dev
 git diff --check
+npm run dev
 ```
 
-Controle supplementaire pour chaque nouveau script renderer :
+Controle supplementaire :
 
 ```powershell
-rg -n "exports|Object\\.defineProperty|require\\(" dist\\renderer\\NOUVEAU_FICHIER.js
+rg -n "exports|Object\.defineProperty|require\(" dist\renderer\*.js
 ```
 
-Le resultat attendu est vide.
-
-## Autres fichiers hors renderer
-
-`src/rules/namingSuggestions.ts` depasse aussi le seuil avec environ 715 lignes non vides.
-Le traiter apres la stabilisation du renderer :
-
-- extraire scoring/date/keywords dans des modules purs ;
-- garder l'API publique `DocSorterNamingSuggestions` compatible ;
-- conserver les tests existants et ajouter des tests sur les modules purs si necessaire.
-
-`src/main/ipcHandlers.ts` et `src/file-ops/classifyFile.ts` sont sous 600 lignes non vides
-mais proches du seuil. Eviter d'y ajouter de nouvelles responsabilites sans extraction.
+Resultat attendu : aucune sortie pour les scripts renderer crees.
