@@ -96,6 +96,7 @@
     const output = validateOutput(value.output, `${label}.output`, errors);
     const confidence = validateConfidence(value.confidence, `${label}.confidence`, errors);
     const source = validateRuleSource(value.source, `${label}.source`, errors);
+    const enabled = validateOptionalBoolean(value.enabled, `${label}.enabled`, errors);
 
     if (!id || !ruleLabel || !match || !output || confidence === null) {
       return null;
@@ -108,7 +109,8 @@
       match,
       output,
       confidence,
-      ...(source ? { source } : {})
+      ...(source ? { source } : {}),
+      ...(enabled === undefined ? {} : { enabled })
     };
   }
 
@@ -197,25 +199,37 @@
       return null;
     }
 
+    const id = validateOptionalString(value.id, `${label}.id`, errors);
     const keywordValue = validateRequiredString(value.value, `${label}.value`, errors);
-    const aliases = validateStringList(value.aliases, `${label}.aliases`, errors);
+    const aliases = validateOptionalStringList(value.aliases, `${label}.aliases`, errors) ?? [];
+    const match =
+      value.match === undefined ? undefined : validateMatch(value.match, `${label}.match`, errors);
     const confidence =
       value.confidence === undefined
         ? undefined
         : validateConfidence(value.confidence, `${label}.confidence`, errors);
     const ruleLabel = validateOptionalString(value.label, `${label}.label`, errors);
     const description = validateOptionalString(value.description, `${label}.description`, errors);
+    const enabled = validateOptionalBoolean(value.enabled, `${label}.enabled`, errors);
 
-    if (!keywordValue || aliases.length === 0 || confidence === null) {
+    if (!keywordValue || confidence === null || (value.match !== undefined && !match)) {
+      return null;
+    }
+
+    if (aliases.length === 0 && !match) {
+      errors.push(`${label} doit définir aliases ou match.`);
       return null;
     }
 
     return {
+      ...(id ? { id } : {}),
       value: keywordValue,
       aliases,
+      ...(match ? { match } : {}),
       ...(confidence === undefined ? {} : { confidence }),
       ...(ruleLabel ? { label: ruleLabel } : {}),
-      ...(description ? { description } : {})
+      ...(description ? { description } : {}),
+      ...(enabled === undefined ? {} : { enabled })
     };
   }
 
@@ -308,6 +322,23 @@
     return undefined;
   }
 
+  function validateOptionalBoolean(
+    value: unknown,
+    label: string,
+    errors: string[]
+  ): boolean | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (typeof value !== "boolean") {
+      errors.push(`${label} doit être un booléen.`);
+      return undefined;
+    }
+
+    return value;
+  }
+
   function mergeRulesById(
     defaultRules: NamingSuggestionRule[],
     userRules: NamingSuggestionRule[]
@@ -364,17 +395,29 @@
         ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
       },
       confidence: rule.confidence,
-      ...(rule.source ? { source: rule.source } : {})
+      ...(rule.source ? { source: rule.source } : {}),
+      ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
     };
   }
 
   function cloneKeywordRule(rule: KeywordAliasRule): KeywordAliasRule {
     return {
+      ...(rule.id ? { id: rule.id } : {}),
       value: rule.value,
       aliases: [...rule.aliases],
+      ...(rule.match
+        ? {
+            match: {
+              ...(rule.match.allOf ? { allOf: [...rule.match.allOf] } : {}),
+              ...(rule.match.anyOf ? { anyOf: [...rule.match.anyOf] } : {}),
+              ...(rule.match.noneOf ? { noneOf: [...rule.match.noneOf] } : {})
+            }
+          }
+        : {}),
       ...(rule.confidence === undefined ? {} : { confidence: rule.confidence }),
       ...(rule.label ? { label: rule.label } : {}),
-      ...(rule.description ? { description: rule.description } : {})
+      ...(rule.description ? { description: rule.description } : {}),
+      ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
     };
   }
 

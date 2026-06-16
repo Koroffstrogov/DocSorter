@@ -19,6 +19,11 @@ import {
 } from "../naming/namingDraft";
 import { checkDestinationNameAvailability } from "../naming/destinationNameAvailability";
 import { getPreviewData } from "../preview/previewService";
+import {
+  loadMergedNamingRulesCatalog,
+  loadUserRulesCatalog,
+  saveUserRulesCatalog
+} from "../rules/userNamingRulesStore";
 
 interface DirectorySelection {
   path: string;
@@ -142,6 +147,27 @@ function registerIpcHandlers(): void {
       typeof limit === "number" && Number.isFinite(limit) ? limit : 8
     )
   );
+  ipcMain.handle("rules:getStatus", () =>
+    loadMergedNamingRulesCatalog(app.getPath("userData"))
+  );
+  ipcMain.handle("rules:getUserCatalog", () =>
+    loadUserRulesCatalog(app.getPath("userData"))
+  );
+  ipcMain.handle("rules:reload", () =>
+    loadMergedNamingRulesCatalog(app.getPath("userData"))
+  );
+  ipcMain.handle("rules:saveUserCatalog", async (_event, catalog: unknown) => {
+    const result = await saveUserRulesCatalog(
+      app.getPath("userData"),
+      catalog as NamingSuggestionRulesCatalog
+    );
+
+    if (!result.ok) {
+      return result;
+    }
+
+    return loadMergedNamingRulesCatalog(app.getPath("userData"));
+  });
 
   ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {

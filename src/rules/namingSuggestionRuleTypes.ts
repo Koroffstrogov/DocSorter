@@ -20,14 +20,18 @@ type NamingSuggestionRule = {
   output: SuggestionRuleOutput;
   confidence: number;
   source?: RuleSource;
+  enabled?: boolean;
 };
 
 type KeywordAliasRule = {
+  id?: string;
   value: string;
   aliases: string[];
+  match?: SuggestionRuleMatch;
   confidence?: number;
   label?: string;
   description?: string;
+  enabled?: boolean;
 };
 
 type NamingSuggestionRulesCatalog = {

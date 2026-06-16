@@ -427,6 +427,10 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     const matches: MatchedSuggestionRule[] = [];
 
     for (const rule of rules) {
+      if (rule.enabled === false) {
+        continue;
+      }
+
       const match = matchSuggestionRule(input, rule);
       if (match) {
         matches.push(match);
@@ -478,6 +482,32 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     input: NormalizedInput,
     rule: KeywordAliasRule
   ): SuggestedNamingField | null {
+    if (rule.enabled === false) {
+      return null;
+    }
+
+    if (rule.match) {
+      const textMatch = matchTerms(input.textSearch, rule.match);
+      const filenameMatch = matchTerms(input.filenameSearch, rule.match);
+      const combinedMatch = matchTerms(input.combinedSearch, rule.match);
+
+      if (!combinedMatch) {
+        return null;
+      }
+
+      const source = sourceFromBooleans(
+        textMatch || hasAnyRuleTerm(input.textSearch, rule.match),
+        filenameMatch || hasAnyRuleTerm(input.filenameSearch, rule.match)
+      );
+
+      return {
+        value: rule.value,
+        source,
+        confidence: applySourceBoost(normalizeRuleConfidence(rule.confidence ?? 60), source),
+        reason: `Regle locale : ${rule.label ?? normalizeFilenameBlock(rule.value)}.`
+      };
+    }
+
     const aliases = rule.aliases.map(normalizeSearchText).filter(Boolean);
     const textMatch = aliases.some((alias) => input.textSearch.includes(alias));
     const filenameMatch = aliases.some((alias) => input.filenameSearch.includes(alias));
@@ -663,7 +693,8 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
           ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
           ...(rule.output.subject ? { subject: rule.output.subject } : {}),
           ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
-        }
+        },
+        ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
       })),
       subjectRules: catalog.subjectRules.map((rule) => ({
         ...rule,
@@ -676,11 +707,22 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
           ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
           ...(rule.output.subject ? { subject: rule.output.subject } : {}),
           ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
-        }
+        },
+        ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
       })),
       keywordRules: catalog.keywordRules.map((rule) => ({
         ...rule,
-        aliases: [...rule.aliases]
+        aliases: [...rule.aliases],
+        ...(rule.match
+          ? {
+              match: {
+                ...(rule.match.allOf ? { allOf: [...rule.match.allOf] } : {}),
+                ...(rule.match.anyOf ? { anyOf: [...rule.match.anyOf] } : {}),
+                ...(rule.match.noneOf ? { noneOf: [...rule.match.noneOf] } : {})
+              }
+            }
+          : {}),
+        ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
       })),
       stopWords: [...catalog.stopWords]
     };

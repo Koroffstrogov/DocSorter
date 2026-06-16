@@ -266,6 +266,46 @@ interface NamingSuggestionsState {
   byDocumentPath: Record<string, NamingSuggestionDocumentState>;
 }
 
+type RendererUserRulesFileStatus = "loaded" | "created" | "invalid" | "read-error";
+type NamingRulesPanelStatus = "loading" | "ready" | "saving" | "error";
+
+interface RendererUserRulesError {
+  code: string;
+  message: string;
+}
+
+interface RendererNamingRulesStatus {
+  status: RendererUserRulesFileStatus;
+  message: string;
+  userRulesPath: string;
+  userCatalog: NamingSuggestionRulesCatalog;
+  mergedCatalog: NamingSuggestionRulesCatalog;
+  defaultRuleCount: number;
+  userRuleCount: number;
+  warning: RendererUserRulesError | null;
+}
+
+interface UserRuleEditingTarget {
+  category: UserRuleEditorCategory;
+  index: number;
+}
+
+interface NamingRulesState {
+  panelStatus: NamingRulesPanelStatus;
+  panelOpen: boolean;
+  userRulesPath: string;
+  userCatalog: NamingSuggestionRulesCatalog;
+  mergedCatalog: NamingSuggestionRulesCatalog;
+  defaultRuleCount: number;
+  userRuleCount: number;
+  message: string;
+  warning: RendererUserRulesError | null;
+  draft: UserRuleEditorDraft;
+  editingTarget: UserRuleEditingTarget | null;
+  draftErrors: string[];
+  dirty: boolean;
+}
+
 interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
@@ -313,6 +353,7 @@ interface AppState {
   duplicates: DuplicateAnalysisState;
   textExtraction: TextExtractionState;
   namingSuggestions: NamingSuggestionsState;
+  namingRules: NamingRulesState;
   shortcutsHelpVisible: boolean;
 }
 
@@ -343,6 +384,7 @@ const state: AppState = {
   duplicates: createIdleDuplicateAnalysisState(),
   textExtraction: createIdleTextExtractionState(),
   namingSuggestions: createIdleNamingSuggestionsState(),
+  namingRules: createIdleNamingRulesState(),
   shortcutsHelpVisible: false
 };
 
@@ -400,6 +442,29 @@ const analyzeSuggestionsButton = document.querySelector<HTMLButtonElement>("#ana
 const suggestionsDetails = document.querySelector<HTMLElement>("#suggestions-details");
 const applySuggestionsEmptyButton =
   document.querySelector<HTMLButtonElement>("#apply-suggestions-empty");
+const toggleRulesPanelButton = document.querySelector<HTMLButtonElement>("#toggle-rules-panel");
+const rulesStatus = document.querySelector<HTMLElement>("#rules-status");
+const rulesEditor = document.querySelector<HTMLElement>("#rules-editor");
+const userRulesList = document.querySelector<HTMLOListElement>("#user-rules-list");
+const userRuleForm = document.querySelector<HTMLFormElement>("#user-rule-form");
+const userRuleCategoryInput = document.querySelector<HTMLSelectElement>("#user-rule-category");
+const userRuleIdInput = document.querySelector<HTMLInputElement>("#user-rule-id");
+const userRuleLabelInput = document.querySelector<HTMLInputElement>("#user-rule-label");
+const userRuleAllOfInput = document.querySelector<HTMLInputElement>("#user-rule-all-of");
+const userRuleAnyOfInput = document.querySelector<HTMLInputElement>("#user-rule-any-of");
+const userRuleNoneOfInput = document.querySelector<HTMLInputElement>("#user-rule-none-of");
+const userRuleDocumentTypeInput = document.querySelector<HTMLInputElement>(
+  "#user-rule-document-type"
+);
+const userRuleSubjectInput = document.querySelector<HTMLInputElement>("#user-rule-subject");
+const userRuleKeywordsInput = document.querySelector<HTMLInputElement>("#user-rule-keywords");
+const userRuleConfidenceInput = document.querySelector<HTMLInputElement>("#user-rule-confidence");
+const userRuleEnabledInput = document.querySelector<HTMLInputElement>("#user-rule-enabled");
+const userRuleErrors = document.querySelector<HTMLUListElement>("#user-rule-errors");
+const resetUserRuleFormButton = document.querySelector<HTMLButtonElement>("#reset-user-rule-form");
+const saveUserRuleDraftButton = document.querySelector<HTMLButtonElement>("#save-user-rule-draft");
+const saveUserRulesButton = document.querySelector<HTMLButtonElement>("#save-user-rules");
+const reloadUserRulesButton = document.querySelector<HTMLButtonElement>("#reload-user-rules");
 const namingPanel = document.querySelector<HTMLElement>("#naming-panel");
 const namingDateInput = document.querySelector<HTMLInputElement>("#naming-date");
 const namingSubjectInput = document.querySelector<HTMLInputElement>("#naming-subject");
@@ -431,6 +496,7 @@ void window.docSorter.getVersion().then((value) => {
 
 void refreshLastUndoableAction();
 void refreshRecentHistory();
+void refreshNamingRulesStatus();
 
 selectSourceButton?.addEventListener("click", () => {
   void selectSourceDirectory();
@@ -600,6 +666,49 @@ analyzeSuggestionsButton?.addEventListener("click", () => {
 
 applySuggestionsEmptyButton?.addEventListener("click", () => {
   applyNamingSuggestionsToEmptyFields();
+});
+
+toggleRulesPanelButton?.addEventListener("click", () => {
+  state.namingRules.panelOpen = !state.namingRules.panelOpen;
+  renderRulesPanel();
+});
+
+userRuleForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  upsertUserRuleDraft();
+});
+
+resetUserRuleFormButton?.addEventListener("click", () => {
+  resetUserRuleDraft();
+});
+
+saveUserRulesButton?.addEventListener("click", () => {
+  void saveUserRules();
+});
+
+reloadUserRulesButton?.addEventListener("click", () => {
+  void reloadNamingRules();
+});
+
+[
+  userRuleCategoryInput,
+  userRuleIdInput,
+  userRuleLabelInput,
+  userRuleAllOfInput,
+  userRuleAnyOfInput,
+  userRuleNoneOfInput,
+  userRuleDocumentTypeInput,
+  userRuleSubjectInput,
+  userRuleKeywordsInput,
+  userRuleConfidenceInput,
+  userRuleEnabledInput
+].forEach((input) => {
+  input?.addEventListener("input", () => {
+    updateUserRuleDraftFromInputs();
+  });
+  input?.addEventListener("change", () => {
+    updateUserRuleDraftFromInputs();
+  });
 });
 
 refreshHistoryButton?.addEventListener("click", () => {
@@ -852,6 +961,7 @@ function render(): void {
   renderQueue();
   renderPreview();
   renderDetails();
+  renderRulesPanel();
   renderHistory();
   renderShortcutHelp();
 }
@@ -904,6 +1014,18 @@ function renderControls(): void {
 
   if (refreshHistoryButton) {
     refreshHistoryButton.disabled = state.history.isLoading || isClassificationBusy();
+  }
+
+  if (saveUserRulesButton) {
+    saveUserRulesButton.disabled = state.namingRules.panelStatus === "saving" || !state.namingRules.dirty;
+  }
+
+  if (reloadUserRulesButton) {
+    reloadUserRulesButton.disabled = state.namingRules.panelStatus === "saving";
+  }
+
+  if (saveUserRuleDraftButton) {
+    saveUserRuleDraftButton.disabled = state.namingRules.panelStatus === "saving";
   }
 }
 
@@ -2020,7 +2142,8 @@ function analyzeNamingSuggestionsForActiveDocument(): void {
 
   const suggestions = DocSorterNamingSuggestions.buildNamingSuggestions({
     filename: activeDocument.name,
-    extractedText: extraction.excerpt
+    extractedText: extraction.excerpt,
+    rulesCatalog: state.namingRules.mergedCatalog
   });
   const hasSuggestions = namingSuggestionsHaveContent(suggestions);
 
@@ -2159,6 +2282,479 @@ function sourceFromSuggestionBooleans(
   }
 
   return textMatch ? "text" : "filename";
+}
+
+async function refreshNamingRulesStatus(): Promise<void> {
+  state.namingRules.panelStatus = "loading";
+  renderRulesPanel();
+
+  const result = await window.docSorter.getRulesStatus();
+  if (!result.ok) {
+    state.namingRules = {
+      ...state.namingRules,
+      panelStatus: "error",
+      message: result.error.message,
+      warning: result.error as RendererUserRulesError
+    };
+    renderRulesPanel();
+    return;
+  }
+
+  applyNamingRulesStatus(result.value as RendererNamingRulesStatus, false);
+}
+
+async function reloadNamingRules(): Promise<void> {
+  state.namingRules.panelStatus = "loading";
+  state.namingRules.dirty = false;
+  renderRulesPanel();
+
+  const result = await window.docSorter.reloadNamingRules();
+  if (!result.ok) {
+    state.namingRules = {
+      ...state.namingRules,
+      panelStatus: "error",
+      message: result.error.message,
+      warning: result.error as RendererUserRulesError
+    };
+    renderRulesPanel();
+    return;
+  }
+
+  applyNamingRulesStatus(result.value as RendererNamingRulesStatus, true);
+}
+
+async function saveUserRules(): Promise<void> {
+  state.namingRules.panelStatus = "saving";
+  state.namingRules.message = "Sauvegarde des règles utilisateur...";
+  renderRulesPanel();
+
+  const result = await window.docSorter.saveUserRulesCatalog(state.namingRules.userCatalog);
+  if (!result.ok) {
+    state.namingRules = {
+      ...state.namingRules,
+      panelStatus: "error",
+      message: result.error.message,
+      warning: result.error as RendererUserRulesError
+    };
+    renderRulesPanel();
+    return;
+  }
+
+  applyNamingRulesStatus(result.value as RendererNamingRulesStatus, true);
+}
+
+function applyNamingRulesStatus(status: RendererNamingRulesStatus, resetSuggestions: boolean): void {
+  state.namingRules = {
+    ...state.namingRules,
+    panelStatus: "ready",
+    userRulesPath: status.userRulesPath,
+    userCatalog: cloneRulesCatalog(status.userCatalog),
+    mergedCatalog: cloneRulesCatalog(status.mergedCatalog),
+    defaultRuleCount: status.defaultRuleCount,
+    userRuleCount: status.userRuleCount,
+    message: status.message,
+    warning: status.warning,
+    editingTarget: null,
+    draft: DocSorterUserRuleEditor.createEmptyUserRuleDraft(),
+    draftErrors: [],
+    dirty: false
+  };
+
+  if (resetSuggestions) {
+    resetNamingSuggestionsState();
+  }
+
+  render();
+}
+
+function renderRulesPanel(): void {
+  if (!rulesStatus || !rulesEditor) {
+    return;
+  }
+
+  if (toggleRulesPanelButton) {
+    toggleRulesPanelButton.setAttribute("aria-expanded", String(state.namingRules.panelOpen));
+    toggleRulesPanelButton.textContent = state.namingRules.panelOpen ? "Masquer" : "Règles";
+  }
+
+  rulesEditor.hidden = !state.namingRules.panelOpen;
+  rulesStatus.replaceChildren(...createRulesStatusContent());
+  renderUserRulesList();
+  syncUserRuleForm();
+
+  if (userRuleErrors) {
+    userRuleErrors.replaceChildren(...state.namingRules.draftErrors.map(createRuleErrorItem));
+  }
+
+  if (saveUserRuleDraftButton) {
+    saveUserRuleDraftButton.textContent = state.namingRules.editingTarget
+      ? "Modifier la règle"
+      : "Ajouter la règle";
+  }
+
+  renderControls();
+}
+
+function createRulesStatusContent(): Node[] {
+  const lines: Node[] = [];
+  const summary = document.createElement("strong");
+  const detail = document.createElement("span");
+  const pathLine = document.createElement("span");
+
+  summary.textContent = rulesStatusLabel();
+  detail.textContent = `${state.namingRules.defaultRuleCount} règle${
+    state.namingRules.defaultRuleCount > 1 ? "s" : ""
+  } par défaut, ${state.namingRules.userRuleCount} règle${
+    state.namingRules.userRuleCount > 1 ? "s" : ""
+  } utilisateur.`;
+  pathLine.textContent = state.namingRules.userRulesPath
+    ? `Fichier local : ${state.namingRules.userRulesPath}`
+    : "Fichier local : initialisation en cours";
+  pathLine.title = state.namingRules.userRulesPath;
+  lines.push(summary, detail, pathLine);
+
+  if (state.namingRules.warning) {
+    const warning = document.createElement("span");
+    warning.textContent = state.namingRules.warning.message;
+    lines.push(warning);
+  }
+
+  if (state.namingRules.dirty) {
+    const dirty = document.createElement("span");
+    dirty.textContent = "Modifications non sauvegardées.";
+    lines.push(dirty);
+  }
+
+  return lines;
+}
+
+function rulesStatusLabel(): string {
+  if (state.namingRules.panelStatus === "loading") {
+    return "Chargement des règles...";
+  }
+
+  if (state.namingRules.panelStatus === "saving") {
+    return "Sauvegarde des règles...";
+  }
+
+  if (state.namingRules.panelStatus === "error") {
+    return "Erreur règles utilisateur";
+  }
+
+  return state.namingRules.message;
+}
+
+function renderUserRulesList(): void {
+  if (!userRulesList) {
+    return;
+  }
+
+  const entries = getUserRuleEntries(state.namingRules.userCatalog);
+  if (entries.length === 0) {
+    const item = document.createElement("li");
+    const empty = document.createElement("span");
+    empty.textContent = "Aucune règle utilisateur.";
+    item.append(empty);
+    userRulesList.replaceChildren(item);
+    return;
+  }
+
+  userRulesList.replaceChildren(...entries.map(createUserRuleListItem));
+}
+
+function createUserRuleListItem(entry: UserRuleListEntry): HTMLLIElement {
+  const item = document.createElement("li");
+  const text = document.createElement("span");
+  const title = document.createElement("strong");
+  const meta = document.createElement("small");
+  const editButton = document.createElement("button");
+  const deleteButton = document.createElement("button");
+
+  title.textContent = entry.label;
+  title.title = entry.label;
+  meta.textContent = `${userRuleCategoryLabel(entry.category)} - ${entry.enabled ? "actif" : "inactif"}`;
+  text.append(title, meta);
+
+  editButton.type = "button";
+  editButton.textContent = "Modifier";
+  editButton.addEventListener("click", () => {
+    editUserRule(entry.category, entry.index);
+  });
+
+  deleteButton.type = "button";
+  deleteButton.textContent = "Supprimer";
+  deleteButton.addEventListener("click", () => {
+    deleteUserRule(entry.category, entry.index);
+  });
+
+  item.append(text, editButton, deleteButton);
+  return item;
+}
+
+interface UserRuleListEntry {
+  category: UserRuleEditorCategory;
+  index: number;
+  label: string;
+  enabled: boolean;
+}
+
+function getUserRuleEntries(catalog: NamingSuggestionRulesCatalog): UserRuleListEntry[] {
+  return [
+    ...catalog.documentTypeRules.map((rule, index) => ({
+      category: "documentType" as const,
+      index,
+      label: rule.label,
+      enabled: rule.enabled !== false
+    })),
+    ...catalog.subjectRules.map((rule, index) => ({
+      category: "subject" as const,
+      index,
+      label: rule.label,
+      enabled: rule.enabled !== false
+    })),
+    ...catalog.keywordRules.map((rule, index) => ({
+      category: "keyword" as const,
+      index,
+      label: rule.label ?? rule.value,
+      enabled: rule.enabled !== false
+    }))
+  ];
+}
+
+function syncUserRuleForm(): void {
+  const draft = state.namingRules.draft;
+
+  if (userRuleCategoryInput) {
+    userRuleCategoryInput.value = draft.category;
+  }
+  if (userRuleIdInput) {
+    userRuleIdInput.value = draft.id;
+  }
+  if (userRuleLabelInput) {
+    userRuleLabelInput.value = draft.label;
+  }
+  if (userRuleAllOfInput) {
+    userRuleAllOfInput.value = draft.allOf;
+  }
+  if (userRuleAnyOfInput) {
+    userRuleAnyOfInput.value = draft.anyOf;
+  }
+  if (userRuleNoneOfInput) {
+    userRuleNoneOfInput.value = draft.noneOf;
+  }
+  if (userRuleDocumentTypeInput) {
+    userRuleDocumentTypeInput.value = draft.documentType;
+  }
+  if (userRuleSubjectInput) {
+    userRuleSubjectInput.value = draft.subject;
+  }
+  if (userRuleKeywordsInput) {
+    userRuleKeywordsInput.value = draft.keywords;
+  }
+  if (userRuleConfidenceInput) {
+    userRuleConfidenceInput.value = draft.confidence;
+  }
+  if (userRuleEnabledInput) {
+    userRuleEnabledInput.checked = draft.enabled;
+  }
+}
+
+function updateUserRuleDraftFromInputs(): void {
+  state.namingRules.draft = {
+    category: (userRuleCategoryInput?.value as UserRuleEditorCategory) ?? "documentType",
+    id: userRuleIdInput?.value ?? "",
+    label: userRuleLabelInput?.value ?? "",
+    allOf: userRuleAllOfInput?.value ?? "",
+    anyOf: userRuleAnyOfInput?.value ?? "",
+    noneOf: userRuleNoneOfInput?.value ?? "",
+    documentType: userRuleDocumentTypeInput?.value ?? "",
+    subject: userRuleSubjectInput?.value ?? "",
+    keywords: userRuleKeywordsInput?.value ?? "",
+    confidence: userRuleConfidenceInput?.value ?? "70",
+    enabled: userRuleEnabledInput?.checked ?? true
+  };
+  state.namingRules.draftErrors = [];
+}
+
+function upsertUserRuleDraft(): void {
+  updateUserRuleDraftFromInputs();
+  const result = DocSorterUserRuleEditor.buildUserRuleFromDraft(state.namingRules.draft);
+
+  if (!result.ok) {
+    state.namingRules.draftErrors = result.errors;
+    renderRulesPanel();
+    return;
+  }
+
+  const nextCatalog = cloneRulesCatalog(state.namingRules.userCatalog);
+  const editingTarget = state.namingRules.editingTarget;
+
+  if (editingTarget && editingTarget.category !== result.value.category) {
+    removeRuleFromCatalog(nextCatalog, editingTarget.category, editingTarget.index);
+  }
+
+  if (result.value.category === "documentType") {
+    upsertRuleInList(nextCatalog.documentTypeRules, result.value.rule as NamingSuggestionRule, editingTarget);
+  } else if (result.value.category === "subject") {
+    upsertRuleInList(nextCatalog.subjectRules, result.value.rule as NamingSuggestionRule, editingTarget);
+  } else {
+    upsertRuleInList(nextCatalog.keywordRules, result.value.rule as KeywordAliasRule, editingTarget);
+  }
+
+  state.namingRules.userCatalog = nextCatalog;
+  state.namingRules.dirty = true;
+  state.namingRules.draft = DocSorterUserRuleEditor.createEmptyUserRuleDraft();
+  state.namingRules.editingTarget = null;
+  state.namingRules.draftErrors = [];
+  state.namingRules.userRuleCount = countRules(nextCatalog);
+  render();
+}
+
+function upsertRuleInList<TRule>(
+  list: TRule[],
+  rule: TRule,
+  editingTarget: UserRuleEditingTarget | null
+): void {
+  if (editingTarget && editingTarget.category === state.namingRules.draft.category) {
+    list.splice(editingTarget.index, 1, rule);
+    return;
+  }
+
+  list.push(rule);
+}
+
+function editUserRule(category: UserRuleEditorCategory, index: number): void {
+  const catalog = state.namingRules.userCatalog;
+  if (category === "documentType") {
+    const rule = catalog.documentTypeRules[index];
+    if (!rule) {
+      return;
+    }
+
+    state.namingRules.draft = DocSorterUserRuleEditor.namingRuleToDraft("documentType", rule);
+  } else if (category === "subject") {
+    const rule = catalog.subjectRules[index];
+    if (!rule) {
+      return;
+    }
+
+    state.namingRules.draft = DocSorterUserRuleEditor.namingRuleToDraft("subject", rule);
+  } else {
+    const rule = catalog.keywordRules[index];
+    if (!rule) {
+      return;
+    }
+
+    state.namingRules.draft = DocSorterUserRuleEditor.keywordRuleToDraft(rule);
+  }
+
+  state.namingRules.editingTarget = { category, index };
+  state.namingRules.draftErrors = [];
+  state.namingRules.panelOpen = true;
+  renderRulesPanel();
+}
+
+function deleteUserRule(category: UserRuleEditorCategory, index: number): void {
+  const nextCatalog = cloneRulesCatalog(state.namingRules.userCatalog);
+  removeRuleFromCatalog(nextCatalog, category, index);
+
+  state.namingRules.userCatalog = nextCatalog;
+  state.namingRules.userRuleCount = countRules(nextCatalog);
+  state.namingRules.dirty = true;
+  state.namingRules.editingTarget = null;
+  state.namingRules.draft = DocSorterUserRuleEditor.createEmptyUserRuleDraft();
+  state.namingRules.draftErrors = [];
+  render();
+}
+
+function removeRuleFromCatalog(
+  catalog: NamingSuggestionRulesCatalog,
+  category: UserRuleEditorCategory,
+  index: number
+): void {
+  if (category === "documentType") {
+    catalog.documentTypeRules.splice(index, 1);
+  } else if (category === "subject") {
+    catalog.subjectRules.splice(index, 1);
+  } else {
+    catalog.keywordRules.splice(index, 1);
+  }
+}
+
+function resetUserRuleDraft(): void {
+  state.namingRules.draft = DocSorterUserRuleEditor.createEmptyUserRuleDraft();
+  state.namingRules.editingTarget = null;
+  state.namingRules.draftErrors = [];
+  renderRulesPanel();
+}
+
+function createRuleErrorItem(error: string): HTMLLIElement {
+  const item = document.createElement("li");
+  item.textContent = error;
+  return item;
+}
+
+function userRuleCategoryLabel(category: UserRuleEditorCategory): string {
+  switch (category) {
+    case "documentType":
+      return "type";
+    case "subject":
+      return "sujet";
+    case "keyword":
+      return "mot-clé";
+  }
+}
+
+function cloneRulesCatalog(catalog: NamingSuggestionRulesCatalog): NamingSuggestionRulesCatalog {
+  return {
+    version: 1,
+    documentTypeRules: catalog.documentTypeRules.map((rule) => ({
+      ...rule,
+      match: cloneRuleMatch(rule.match),
+      output: {
+        ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
+        ...(rule.output.subject ? { subject: rule.output.subject } : {}),
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+      }
+    })),
+    subjectRules: catalog.subjectRules.map((rule) => ({
+      ...rule,
+      match: cloneRuleMatch(rule.match),
+      output: {
+        ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
+        ...(rule.output.subject ? { subject: rule.output.subject } : {}),
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+      }
+    })),
+    keywordRules: catalog.keywordRules.map((rule) => ({
+      ...rule,
+      aliases: [...rule.aliases],
+      ...(rule.match ? { match: cloneRuleMatch(rule.match) } : {})
+    })),
+    stopWords: [...catalog.stopWords]
+  };
+}
+
+function cloneRuleMatch(match: SuggestionRuleMatch): SuggestionRuleMatch {
+  return {
+    ...(match.allOf ? { allOf: [...match.allOf] } : {}),
+    ...(match.anyOf ? { anyOf: [...match.anyOf] } : {}),
+    ...(match.noneOf ? { noneOf: [...match.noneOf] } : {})
+  };
+}
+
+function countRules(catalog: NamingSuggestionRulesCatalog): number {
+  return catalog.documentTypeRules.length + catalog.subjectRules.length + catalog.keywordRules.length;
+}
+
+function createEmptyRulesCatalog(): NamingSuggestionRulesCatalog {
+  return {
+    version: 1,
+    documentTypeRules: [],
+    subjectRules: [],
+    keywordRules: [],
+    stopWords: []
+  };
 }
 
 function createPlaceholder(message: string): HTMLDivElement {
@@ -3132,6 +3728,28 @@ function createIdleDuplicateAnalysisState(): DuplicateAnalysisState {
 function createIdleTextExtractionState(): TextExtractionState {
   return {
     byDocumentPath: {}
+  };
+}
+
+function createIdleNamingRulesState(): NamingRulesState {
+  const defaultCatalog =
+    globalThis.DocSorterNamingSuggestionRulesCatalog?.getDefaultNamingSuggestionRulesCatalog() ??
+    createEmptyRulesCatalog();
+
+  return {
+    panelStatus: "loading",
+    panelOpen: false,
+    userRulesPath: "",
+    userCatalog: createEmptyRulesCatalog(),
+    mergedCatalog: defaultCatalog,
+    defaultRuleCount: countRules(defaultCatalog),
+    userRuleCount: 0,
+    message: "Chargement des règles...",
+    warning: null,
+    draft: DocSorterUserRuleEditor.createEmptyUserRuleDraft(),
+    editingTarget: null,
+    draftErrors: [],
+    dirty: false
   };
 }
 

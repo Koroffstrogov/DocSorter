@@ -2,7 +2,13 @@
 
 DocSorter utilise un catalogue de règles locales pour proposer une date, un sujet, un type de document et des mots-clés à partir du texte PDF extrait en mémoire et du nom de fichier.
 
-Le catalogue par défaut est livré avec l'application. La personnalisation utilisateur est préparée par le schéma, mais aucun fichier utilisateur n'est encore lu, écrit ou chargé automatiquement.
+Le catalogue par défaut est livré avec l'application et n'est jamais modifié. Le catalogue utilisateur est stocké localement dans :
+
+```text
+app.getPath("userData")/config/naming-suggestion-rules.json
+```
+
+Si ce fichier est absent, DocSorter crée un catalogue utilisateur vide.
 
 ## Structure
 
@@ -46,11 +52,14 @@ Le catalogue par défaut est livré avec l'application. La personnalisation util
 - `noneOf` : aucun terme ne doit être présent.
 - `confidence` : score indicatif entre `0` et `100`.
 - `source` optionnel : `text`, `filename` ou `filename+text`.
+- `enabled` optionnel : `false` désactive une règle utilisateur sans la supprimer.
 
 Les termes sont comparés sans tenir compte de la casse ni des accents. Les apostrophes, tirets et espaces multiples sont normalisés.
 
 ## Confidentialité
 
+Les règles utilisateur sont fusionnées avec les règles par défaut après validation. Une règle utilisateur ne doit pas réutiliser un identifiant de règle par défaut.
+
 Les règles ne doivent pas contenir de texte OCR complet, de contenu documentaire sensible, de chemins locaux, de vrais noms de proches ou de données personnelles. Elles doivent rester des alias courts et génériques.
 
-Dans le Lot 6C, aucun éditeur de règles, aucun cache, aucune persistance utilisateur et aucun chargement de fichier JSON utilisateur ne sont disponibles.
+Dans le Lot 6D, l'éditeur intégré reste minimal : il permet d'ajouter, modifier, désactiver ou supprimer des règles utilisateur simples. Il ne propose pas d'éditeur JSON avancé, pas de profils multiples et pas de suggestion de dossier cible.

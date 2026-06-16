@@ -11,6 +11,11 @@ import type { ActionJournalEntry } from "../history/historyTypes";
 import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type { PreviewData } from "../preview/previewTypes";
+import type {
+  NamingRulesStatus,
+  UserRulesLoadResult,
+  UserRulesResult
+} from "../rules/userNamingRulesStore";
 
 interface DirectorySelection {
   path: string;
@@ -55,7 +60,17 @@ const api = {
   extractTextFromActivePdf: (documentPath: string): Promise<PdfTextExtractionResult> =>
     ipcRenderer.invoke("extraction:extractPdfText", documentPath),
   getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
-    ipcRenderer.invoke("history:getRecent", limit)
+    ipcRenderer.invoke("history:getRecent", limit),
+  getRulesStatus: (): Promise<UserRulesResult<NamingRulesStatus>> =>
+    ipcRenderer.invoke("rules:getStatus"),
+  getUserRulesCatalog: (): Promise<UserRulesResult<UserRulesLoadResult>> =>
+    ipcRenderer.invoke("rules:getUserCatalog"),
+  saveUserRulesCatalog: (
+    catalog: NamingSuggestionRulesCatalog
+  ): Promise<UserRulesResult<NamingRulesStatus>> =>
+    ipcRenderer.invoke("rules:saveUserCatalog", catalog),
+  reloadNamingRules: (): Promise<UserRulesResult<NamingRulesStatus>> =>
+    ipcRenderer.invoke("rules:reload")
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

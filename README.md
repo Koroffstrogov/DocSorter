@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 6C : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif sans OCR et suggestions locales de nommage en mémoire uniquement, avec règles par défaut externalisées et structurées.
+Lot 6D : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif sans OCR, suggestions locales de nommage et règles utilisateur locales avec éditeur minimal.
 
 ## Commandes
 
@@ -78,7 +78,9 @@ npm run dev
 - suggestions locales de date, sujet, type et mots-clés depuis l'extrait texte et le nom de fichier ;
 - règles de suggestion par défaut externalisées dans un catalogue typé ;
 - moteur de suggestions capable de consommer un catalogue de règles injecté ;
-- validation et fusion préparées pour un futur catalogue utilisateur, sans chargement utilisateur dans ce lot ;
+- fichier local de règles utilisateur créé automatiquement si absent ;
+- validation, sauvegarde prudente et fusion règles par défaut + règles utilisateur ;
+- panneau `Règles de suggestion` pour ajouter, modifier, désactiver ou supprimer une règle utilisateur simple ;
 - score indicatif et raisons sobres pour contrôler les suggestions ;
 - bouton `Appliquer aux champs vides` qui ne remplace jamais une saisie déjà présente ;
 - recalcul du nom proposé et du contrôle cible après application des suggestions.
@@ -145,9 +147,15 @@ Les suggestions sont déclenchées manuellement après extraction du texte PDF n
 
 L'application peut proposer une date documentaire, un sujet, un type et jusqu'à cinq mots-clés. Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides, puis relance le calcul du nom proposé et le contrôle cible. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
 
-Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format futur est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
+Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
 
-Le moteur accepte déjà un catalogue injecté côté code, mais l'application ne lit pas encore de fichier utilisateur et ne propose pas d'éditeur de règles.
+Les règles utilisateur sont stockées localement dans :
+
+```text
+app.getPath("userData")/config/naming-suggestion-rules.json
+```
+
+L'application crée ce fichier s'il est absent avec un catalogue vide. Le renderer ne reçoit pas d'accès `fs` et ne fournit jamais le chemin du fichier au main process.
 
 Ces règles restent prudentes : elles ne créent pas de cache, n'écrivent pas dans le journal, ne modifient aucun fichier et ne lancent ni OCR, ni IA, ni appel réseau.
 
@@ -186,14 +194,14 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas de recherche plein texte dans les PDF ou images ;
 - pas d'extraction texte pour les images ;
 - pas d'application automatique des suggestions ;
-- pas d'éditeur de règles ;
-- pas de fichier utilisateur de règles chargé automatiquement ;
+- pas d'éditeur JSON avancé ;
+- pas de gestion multi-profils de règles ;
 - pas de suggestion automatique de dossier cible ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
-Tester le Lot 6C d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Tester le Lot 6D d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
 Pour le classement réel et l'annulation, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
 ## Passage futur recommandé
@@ -203,7 +211,7 @@ Un prochain lot pourra ajouter :
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR local optionnel pour PDF scannés, dans un lot séparé et explicitement validé ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
-- chargement explicite d'un catalogue utilisateur local, après validation du format et sans contenu documentaire sensible ;
+- audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
 - aide au choix de dossier cible, sans OCR ni upload.
 
@@ -282,13 +290,17 @@ Un prochain lot pourra ajouter :
 - un PDF scanné sans texte affiche `Aucun texte exploitable détecté — OCR nécessaire plus tard` ;
 - après extraction texte, le bouton `Analyser les suggestions` devient disponible ;
 - cliquer sur `Analyser les suggestions` affiche date, sujet, type, mots-clés, score et raisons sobres si des signaux sont trouvés ;
-- la mention `Règles locales par défaut` apparaît dans le panneau de suggestions ;
+- le panneau `Règles de suggestion` affiche le nombre de règles par défaut et utilisateur ;
+- si le fichier de règles utilisateur est absent, il est créé dans `userData/config` ;
+- ajouter une règle utilisateur simple, sauvegarder, puis relancer les suggestions permet à la règle de contribuer ;
+- désactiver ou supprimer une règle utilisateur puis sauvegarder retire sa contribution ;
+- si le JSON utilisateur est invalide, l'application revient aux règles par défaut avec un avertissement sobre ;
 - un PDF sans texte exploitable n'affiche aucune suggestion ;
 - `Appliquer aux champs vides` remplit seulement les champs vides du panneau `Renommage proposé` ;
 - les champs déjà saisis manuellement ne sont pas remplacés par une suggestion ;
 - après application, le nom proposé et le contrôle cible sont recalculés ;
 - les suggestions ne créent pas de cache, ne modifient pas le journal et ne modifient aucun fichier ;
-- aucun fichier utilisateur de règles n'est créé ou chargé automatiquement ;
+- le fichier de règles utilisateur ne contient pas de texte extrait, pas de chemins documentaires et pas de contenu OCR ;
 - une image sélectionnée ne permet pas l'extraction texte PDF ;
 - supprimer ou déplacer un PDF après scan puis lancer l'extraction affiche une erreur propre ;
 - l'extraction texte ne crée pas de cache, ne modifie pas le journal et ne modifie aucun fichier ;

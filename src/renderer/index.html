@@ -167,6 +167,77 @@
             <button id="apply-suggestions-empty" type="button" disabled>Appliquer aux champs vides</button>
           </section>
 
+          <section id="rules-panel" class="detail-section rules-panel" aria-label="Règles de suggestion">
+            <div class="section-heading">
+              <h3>Règles de suggestion</h3>
+              <button id="toggle-rules-panel" type="button" aria-expanded="false">Règles</button>
+            </div>
+            <div id="rules-status" class="rules-status">Chargement des règles...</div>
+            <div id="rules-editor" class="rules-editor" hidden>
+              <p class="rules-warning">
+                N'enregistrez pas de contenu complet de documents dans les règles. Utilisez seulement des mots-clés ou expressions courtes.
+              </p>
+              <ol id="user-rules-list" class="user-rules-list"></ol>
+              <form id="user-rule-form" class="user-rule-form">
+                <label>
+                  Catégorie
+                  <select id="user-rule-category" name="category">
+                    <option value="documentType">Type de document</option>
+                    <option value="subject">Sujet</option>
+                    <option value="keyword">Mot-clé</option>
+                  </select>
+                </label>
+                <label>
+                  Identifiant
+                  <input id="user-rule-id" name="id" autocomplete="off" placeholder="garage-maintenance" />
+                </label>
+                <label>
+                  Libellé
+                  <input id="user-rule-label" name="label" autocomplete="off" />
+                </label>
+                <label>
+                  Tous les mots requis
+                  <input id="user-rule-all-of" name="allOf" autocomplete="off" placeholder="facture" />
+                </label>
+                <label>
+                  Au moins un mot
+                  <input id="user-rule-any-of" name="anyOf" autocomplete="off" placeholder="garage, vidange" />
+                </label>
+                <label>
+                  Mots interdits
+                  <input id="user-rule-none-of" name="noneOf" autocomplete="off" />
+                </label>
+                <label>
+                  Sortie type
+                  <input id="user-rule-document-type" name="documentType" autocomplete="off" placeholder="facture-entretien" />
+                </label>
+                <label>
+                  Sortie sujet
+                  <input id="user-rule-subject" name="subject" autocomplete="off" />
+                </label>
+                <label>
+                  Mots-clés de sortie
+                  <input id="user-rule-keywords" name="keywords" autocomplete="off" placeholder="entretien" />
+                </label>
+                <label>
+                  Confiance
+                  <input id="user-rule-confidence" name="confidence" type="number" min="0" max="100" step="1" value="70" />
+                </label>
+                <label class="rules-checkbox">
+                  <input id="user-rule-enabled" name="enabled" type="checkbox" checked />
+                  Actif
+                </label>
+                <ul id="user-rule-errors" class="user-rule-errors"></ul>
+                <div class="rules-actions">
+                  <button id="reset-user-rule-form" type="button">Nouvelle règle</button>
+                  <button id="save-user-rule-draft" type="submit">Ajouter la règle</button>
+                  <button id="save-user-rules" type="button">Sauvegarder</button>
+                  <button id="reload-user-rules" type="button">Recharger</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
             <div class="section-heading">
               <h3>Renommage proposé</h3>
@@ -244,6 +315,7 @@
     <script src="../rules/defaultNamingSuggestionRules.js"></script>
     <script src="../rules/namingSuggestionRulesCatalog.js"></script>
     <script src="../rules/namingSuggestions.js"></script>
+    <script src="../rules/userRuleEditor.js"></script>
     <script src="./keyboardShortcuts.js"></script>
     <script src="./renderer.js"></script>
   </body>
