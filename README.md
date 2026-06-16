@@ -86,7 +86,8 @@ npm run dev
 - panneau `Règles de suggestion` pour ajouter, modifier, désactiver ou supprimer une règle utilisateur simple ;
 - score indicatif et raisons sobres pour contrôler les suggestions ;
 - bouton `Appliquer aux champs vides` qui ne remplace jamais une saisie déjà présente ;
-- recalcul du nom proposé et du contrôle cible après application des suggestions.
+- recalcul du nom proposé et du contrôle cible après application des suggestions ;
+- tests légers des handlers IPC sensibles côté main process pour vérifier source, cible, journal, file scannée et règles utilisateur contrôlés côté main.
 
 ## Convention de nommage
 
@@ -128,6 +129,8 @@ Le journal est relu au démarrage pour retrouver la dernière action `classify c
 Le renderer n'a pas d'accès direct au système de fichiers. Toutes les actions passent par une API preload limitée et testée, exposée sous `window.docSorter`.
 
 Les canaux IPC sont listés dans un contrat explicite. Toute nouvelle méthode preload ou tout nouveau canal IPC doit être ajouté volontairement au contrat et aux tests de surface. Les chemins sensibles sont re-vérifiés côté main process avant lecture, extraction, classement ou annulation.
+
+Les handlers IPC sensibles sont enregistrés via une couche testable côté main process. Les tests vérifient que le renderer ne fournit pas de chemin source, cible, journal ou fichier de règles arbitraire aux services métier.
 
 ## Doublons exacts
 
