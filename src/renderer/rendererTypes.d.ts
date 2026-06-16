@@ -30,6 +30,7 @@ type TargetFolderStatus =
   | "error";
 type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
 type DuplicateAnalysisStatus = "idle" | "analyzing" | "ready" | "error";
+type OcrPanelStatus = "loading" | "ready" | "saving" | "testing" | "error";
 
 interface AppError {
   code:
@@ -347,6 +348,62 @@ interface NamingRulesState {
   dirty: boolean;
 }
 
+interface RendererOcrError {
+  code:
+    | "OCR_ENGINE_NOT_CONFIGURED"
+    | "OCR_ENGINE_NOT_FOUND"
+    | "OCR_TESSDATA_NOT_FOUND"
+    | "OCR_LANGUAGE_DATA_MISSING"
+    | "OCR_VERSION_FAILED"
+    | "OCR_LIST_LANGS_FAILED"
+    | "OCR_PROCESS_TIMEOUT"
+    | "OCR_CONFIG_READ_FAILED"
+    | "OCR_CONFIG_WRITE_FAILED"
+    | "UNKNOWN_ERROR";
+  message: string;
+}
+
+interface RendererOcrSettings {
+  tesseractPath: string;
+  tessdataPath: string;
+  language: string;
+  psm: number;
+  lastTestedAt: string | null;
+  detectedVersion: string | null;
+}
+
+interface RendererOcrStatus {
+  status: "not-configured" | "configured" | "error";
+  settingsPath: string;
+  settings: RendererOcrSettings;
+  tesseractPath: string;
+  tessdataPath: string;
+  language: string;
+  psm: number;
+  detectedVersion: string | null;
+  lastTestedAt: string | null;
+  availableLanguages: string[];
+  missingLanguages: string[];
+  message: string;
+  error: RendererOcrError | null;
+}
+
+interface OcrSettingsDraft {
+  tesseractPath: string;
+  tessdataPath: string;
+  language: string;
+  psm: string;
+}
+
+interface OcrState {
+  panelStatus: OcrPanelStatus;
+  status: RendererOcrStatus | null;
+  draft: OcrSettingsDraft;
+  message: string;
+  error: RendererOcrError | null;
+  dirty: boolean;
+}
+
 interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
@@ -397,6 +454,7 @@ interface AppState {
   textExtraction: TextExtractionState;
   namingSuggestions: NamingSuggestionsState;
   namingRules: NamingRulesState;
+  ocr: OcrState;
   shortcutsHelpVisible: boolean;
 }
 

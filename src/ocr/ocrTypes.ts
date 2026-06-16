@@ -1,0 +1,96 @@
+export type OcrErrorCode =
+  | "OCR_ENGINE_NOT_CONFIGURED"
+  | "OCR_ENGINE_NOT_FOUND"
+  | "OCR_TESSDATA_NOT_FOUND"
+  | "OCR_LANGUAGE_DATA_MISSING"
+  | "OCR_VERSION_FAILED"
+  | "OCR_LIST_LANGS_FAILED"
+  | "OCR_PROCESS_TIMEOUT"
+  | "OCR_CONFIG_READ_FAILED"
+  | "OCR_CONFIG_WRITE_FAILED"
+  | "UNKNOWN_ERROR";
+
+export interface OcrError {
+  code: OcrErrorCode;
+  message: string;
+}
+
+export type OcrResult<T> = { ok: true; value: T } | { ok: false; error: OcrError };
+
+export interface OcrSettings {
+  tesseractPath: string;
+  tessdataPath: string;
+  language: string;
+  psm: number;
+  lastTestedAt: string | null;
+  detectedVersion: string | null;
+}
+
+export type OcrSettingsInput = Partial<OcrSettings>;
+
+export type OcrStatusKind = "not-configured" | "configured" | "error";
+
+export interface OcrStatus {
+  status: OcrStatusKind;
+  settingsPath: string;
+  settings: OcrSettings;
+  tesseractPath: string;
+  tessdataPath: string;
+  language: string;
+  psm: number;
+  detectedVersion: string | null;
+  lastTestedAt: string | null;
+  availableLanguages: string[];
+  missingLanguages: string[];
+  message: string;
+  error: OcrError | null;
+}
+
+export interface OcrPathSelection {
+  path: string;
+}
+
+export const DEFAULT_OCR_LANGUAGE = "fra";
+export const DEFAULT_OCR_PSM = 3;
+
+export function createOcrError(code: OcrErrorCode, message = ocrErrorMessage(code)): OcrError {
+  return {
+    code,
+    message
+  };
+}
+
+export function ocrFailure<T = never>(
+  code: OcrErrorCode,
+  message = ocrErrorMessage(code)
+): OcrResult<T> {
+  return {
+    ok: false,
+    error: createOcrError(code, message)
+  };
+}
+
+export function ocrErrorMessage(code: OcrErrorCode): string {
+  switch (code) {
+    case "OCR_ENGINE_NOT_CONFIGURED":
+      return "OCR local non configuré.";
+    case "OCR_ENGINE_NOT_FOUND":
+      return "Tesseract est introuvable.";
+    case "OCR_TESSDATA_NOT_FOUND":
+      return "Le dossier tessdata est introuvable.";
+    case "OCR_LANGUAGE_DATA_MISSING":
+      return "Données de langue OCR manquantes.";
+    case "OCR_VERSION_FAILED":
+      return "Impossible de lire la version de Tesseract.";
+    case "OCR_LIST_LANGS_FAILED":
+      return "Impossible de lister les langues Tesseract.";
+    case "OCR_PROCESS_TIMEOUT":
+      return "Le test Tesseract a dépassé le délai autorisé.";
+    case "OCR_CONFIG_READ_FAILED":
+      return "Configuration OCR illisible.";
+    case "OCR_CONFIG_WRITE_FAILED":
+      return "Impossible de sauvegarder la configuration OCR.";
+    case "UNKNOWN_ERROR":
+      return "Erreur OCR inconnue.";
+  }
+}

@@ -17,6 +17,7 @@ const state: AppState = {
   textExtraction: createIdleTextExtractionState(),
   namingSuggestions: createIdleNamingSuggestionsState(),
   namingRules: createIdleNamingRulesState(),
+  ocr: createIdleOcrState(),
   shortcutsHelpVisible: false
 };
 
@@ -27,6 +28,7 @@ let classificationRequestId = 0;
 let duplicateAnalysisRequestId = 0;
 let textExtractionRequestId = 0;
 let targetFolderRequestId = 0;
+let ocrRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
@@ -212,6 +214,28 @@ const rulesPanel = DocSorterRulesPanel.createRulesPanel({
   onDeleteRule: deleteUserRule
 });
 
+const ocrPanel = DocSorterOcrPanel.createOcrPanel({
+  getState: () => state.ocr,
+  onDraftChange: updateOcrDraft,
+  onChooseTesseractExecutable: () => {
+    void selectTesseractExecutableForOcr();
+  },
+  onChooseTessdataDirectory: () => {
+    void selectTessdataDirectoryForOcr();
+  },
+  onSaveSettings: () => {
+    void saveOcrSettingsFromPanel();
+  },
+  onTestEngine: () => {
+    void testOcrEngineFromPanel();
+  },
+  onRefreshStatus: () => {
+    void refreshOcrStatus();
+  },
+  isActionsDisabled: isClassificationBusy,
+  formatDate
+});
+
 void window.docSorter.getVersion().then((value) => {
   if (version) {
     version.textContent = `v${value}`;
@@ -221,6 +245,7 @@ void window.docSorter.getVersion().then((value) => {
 void refreshLastUndoableAction();
 void refreshRecentHistory();
 void refreshNamingRulesStatus();
+void refreshOcrStatus();
 
 selectSourceButton?.addEventListener("click", () => {
   void selectSourceDirectory();
@@ -281,6 +306,7 @@ function render(): void {
   renderPreview();
   renderDetails();
   renderRulesPanel();
+  renderOcrPanel();
   renderHistory();
   renderShortcutHelp();
 }

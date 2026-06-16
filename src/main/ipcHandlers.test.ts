@@ -20,6 +20,7 @@ import type {
   TargetFolderResult
 } from "../naming/targetFolder";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
+import type { OcrResult, OcrStatus } from "../ocr/ocrTypes";
 import type { PreviewDataResult } from "../preview/previewTypes";
 import type {
   NamingRulesStatus,
@@ -42,6 +43,8 @@ const TARGET_PATH = "C:\\target";
 const TARGET_FOLDER = "Vehicules/Renault-Captur";
 const USER_DATA_PATH = "C:\\user-data";
 const JOURNAL_PATH = path.join(USER_DATA_PATH, "history", "actions.jsonl");
+const TESSERACT_PATH = "C:\\Tools\\Tesseract-OCR\\tesseract.exe";
+const TESSDATA_PATH = "C:\\Tools\\Tesseract-OCR\\tessdata";
 const DOCUMENT_PATH = path.join(SOURCE_PATH, "document.pdf");
 const CLASSIFIED_PATH = path.join(TARGET_PATH, "Vehicules", "Renault-Captur", "document-classe.pdf");
 
@@ -107,6 +110,21 @@ describe("sensitive IPC handler contract", () => {
     expect(contractFor(IPC_CHANNELS.rulesSaveUserCatalog)).toMatchObject({
       acceptsRendererPath: false,
       usesUserDataPath: true
+    });
+    expect(contractFor(IPC_CHANNELS.ocrGetStatus)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "getOcrStatus"
+    });
+    expect(contractFor(IPC_CHANNELS.ocrSaveSettings)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "saveOcrSettings"
+    });
+    expect(contractFor(IPC_CHANNELS.ocrTestEngine)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "testOcrEngine"
     });
   });
 });
@@ -315,6 +333,58 @@ describe("registerIpcHandlers", () => {
     expect(services.saveUserRulesCatalog).toHaveBeenCalledWith(USER_DATA_PATH, catalog);
     expect(harness.appPathCalls).toEqual(["userData", "userData", "userData", "userData", "userData"]);
   });
+
+  it("keeps OCR configuration and tests under app userData", async () => {
+    const services = createServices();
+    const harness = createHarness({ services });
+    const settings = {
+      tesseractPath: TESSERACT_PATH,
+      tessdataPath: TESSDATA_PATH,
+      language: "fra",
+      psm: 3
+    };
+
+    await harness.invoke(IPC_CHANNELS.ocrGetStatus, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.ocrSaveSettings, settings, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.ocrTestEngine, "C:\\renderer-config");
+
+    expect(services.getOcrStatus).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.saveOcrSettings).toHaveBeenCalledWith(USER_DATA_PATH, settings);
+    expect(services.testOcrEngine).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(harness.appPathCalls).toEqual(["userData", "userData", "userData"]);
+  });
+
+  it("selects OCR paths through reviewed dialogs only", async () => {
+    const harness = createHarness({
+      dialogResponses: [
+        { canceled: false, filePaths: [TESSERACT_PATH] },
+        { canceled: false, filePaths: [TESSDATA_PATH] }
+      ]
+    });
+
+    const executable = await harness.invoke(
+      IPC_CHANNELS.ocrSelectTesseractExecutable,
+      "C:\\renderer-path.exe"
+    );
+    const tessdata = await harness.invoke(
+      IPC_CHANNELS.ocrSelectTessdataDirectory,
+      "C:\\renderer-tessdata"
+    );
+
+    expect(executable).toEqual({ ok: true, value: { path: TESSERACT_PATH } });
+    expect(tessdata).toEqual({ ok: true, value: { path: TESSDATA_PATH } });
+    expect(harness.dialogCalls).toEqual([
+      {
+        title: "Choisir tesseract.exe",
+        properties: ["openFile"],
+        filters: [{ name: "Tesseract", extensions: ["exe"] }]
+      },
+      {
+        title: "Choisir le dossier tessdata",
+        properties: ["openDirectory"]
+      }
+    ]);
+  });
 });
 
 function contractFor(channel: IpcChannel) {
@@ -332,7 +402,11 @@ function createHarness(options: {
   dialogResponses?: Array<{ canceled: boolean; filePaths: string[] }>;
 } = {}) {
   const handlers = new Map<IpcChannel, IpcHandlerListener>();
-  const dialogCalls: Array<{ title: string; properties: ["openDirectory"] }> = [];
+  const dialogCalls: Array<{
+    title: string;
+    properties: Array<"openDirectory" | "openFile">;
+    filters?: Array<{ name: string; extensions: string[] }>;
+  }> = [];
   const appPathCalls: string[] = [];
   const dialogResponses = [...(options.dialogResponses ?? [])];
   const app: AppLike = {
@@ -527,6 +601,18 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
         bytes: new ArrayBuffer(0)
       }
     } as PreviewDataResult)),
+    getOcrStatus: vi.fn(async () => ({
+      ok: true,
+      value: createOcrStatus()
+    } as OcrResult<OcrStatus>)),
+    saveOcrSettings: vi.fn(async () => ({
+      ok: true,
+      value: createOcrStatus()
+    } as OcrResult<OcrStatus>)),
+    testOcrEngine: vi.fn(async () => ({
+      ok: true,
+      value: createOcrStatus()
+    } as OcrResult<OcrStatus>)),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()
@@ -558,6 +644,31 @@ function createRulesStatus(): NamingRulesStatus {
     defaultRuleCount: 0,
     userRuleCount: 0,
     warning: null
+  };
+}
+
+function createOcrStatus(): OcrStatus {
+  return {
+    status: "configured",
+    settingsPath: path.join(USER_DATA_PATH, "config", "ocr-settings.json"),
+    settings: {
+      tesseractPath: TESSERACT_PATH,
+      tessdataPath: TESSDATA_PATH,
+      language: "fra",
+      psm: 3,
+      lastTestedAt: null,
+      detectedVersion: null
+    },
+    tesseractPath: TESSERACT_PATH,
+    tessdataPath: TESSDATA_PATH,
+    language: "fra",
+    psm: 3,
+    detectedVersion: null,
+    lastTestedAt: null,
+    availableLanguages: [],
+    missingLanguages: [],
+    message: "OCR local configuré. Test Tesseract disponible.",
+    error: null
   };
 }
 

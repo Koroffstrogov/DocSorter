@@ -9,6 +9,12 @@ import type { ActionJournalEntry } from "../history/historyTypes";
 import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
 import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
+import type {
+  OcrPathSelection,
+  OcrResult,
+  OcrSettingsInput,
+  OcrStatus
+} from "../ocr/ocrTypes";
 import type { PreviewData } from "../preview/previewTypes";
 import type {
   TargetFolderCreation,
@@ -47,6 +53,11 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "getLastUndoableAction",
   "analyzeExactDuplicates",
   "extractTextFromActivePdf",
+  "getOcrStatus",
+  "selectTesseractExecutable",
+  "selectTessdataDirectory",
+  "saveOcrSettings",
+  "testOcrEngine",
   "getRecentHistory",
   "getRulesStatus",
   "getUserRulesCatalog",
@@ -131,6 +142,20 @@ export function createPreloadApi(ipc: IpcInvoker) {
         IPC_CHANNELS.extractionExtractPdfText,
         documentPath
       ) as Promise<PdfTextExtractionResult>,
+    getOcrStatus: (): Promise<OcrResult<OcrStatus>> =>
+      ipc.invoke(IPC_CHANNELS.ocrGetStatus) as Promise<OcrResult<OcrStatus>>,
+    selectTesseractExecutable: (): Promise<OcrResult<OcrPathSelection | null>> =>
+      ipc.invoke(IPC_CHANNELS.ocrSelectTesseractExecutable) as Promise<
+        OcrResult<OcrPathSelection | null>
+      >,
+    selectTessdataDirectory: (): Promise<OcrResult<OcrPathSelection | null>> =>
+      ipc.invoke(IPC_CHANNELS.ocrSelectTessdataDirectory) as Promise<
+        OcrResult<OcrPathSelection | null>
+      >,
+    saveOcrSettings: (settings: OcrSettingsInput): Promise<OcrResult<OcrStatus>> =>
+      ipc.invoke(IPC_CHANNELS.ocrSaveSettings, settings) as Promise<OcrResult<OcrStatus>>,
+    testOcrEngine: (): Promise<OcrResult<OcrStatus>> =>
+      ipc.invoke(IPC_CHANNELS.ocrTestEngine) as Promise<OcrResult<OcrStatus>>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
         ActionJournalReadResult<ActionJournalEntry[]>

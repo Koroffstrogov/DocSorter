@@ -114,6 +114,22 @@ function createIdleNamingSuggestionsState(): NamingSuggestionsState {
   };
 }
 
+function createIdleOcrState(): OcrState {
+  return {
+    panelStatus: "loading",
+    status: null,
+    draft: {
+      tesseractPath: "",
+      tessdataPath: "",
+      language: "fra",
+      psm: "3"
+    },
+    message: "Chargement de la configuration OCR locale...",
+    error: null,
+    dirty: false
+  };
+}
+
 function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
   return {
     status: "idle",

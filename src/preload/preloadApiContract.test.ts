@@ -72,6 +72,16 @@ describe("preload API surface", () => {
     await api.getLastUndoableAction();
     await api.analyzeExactDuplicates();
     await api.extractTextFromActivePdf("C:\\source\\document.pdf");
+    await api.getOcrStatus();
+    await api.selectTesseractExecutable();
+    await api.selectTessdataDirectory();
+    await api.saveOcrSettings({
+      tesseractPath: "C:\\Tools\\Tesseract-OCR\\tesseract.exe",
+      tessdataPath: "C:\\Tools\\Tesseract-OCR\\tessdata",
+      language: "fra",
+      psm: 3
+    });
+    await api.testOcrEngine();
     await api.getRecentHistory(8);
     await api.getRulesStatus();
     await api.getUserRulesCatalog();
@@ -102,6 +112,11 @@ describe("preload API surface", () => {
       IPC_CHANNELS.classificationGetLastUndoableAction,
       IPC_CHANNELS.duplicatesAnalyzeExact,
       IPC_CHANNELS.extractionExtractPdfText,
+      IPC_CHANNELS.ocrGetStatus,
+      IPC_CHANNELS.ocrSelectTesseractExecutable,
+      IPC_CHANNELS.ocrSelectTessdataDirectory,
+      IPC_CHANNELS.ocrSaveSettings,
+      IPC_CHANNELS.ocrTestEngine,
       IPC_CHANNELS.historyGetRecent,
       IPC_CHANNELS.rulesGetStatus,
       IPC_CHANNELS.rulesGetUserCatalog,

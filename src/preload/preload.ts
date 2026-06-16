@@ -26,6 +26,11 @@ const api: DocSorterApi = {
   analyzeExactDuplicates: () => ipcRenderer.invoke("duplicates:analyzeExact"),
   extractTextFromActivePdf: (documentPath) =>
     ipcRenderer.invoke("extraction:extractPdfText", documentPath),
+  getOcrStatus: () => ipcRenderer.invoke("ocr:getStatus"),
+  selectTesseractExecutable: () => ipcRenderer.invoke("ocr:selectTesseractExecutable"),
+  selectTessdataDirectory: () => ipcRenderer.invoke("ocr:selectTessdataDirectory"),
+  saveOcrSettings: (settings) => ipcRenderer.invoke("ocr:saveSettings", settings),
+  testOcrEngine: () => ipcRenderer.invoke("ocr:testEngine"),
   getRecentHistory: (limit) => ipcRenderer.invoke("history:getRecent", limit),
   getRulesStatus: () => ipcRenderer.invoke("rules:getStatus"),
   getUserRulesCatalog: () => ipcRenderer.invoke("rules:getUserCatalog"),

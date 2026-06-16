@@ -58,6 +58,17 @@ import {
   type PreviewAccessContext
 } from "../preview/previewService";
 import type { PreviewDataResult } from "../preview/previewTypes";
+import { testOcrEngine as testOcrEngineService } from "../ocr/tesseractCli";
+import {
+  getOcrStatus as getOcrStatusService,
+  saveOcrSettings as saveOcrSettingsService
+} from "../ocr/tesseractConfig";
+import type {
+  OcrPathSelection,
+  OcrResult,
+  OcrSettingsInput,
+  OcrStatus
+} from "../ocr/ocrTypes";
 import {
   loadMergedNamingRulesCatalog as loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog as loadUserRulesCatalogService,
@@ -85,7 +96,8 @@ export interface AppLike {
 export interface DialogLike {
   showOpenDialog: (options: {
     title: string;
-    properties: ["openDirectory"];
+    properties: Array<"openDirectory" | "openFile">;
+    filters?: Array<{ name: string; extensions: string[] }>;
   }) => Promise<{
     canceled: boolean;
     filePaths: string[];
@@ -163,6 +175,12 @@ export interface IpcHandlerServices {
     documentPath: string | undefined,
     context: PreviewAccessContext
   ) => Promise<PreviewDataResult>;
+  getOcrStatus: (userDataPath: string) => Promise<OcrResult<OcrStatus>>;
+  saveOcrSettings: (
+    userDataPath: string,
+    settings: OcrSettingsInput
+  ) => Promise<OcrResult<OcrStatus>>;
+  testOcrEngine: (userDataPath: string) => Promise<OcrResult<OcrStatus>>;
   loadMergedNamingRulesCatalog: (
     userDataPath: string
   ) => Promise<UserRulesResult<NamingRulesStatus>>;
@@ -256,6 +274,46 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     usesMainTarget: false,
     usesUserDataPath: true,
     serviceName: "extractTextFromPdfDocument"
+  },
+  {
+    channel: IPC_CHANNELS.ocrGetStatus,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "getOcrStatus"
+  },
+  {
+    channel: IPC_CHANNELS.ocrSelectTesseractExecutable,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: false,
+    serviceName: "dialog.showOpenDialog"
+  },
+  {
+    channel: IPC_CHANNELS.ocrSelectTessdataDirectory,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: false,
+    serviceName: "dialog.showOpenDialog"
+  },
+  {
+    channel: IPC_CHANNELS.ocrSaveSettings,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "saveOcrSettings"
+  },
+  {
+    channel: IPC_CHANNELS.ocrTestEngine,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "testOcrEngine"
   },
   {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
@@ -366,6 +424,9 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   analyzeExactDuplicates: analyzeExactDuplicatesService,
   extractTextFromPdfDocument: extractTextFromPdfDocumentService,
   getPreviewData: getPreviewDataService,
+  getOcrStatus: getOcrStatusService,
+  saveOcrSettings: saveOcrSettingsService,
+  testOcrEngine: testOcrEngineService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
   saveUserRulesCatalog: saveUserRulesCatalogService
@@ -524,6 +585,21 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
       userDataPath: options.app.getPath("userData"),
       rulesCatalog: await getRulesCatalogForAnalysis(options.app, services)
     })
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrGetStatus, () =>
+    services.getOcrStatus(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrSelectTesseractExecutable, () =>
+    selectTesseractExecutable(options.dialog)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrSelectTessdataDirectory, () =>
+    selectTessdataDirectory(options.dialog)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrSaveSettings, (_event, settings: unknown) =>
+    services.saveOcrSettings(options.app.getPath("userData"), settings as OcrSettingsInput)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrTestEngine, () =>
+    services.testOcrEngine(options.app.getPath("userData"))
   );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(
@@ -719,6 +795,64 @@ async function selectDirectory(
       error: {
         code: "UNKNOWN_ERROR",
         message: "Impossible d'ouvrir le sélecteur de dossier."
+      }
+    };
+  }
+}
+
+async function selectTesseractExecutable(
+  dialog: DialogLike
+): Promise<OcrResult<OcrPathSelection | null>> {
+  return selectOcrPath(dialog, {
+    title: "Choisir tesseract.exe",
+    properties: ["openFile"],
+    filters: [
+      {
+        name: "Tesseract",
+        extensions: ["exe"]
+      }
+    ],
+    errorMessage: "Impossible d'ouvrir le sélecteur de tesseract.exe."
+  });
+}
+
+async function selectTessdataDirectory(
+  dialog: DialogLike
+): Promise<OcrResult<OcrPathSelection | null>> {
+  return selectOcrPath(dialog, {
+    title: "Choisir le dossier tessdata",
+    properties: ["openDirectory"],
+    errorMessage: "Impossible d'ouvrir le sélecteur de dossier tessdata."
+  });
+}
+
+async function selectOcrPath(
+  dialog: DialogLike,
+  options: {
+    title: string;
+    properties: Array<"openDirectory" | "openFile">;
+    filters?: Array<{ name: string; extensions: string[] }>;
+    errorMessage: string;
+  }
+): Promise<OcrResult<OcrPathSelection | null>> {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: options.title,
+      properties: options.properties,
+      ...(options.filters ? { filters: options.filters } : {})
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { ok: true, value: null };
+    }
+
+    return { ok: true, value: { path: result.filePaths[0] } };
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: options.errorMessage
       }
     };
   }
