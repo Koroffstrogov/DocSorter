@@ -435,10 +435,6 @@ const zoomInButton = document.querySelector<HTMLButtonElement>("#zoom-in");
 const rotatePreviewButton = document.querySelector<HTMLButtonElement>("#rotate-preview");
 const statusText = document.querySelector<HTMLElement>("#status-text");
 const documentDetails = document.querySelector<HTMLElement>("#document-details");
-const duplicatePanel = document.querySelector<HTMLElement>("#duplicate-panel");
-const duplicateDetails = document.querySelector<HTMLElement>("#duplicate-details");
-const ignoreDuplicateButton = document.querySelector<HTMLButtonElement>("#ignore-duplicate");
-const keepDuplicateButton = document.querySelector<HTMLButtonElement>("#keep-duplicate");
 const textExtractionPanel = document.querySelector<HTMLElement>("#text-extraction-panel");
 const extractPdfTextButton = document.querySelector<HTMLButtonElement>("#extract-pdf-text");
 const textExtractionDetails = document.querySelector<HTMLElement>("#text-extraction-details");
@@ -492,6 +488,17 @@ const classificationSummary = document.querySelector<HTMLElement>("#classificati
 const refreshHistoryButton = document.querySelector<HTMLButtonElement>("#refresh-history");
 const historyState = document.querySelector<HTMLElement>("#history-state");
 const historyList = document.querySelector<HTMLOListElement>("#history-list");
+
+const duplicatePanel = DocSorterDuplicatePanel.createDuplicatePanel({
+  getState: () => ({
+    activeDocument: getActiveDocument(),
+    documents: state.documents,
+    duplicates: state.duplicates
+  }),
+  onSelectDocumentByPath: selectDocumentByPath,
+  onIgnoreActiveDuplicate: ignoreActiveDuplicateForSession,
+  isActionsDisabled: isClassificationBusy
+});
 
 const queuePanel = DocSorterQueuePanel.createQueuePanel<DocumentItem>({
   getState: () => ({
@@ -634,14 +641,6 @@ executeClassificationButton?.addEventListener("click", () => {
 
 undoLastActionButton?.addEventListener("click", () => {
   void undoLastClassificationAction();
-});
-
-ignoreDuplicateButton?.addEventListener("click", () => {
-  ignoreActiveDuplicateForSession();
-});
-
-keepDuplicateButton?.addEventListener("click", () => {
-  ignoreActiveDuplicateForSession();
 });
 
 extractPdfTextButton?.addEventListener("click", () => {
@@ -1408,119 +1407,15 @@ function ignoreActiveDuplicateForSession(): void {
 }
 
 function renderDuplicatePanel(): void {
-  if (!duplicatePanel || !duplicateDetails) {
-    return;
-  }
-
-  const activeDocument = getActiveDocument();
-  const matches = activeDocument ? getVisibleDuplicateMatchesForDocument(activeDocument.filePath) : [];
-  if (!activeDocument || matches.length === 0) {
-    duplicatePanel.hidden = true;
-    duplicateDetails.replaceChildren();
-    return;
-  }
-
-  duplicatePanel.hidden = false;
-  duplicateDetails.replaceChildren(
-    createDuplicateSummary(matches),
-    ...matches.map((match) => createDuplicateMatchItem(match, activeDocument.filePath))
-  );
-
-  const actionsDisabled = isClassificationBusy();
-  if (ignoreDuplicateButton) {
-    ignoreDuplicateButton.disabled = actionsDisabled;
-  }
-  if (keepDuplicateButton) {
-    keepDuplicateButton.disabled = actionsDisabled;
-  }
-}
-
-function createDuplicateSummary(matches: ExactDuplicateMatch[]): HTMLParagraphElement {
-  const summary = document.createElement("p");
-  summary.className = "duplicate-summary";
-  summary.textContent = `${matches.length} correspondance${
-    matches.length > 1 ? "s" : ""
-  } exacte${matches.length > 1 ? "s" : ""} par hash SHA-256. Aucune suppression automatique.`;
-  return summary;
-}
-
-function createDuplicateMatchItem(match: ExactDuplicateMatch, activeFilePath: string): HTMLDivElement {
-  const item = document.createElement("div");
-  const title = document.createElement("strong");
-  const description = document.createElement("p");
-  const hash = document.createElement("small");
-
-  item.className = "duplicate-match";
-  hash.textContent = `SHA-256 ${shortHash(match.hash)}`;
-
-  if (match.type === "source-queue") {
-    const otherFiles = match.files.filter((file) => file.filePath !== activeFilePath);
-    title.textContent = "Doublon dans la file source";
-    description.textContent = `Aussi présent : ${formatDuplicateNames(otherFiles)}`;
-    item.title = otherFiles.map((file) => file.filePath).join("\n");
-    item.append(title, description);
-    const sourceLinks = createDuplicateSourceLinks(otherFiles);
-    if (sourceLinks) {
-      item.append(sourceLinks);
-    }
-    item.append(hash);
-    return item;
-  }
-
-  title.textContent = "Doublon déjà classé";
-  description.textContent = `${match.historyFile.classifiedName} depuis ${match.historyFile.originalName}`;
-  item.title = match.historyFile.filePath;
-  item.append(title, description, hash);
-  return item;
-}
-
-function createDuplicateSourceLinks(files: DuplicateFileReference[]): HTMLDivElement | null {
-  const availableFiles = files.filter((file) =>
-    state.documents.some((documentItem) => documentItem.filePath === file.filePath)
-  );
-  if (availableFiles.length === 0) {
-    return null;
-  }
-
-  const links = document.createElement("div");
-  links.className = "duplicate-source-links";
-
-  availableFiles.forEach((file) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = file.name;
-    button.title = file.filePath;
-    button.addEventListener("click", () => {
-      selectDocumentByPath(file.filePath);
-    });
-    links.append(button);
-  });
-
-  return links;
+  duplicatePanel.render();
 }
 
 function getVisibleDuplicateMatchesForDocument(filePath: string): ExactDuplicateMatch[] {
-  if (state.duplicates.ignoredFilePaths.includes(filePath)) {
-    return [];
-  }
-
-  return getDuplicateMatchesForDocument(filePath);
-}
-
-function getDuplicateMatchesForDocument(filePath: string): ExactDuplicateMatch[] {
-  if (state.duplicates.status !== "ready") {
-    return [];
-  }
-
-  return state.duplicates.matches.filter((match) =>
-    match.type === "source-queue"
-      ? match.files.some((file) => file.filePath === filePath)
-      : match.sourceFile.filePath === filePath
-  );
+  return duplicatePanel.getVisibleDuplicateMatchesForDocument(filePath);
 }
 
 function documentHasVisibleDuplicate(filePath: string): boolean {
-  return getVisibleDuplicateMatchesForDocument(filePath).length > 0;
+  return duplicatePanel.hasVisibleDuplicate(filePath);
 }
 
 function documentQueueStatusLabel(documentItem: DocumentItem): string {
@@ -1573,18 +1468,6 @@ function countDuplicateSourceDocuments(matches: ExactDuplicateMatch[]): number {
   }
 
   return filePaths.size;
-}
-
-function formatDuplicateNames(files: DuplicateFileReference[]): string {
-  if (files.length === 0) {
-    return "aucun autre document visible";
-  }
-
-  return files.map((file) => file.name).join(", ");
-}
-
-function shortHash(hash: string): string {
-  return hash.length > 16 ? `${hash.slice(0, 16)}...` : hash;
 }
 
 async function extractTextFromActivePdf(): Promise<void> {
