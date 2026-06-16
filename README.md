@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI et OCR manuel des images JPG/JPEG/PNG.
+Lot 7 + 8A + OCR-2 + IA-0 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG et contrat de classification IA avec provider simulé uniquement.
 
 ## Commandes
 
@@ -111,6 +111,10 @@ npm run dev
 - refus des images trop volumineuses pour OCR ;
 - affichage borné du texte OCR et réutilisation manuelle pour les suggestions locales ;
 - cache local des résultats OCR image sous `userData/cache/analysis`, invalidé par chemin, taille, date de modification, moteur, version Tesseract, langue et PSM.
+- contrat IA local strict pour proposer date, type, sujet, mots-clés, dossier, score et raisons ;
+- provider IA simulé déterministe, sans modèle réel, sans réseau et sans prompt modèle ;
+- validation stricte des sorties IA : score borné, date valide, dossier cible relatif, listes bornées et source contrôlée ;
+- orchestrateur IA pur qui borne l'entrée, valide la sortie et n'applique jamais automatiquement les suggestions.
 
 ## Convention de nommage
 
@@ -243,6 +247,22 @@ app.getPath("userData")/cache/analysis
 
 Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli`, la version Tesseract détectée, la langue, le PSM, le texte OCR borné, l'extrait affichable, les suggestions locales calculées et la date d'analyse. Elle n'est pas écrite dans la source, la cible ou le journal. Si le cache est corrompu, il est ignoré et l'OCR est relancé.
 
+## IA locale simulée
+
+IA-0 prépare seulement un contrat de classification pour une future IA locale. Aucun modèle réel n'est branché : pas d'Ollama, pas de `llama.cpp`, pas d'appel réseau, pas de prompt modèle et pas de nouvelle dépendance.
+
+L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, les suggestions de règles locales déjà calculées, les dossiers relatifs connus, la convention de nommage et une date ou année détectée.
+
+La sortie IA validée peut proposer uniquement :
+
+```text
+date?, documentType?, subject?, keywords[], targetFolder?, confidence, reasons[], warnings[], source="simulated-ai"
+```
+
+Le validateur refuse les objets non JSON, les champs inconnus, les scores hors `0..100`, les dates invalides et les dossiers absolus, trop profonds ou avec traversée `..`. Les types, sujets et mots-clés sont normalisés avec la logique de nommage existante.
+
+Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Ces suggestions ne remplacent pas les règles utilisateur, ne modifient aucun fichier et ne déclenchent jamais de classement.
+
 ## Raccourcis clavier
 
 Les raccourcis globaux sont désactivés dans les champs de saisie, les listes de sélection et les zones `contenteditable`. `Ctrl+Z` dans un champ texte reste l'annulation native de saisie.
@@ -273,8 +293,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas de suppression, remplacement ou fusion de doublons ;
 - pas de doublons probables ou similaires ;
 - pas de recherche globale dans les documents classés ;
-- pas de recherche plein texte dans les PDF ou images ;
-- pas d'extraction texte pour les images ;
+- pas de recherche plein texte globale dans les PDF ou images classés ;
 - pas d'application automatique des suggestions ;
 - pas d'éditeur JSON avancé ;
 - pas de gestion multi-profils de règles ;
@@ -291,6 +310,7 @@ Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR-3 pourra ajouter l'OCR limité des PDF scannés, dans un lot séparé et explicitement validé ;
+- IA-1 pourra ajouter un connecteur Ollama local optionnel, dans un lot séparé et explicitement validé ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
