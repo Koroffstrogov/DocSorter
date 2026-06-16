@@ -19,9 +19,23 @@ function resetTextExtractionState(): void {
   textExtractionRequestId += 1;
   state.textExtraction = createIdleTextExtractionState();
   resetNamingSuggestionsState();
+  resetAiSuggestionState();
 }
 
 function resetNamingSuggestionsState(): void {
   state.namingSuggestions = createIdleNamingSuggestionsState();
+}
+
+function resetAiSuggestionState(): void {
+  aiSuggestionRequestId += 1;
+  state.ai = {
+    ...state.ai,
+    panelStatus:
+      state.ai.panelStatus === "analyzing" || state.ai.panelStatus === "suggestion-ready"
+        ? "ready"
+        : state.ai.panelStatus,
+    suggestion: null,
+    suggestionDocumentPath: null
+  };
 }
 

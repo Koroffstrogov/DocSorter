@@ -36,6 +36,8 @@ const api: DocSorterApi = {
   getAiSettings: () => ipcRenderer.invoke("ai:getSettings"),
   saveAiSettings: (settings) => ipcRenderer.invoke("ai:saveSettings", settings),
   testAiConnection: () => ipcRenderer.invoke("ai:testConnection"),
+  runAiSuggestionForActiveDocument: (documentPath, textContext) =>
+    ipcRenderer.invoke("ai:runSuggestion", documentPath, textContext),
   getRecentHistory: (limit) => ipcRenderer.invoke("history:getRecent", limit),
   getRulesStatus: () => ipcRenderer.invoke("rules:getStatus"),
   getUserRulesCatalog: () => ipcRenderer.invoke("rules:getUserCatalog"),

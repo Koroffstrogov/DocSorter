@@ -14,6 +14,12 @@ export interface OllamaConnectionTest {
   message: string;
 }
 
+export interface OllamaGeneration {
+  responseText: string;
+  model: string;
+  generatedAt: string;
+}
+
 export interface OllamaHttpResponse {
   ok: boolean;
   status: number;
@@ -23,8 +29,10 @@ export interface OllamaHttpResponse {
 export type OllamaHttpClient = (
   url: string,
   options: {
-    method: "GET";
+    method: "GET" | "POST";
     signal: AbortSignal;
+    headers?: Record<string, string>;
+    body?: string;
   }
 ) => Promise<OllamaHttpResponse>;
 
@@ -39,6 +47,10 @@ interface OllamaVersionResponse {
 
 interface OllamaTagsResponse {
   models: Array<{ name: string }>;
+}
+
+interface OllamaGenerateResponse {
+  response: string;
 }
 
 export async function testOllamaConnection(
@@ -96,18 +108,78 @@ export async function testOllamaConnection(
   };
 }
 
+export async function generateOllamaCompletion(
+  settings: AiSettings,
+  prompt: string,
+  options: TestOllamaConnectionOptions = {}
+): Promise<AiSettingsResult<OllamaGeneration>> {
+  if (!settings.enabled) {
+    return aiFailure("AI_PROVIDER_DISABLED", "IA locale désactivée.");
+  }
+
+  const model = settings.model.trim();
+  if (!model) {
+    return aiFailure("AI_CONFIG_INVALID", "Modèle Ollama non renseigné.");
+  }
+
+  const generatedAt = (options.now ?? (() => new Date()))().toISOString();
+  const result = await fetchOllamaJson<OllamaGenerateResponse>(
+    settings,
+    "api/generate",
+    options.fetchClient ?? defaultFetchClient,
+    {
+      method: "POST",
+      body: {
+        model,
+        prompt,
+        stream: false,
+        format: "json"
+      }
+    }
+  );
+
+  if (!result.ok) {
+    return result;
+  }
+
+  if (typeof result.value.response !== "string" || !result.value.response.trim()) {
+    return aiFailure("AI_CONNECTION_FAILED", "Réponse Ollama locale inexploitable.");
+  }
+
+  return {
+    ok: true,
+    value: {
+      responseText: result.value.response,
+      model,
+      generatedAt
+    }
+  };
+}
+
 async function fetchOllamaJson<TValue>(
   settings: AiSettings,
   endpoint: string,
-  fetchClient: OllamaHttpClient
+  fetchClient: OllamaHttpClient,
+  options: {
+    method?: "GET" | "POST";
+    body?: unknown;
+  } = {}
 ): Promise<AiSettingsResult<TValue>> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), settings.timeoutMs);
 
   try {
     const response = await fetchClient(new URL(endpoint, settings.baseUrl).href, {
-      method: "GET",
-      signal: controller.signal
+      method: options.method ?? "GET",
+      signal: controller.signal,
+      ...(options.body
+        ? {
+            headers: {
+              "content-type": "application/json"
+            },
+            body: JSON.stringify(options.body)
+          }
+        : {})
     });
     if (!response.ok) {
       return aiFailure("AI_CONNECTION_FAILED", `Ollama local a répondu HTTP ${response.status}.`);
@@ -143,7 +215,12 @@ function normalizeModels(value: OllamaTagsResponse): string[] {
 
 function defaultFetchClient(
   url: string,
-  options: { method: "GET"; signal: AbortSignal }
+  options: {
+    method: "GET" | "POST";
+    signal: AbortSignal;
+    headers?: Record<string, string>;
+    body?: string;
+  }
 ): Promise<OllamaHttpResponse> {
   return fetch(url, options);
 }

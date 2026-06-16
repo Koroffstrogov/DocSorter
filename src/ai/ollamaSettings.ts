@@ -14,6 +14,11 @@ export type AiSettingsErrorCode =
   | "AI_CONNECTION_FAILED"
   | "AI_VERSION_FAILED"
   | "AI_MODEL_NOT_FOUND"
+  | "AI_DOCUMENT_NOT_SELECTED"
+  | "AI_DOCUMENT_NOT_IN_QUEUE"
+  | "AI_DOCUMENT_NOT_FOUND"
+  | "AI_TEXT_NOT_AVAILABLE"
+  | "AI_OUTPUT_INVALID"
   | "UNKNOWN_ERROR";
 
 export interface AiSettingsError {
@@ -254,6 +259,16 @@ export function aiErrorMessage(code: AiSettingsErrorCode): string {
       return "Version Ollama locale indisponible.";
     case "AI_MODEL_NOT_FOUND":
       return "Modèle Ollama absent.";
+    case "AI_DOCUMENT_NOT_SELECTED":
+      return "Aucun document sélectionné pour l'analyse IA.";
+    case "AI_DOCUMENT_NOT_IN_QUEUE":
+      return "Document non présent dans la dernière file scannée.";
+    case "AI_DOCUMENT_NOT_FOUND":
+      return "Document indisponible pour l'analyse IA.";
+    case "AI_TEXT_NOT_AVAILABLE":
+      return "Texte extrait requis avant l'analyse IA locale.";
+    case "AI_OUTPUT_INVALID":
+      return "Suggestion IA invalide.";
     case "UNKNOWN_ERROR":
       return "Erreur IA locale inconnue.";
   }

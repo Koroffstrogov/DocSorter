@@ -1,6 +1,11 @@
 import path from "node:path";
 
 import {
+  runOllamaSuggestionForDocument as runOllamaSuggestionForDocumentService,
+  type AiDocumentSuggestion,
+  type AiDocumentTextContext
+} from "../ai/ollamaDocumentSuggestion";
+import {
   getAiStatus as getAiStatusService,
   loadAiSettings as loadAiSettingsService,
   saveAiSettings as saveAiSettingsService,
@@ -211,6 +216,15 @@ export interface IpcHandlerServices {
     settings: AiSettingsInput
   ) => Promise<AiSettingsResult<AiStatus>>;
   testAiConnection: (userDataPath: string) => Promise<AiSettingsResult<AiConnectionTestStatus>>;
+  runAiSuggestionForDocument: (options: {
+    documentPath: string;
+    textContext: AiDocumentTextContext | null;
+    queuedDocuments: Iterable<DuplicateSourceDocument>;
+    queuedDocumentPaths: Iterable<string>;
+    userDataPath: string;
+    rulesCatalog: NamingSuggestionRulesCatalog;
+    knownRelativeFolders: string[];
+  }) => Promise<AiSettingsResult<AiDocumentSuggestion>>;
   loadMergedNamingRulesCatalog: (
     userDataPath: string
   ) => Promise<UserRulesResult<NamingRulesStatus>>;
@@ -386,6 +400,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "testAiConnection"
   },
   {
+    channel: IPC_CHANNELS.aiRunSuggestion,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: true,
+    usesUserDataPath: true,
+    serviceName: "runAiSuggestionForDocument"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -502,6 +524,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   loadAiSettings: loadAiSettingsService,
   saveAiSettings: saveAiSettingsService,
   testAiConnection: testAiConnectionService,
+  runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
   saveUserRulesCatalog: saveUserRulesCatalogService
@@ -696,6 +719,19 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   options.ipcMain.handle(IPC_CHANNELS.aiTestConnection, () =>
     services.testAiConnection(options.app.getPath("userData"))
   );
+  options.ipcMain.handle(
+    IPC_CHANNELS.aiRunSuggestion,
+    async (_event, documentPath: unknown, textContext: unknown) =>
+      services.runAiSuggestionForDocument({
+        documentPath: typeof documentPath === "string" ? documentPath : "",
+        textContext: readAiDocumentTextContext(textContext),
+        queuedDocuments: state.queuedDocuments,
+        queuedDocumentPaths: state.queuedDocumentPaths,
+        userDataPath: options.app.getPath("userData"),
+        rulesCatalog: await getRulesCatalogForAnalysis(options.app, services),
+        knownRelativeFolders: await getKnownTargetFoldersForAi(state, services)
+      })
+  );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(
       getJournalFilePath(options.app, services),
@@ -867,6 +903,44 @@ async function getRulesCatalogForAnalysis(
   }
 
   return globalThis.DocSorterNamingSuggestionRulesCatalog.getDefaultNamingSuggestionRulesCatalog();
+}
+
+async function getKnownTargetFoldersForAi(
+  state: MainProcessAppState,
+  services: IpcHandlerServices
+): Promise<string[]> {
+  const folders = new Set<string>();
+  if (state.selectedTargetFolder) {
+    folders.add(state.selectedTargetFolder);
+  }
+
+  const listedFolders = await services.listTargetSubdirectories(state.selectedTargetPath);
+  if (listedFolders.ok) {
+    listedFolders.value.folders.forEach((folder) => folders.add(folder));
+  }
+
+  return Array.from(folders).sort((left, right) =>
+    left.localeCompare(right, "fr", { sensitivity: "base" })
+  );
+}
+
+function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Partial<AiDocumentTextContext>;
+  if (
+    (candidate.source !== "pdf-native" && candidate.source !== "tesseract-cli") ||
+    typeof candidate.excerpt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    source: candidate.source,
+    excerpt: candidate.excerpt
+  };
 }
 
 async function selectDirectory(

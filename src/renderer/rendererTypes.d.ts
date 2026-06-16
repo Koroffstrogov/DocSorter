@@ -31,7 +31,14 @@ type TargetFolderStatus =
 type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
 type DuplicateAnalysisStatus = "idle" | "analyzing" | "ready" | "error";
 type OcrPanelStatus = "loading" | "ready" | "saving" | "testing" | "error";
-type AiPanelStatus = "loading" | "ready" | "saving" | "testing" | "error";
+type AiPanelStatus =
+  | "loading"
+  | "ready"
+  | "saving"
+  | "testing"
+  | "analyzing"
+  | "suggestion-ready"
+  | "error";
 type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
 
 interface AppError {
@@ -442,6 +449,11 @@ interface RendererAiError {
     | "AI_CONNECTION_FAILED"
     | "AI_VERSION_FAILED"
     | "AI_MODEL_NOT_FOUND"
+    | "AI_DOCUMENT_NOT_SELECTED"
+    | "AI_DOCUMENT_NOT_IN_QUEUE"
+    | "AI_DOCUMENT_NOT_FOUND"
+    | "AI_TEXT_NOT_AVAILABLE"
+    | "AI_OUTPUT_INVALID"
     | "UNKNOWN_ERROR";
   message: string;
 }
@@ -472,6 +484,36 @@ interface AiSettingsDraft {
   timeoutMs: string;
 }
 
+interface RendererAiClassificationSuggestion {
+  date?: string;
+  documentType?: string;
+  subject?: string;
+  keywords: string[];
+  targetFolder?: string;
+  confidence: number;
+  reasons: string[];
+  warnings: string[];
+  source: "simulated-ai" | "ollama";
+}
+
+interface RendererAiDocumentSuggestion {
+  status: "ready";
+  documentName: string;
+  extension: string;
+  model: string;
+  suggestedAt: string;
+  textSource: "pdf-native" | "tesseract-cli";
+  suggestion: RendererAiClassificationSuggestion;
+  promptCharacterCount: number;
+  differsFromLocalRules: boolean;
+  message: string;
+}
+
+interface RendererAiDocumentTextContext {
+  source: "pdf-native" | "tesseract-cli";
+  excerpt: string;
+}
+
 interface AiState {
   panelStatus: AiPanelStatus;
   status: RendererAiStatus | null;
@@ -479,6 +521,8 @@ interface AiState {
   message: string;
   error: RendererAiError | null;
   dirty: boolean;
+  suggestion: RendererAiDocumentSuggestion | null;
+  suggestionDocumentPath: string | null;
 }
 
 interface ClassificationState {

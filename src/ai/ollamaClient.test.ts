@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { testOllamaConnection, type OllamaHttpClient } from "./ollamaClient";
+import {
+  generateOllamaCompletion,
+  testOllamaConnection,
+  type OllamaHttpClient
+} from "./ollamaClient";
 import type { AiSettings } from "./ollamaSettings";
 
 describe("testOllamaConnection", () => {
@@ -104,10 +108,25 @@ describe("testOllamaConnection", () => {
 
 function createMockFetch(
   responses: unknown[]
-): OllamaHttpClient & { calls: Array<{ url: string; options: { method: "GET" } }> } {
-  const calls: Array<{ url: string; options: { method: "GET" } }> = [];
+): OllamaHttpClient & {
+  calls: Array<{
+    url: string;
+    options: { method: "GET" | "POST"; body?: string; headers?: Record<string, string> };
+  }>;
+} {
+  const calls: Array<{
+    url: string;
+    options: { method: "GET" | "POST"; body?: string; headers?: Record<string, string> };
+  }> = [];
   const fetchClient: OllamaHttpClient = async (url, options) => {
-    calls.push({ url, options: { method: options.method } });
+    calls.push({
+      url,
+      options: {
+        method: options.method,
+        ...(options.body ? { body: options.body } : {}),
+        ...(options.headers ? { headers: options.headers } : {})
+      }
+    });
     const value = responses.shift();
     return {
       ok: true,
@@ -118,6 +137,55 @@ function createMockFetch(
 
   return Object.assign(fetchClient, { calls });
 }
+
+describe("generateOllamaCompletion", () => {
+  it("posts a non-streaming JSON generation request to /api/generate", async () => {
+    const fetchClient = createMockFetch([
+      {
+        response:
+          '{"confidence":70,"keywords":[],"reasons":["test"],"warnings":[],"source":"ollama"}'
+      }
+    ]);
+
+    const result = await generateOllamaCompletion(createSettings(), "prompt borné", {
+      fetchClient,
+      now: () => new Date("2026-06-16T10:00:00.000Z")
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value).toEqual({
+      responseText:
+        '{"confidence":70,"keywords":[],"reasons":["test"],"warnings":[],"source":"ollama"}',
+      model: "llama3.2",
+      generatedAt: "2026-06-16T10:00:00.000Z"
+    });
+    expect(fetchClient.calls[0].url).toBe("http://localhost:11434/api/generate");
+    expect(fetchClient.calls[0].options.method).toBe("POST");
+    expect(JSON.parse(fetchClient.calls[0].options.body ?? "{}")).toEqual({
+      model: "llama3.2",
+      prompt: "prompt borné",
+      stream: false,
+      format: "json"
+    });
+  });
+
+  it("refuses generation without configured model", async () => {
+    const fetchClient = createMockFetch([]);
+
+    const result = await generateOllamaCompletion(
+      {
+        ...createSettings(),
+        model: ""
+      },
+      "prompt",
+      { fetchClient }
+    );
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.code).toBe("AI_CONFIG_INVALID");
+    expect(fetchClient.calls).toEqual([]);
+  });
+});
 
 function createSettings(): AiSettings {
   return {

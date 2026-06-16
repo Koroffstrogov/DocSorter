@@ -73,7 +73,7 @@ describe("buildAiClassificationSuggestion", () => {
     );
 
     expect(result.status).toBe("ready");
-    expect(seenTextLength).toBe(5_000);
+    expect(seenTextLength).toBe(6_000);
   });
 
   it("does not mutate files while building a suggestion", async () => {

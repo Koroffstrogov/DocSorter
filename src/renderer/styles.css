@@ -1017,6 +1017,12 @@ h2 {
   background: var(--accent);
 }
 
+#run-ai-suggestion {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
 .ai-checkbox {
   display: flex !important;
   grid-template-columns: none;
@@ -1027,6 +1033,103 @@ h2 {
 .ai-checkbox input {
   width: auto;
   min-height: auto;
+}
+
+.ai-suggestion-details {
+  display: grid;
+  gap: 9px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--muted);
+  background: #f9fbfd;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ai-suggestion-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-suggestion-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-suggestion-heading strong {
+  color: var(--ink);
+}
+
+.ai-suggestion-grid {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.ai-suggestion-grid div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.ai-suggestion-grid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.ai-suggestion-grid dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.ai-suggestion-list {
+  display: grid;
+  gap: 5px;
+}
+
+.ai-suggestion-list strong {
+  color: var(--ink);
+}
+
+.ai-suggestion-list ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.ai-suggestion-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.ai-suggestion-actions button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.ai-suggestion-actions button:first-child {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.ai-suggestion-actions button[hidden] {
+  display: none;
 }
 
 .rules-status {

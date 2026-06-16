@@ -547,6 +547,62 @@ describe("naming suggestions", () => {
     expect(result.appliedFields).toEqual(["documentDate", "documentType", "keywords"]);
     expect(result.skippedFields).toEqual(["subject"]);
   });
+
+  it("applies AI-shaped suggestions without replacing existing values", () => {
+    const result = suggestions.applySuggestionsToEmptyFields(
+      {
+        documentDate: "2024-01-01",
+        subject: "",
+        documentType: "courrier",
+        keywords: ""
+      },
+      {
+        date: {
+          value: "2024-03-05",
+          confidence: 0.72,
+          reason: "Date proposée par l'IA locale.",
+          source: "text"
+        },
+        subject: {
+          value: "Assurance-Habitation",
+          confidence: 0.72,
+          reason: "Sujet proposé par l'IA locale.",
+          source: "text"
+        },
+        documentType: {
+          value: "attestation",
+          confidence: 0.72,
+          reason: "Type proposé par l'IA locale.",
+          source: "text"
+        },
+        keywords: [
+          {
+            value: "habitation",
+            confidence: 0.72,
+            reason: "Mot-clé proposé par l'IA locale.",
+            source: "text"
+          }
+        ],
+        targetFolder: {
+          value: "Assurances/Habitation",
+          confidence: 0.72,
+          reason: "Dossier proposé par l'IA locale.",
+          source: "text"
+        },
+        confidence: 0.72,
+        reasons: ["Suggestion IA locale validée."]
+      }
+    );
+
+    expect(result.draft).toEqual({
+      documentDate: "2024-01-01",
+      subject: "Assurance-Habitation",
+      documentType: "courrier",
+      keywords: "habitation"
+    });
+    expect(result.appliedFields).toEqual(["subject", "keywords"]);
+    expect(result.skippedFields).toEqual(["documentDate", "documentType"]);
+  });
 });
 
 function createCatalog(

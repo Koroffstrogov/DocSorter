@@ -1,4 +1,8 @@
 import type { PrepareClassificationPlanResult } from "../classification/classificationPlan";
+import type {
+  AiDocumentSuggestion,
+  AiDocumentTextContext
+} from "../ai/ollamaDocumentSuggestion";
 import type { AiConnectionTestStatus } from "../ai/ollamaProvider";
 import type {
   AiSettings,
@@ -73,6 +77,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "getAiSettings",
   "saveAiSettings",
   "testAiConnection",
+  "runAiSuggestionForActiveDocument",
   "getRecentHistory",
   "getRulesStatus",
   "getUserRulesCatalog",
@@ -183,6 +188,15 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.aiTestConnection) as Promise<
         AiSettingsResult<AiConnectionTestStatus>
       >,
+    runAiSuggestionForActiveDocument: (
+      documentPath: string,
+      textContext: AiDocumentTextContext
+    ): Promise<AiSettingsResult<AiDocumentSuggestion>> =>
+      ipc.invoke(
+        IPC_CHANNELS.aiRunSuggestion,
+        documentPath,
+        textContext
+      ) as Promise<AiSettingsResult<AiDocumentSuggestion>>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
         ActionJournalReadResult<ActionJournalEntry[]>

@@ -179,6 +179,7 @@ async function runOcrForActiveImage(): Promise<void> {
 
   const requestId = ++textExtractionRequestId;
   clearNamingSuggestionStateForDocument(activeDocument.filePath);
+  resetAiSuggestionState();
   setTextExtractionState(activeDocument.filePath, {
     status: "extracting",
     result: null,
@@ -207,6 +208,7 @@ async function runOcrForActiveImage(): Promise<void> {
 
   const extraction = result.value as PdfTextExtraction;
   clearNamingSuggestionStateForDocument(activeDocument.filePath);
+  resetAiSuggestionState();
   setTextExtractionState(activeDocument.filePath, {
     status: extraction.status,
     result: extraction,

@@ -68,7 +68,7 @@ export function validateAiClassificationSuggestion(
     }
   }
 
-  if (record.source !== "simulated-ai") {
+  if (record.source !== "simulated-ai" && record.source !== "ollama") {
     return invalid("AI_SOURCE_INVALID", "Source de suggestion IA invalide.", "source");
   }
 
@@ -133,7 +133,7 @@ export function validateAiClassificationSuggestion(
       confidence: record.confidence,
       reasons,
       warnings,
-      source: "simulated-ai"
+      source: record.source
     }
   };
 }

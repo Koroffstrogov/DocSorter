@@ -1,4 +1,4 @@
-export type AiClassificationSource = "simulated-ai";
+export type AiClassificationSource = "simulated-ai" | "ollama";
 
 export interface AiRuleSuggestionSnapshot {
   date?: string | null;
@@ -89,7 +89,7 @@ export type AiClassificationOrchestratorResult =
     };
 
 export const AI_CLASSIFICATION_LIMITS = {
-  textExcerptChars: 5_000,
+  textExcerptChars: 6_000,
   filenameChars: 180,
   namingConventionChars: 500,
   folderCount: 50,

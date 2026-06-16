@@ -361,7 +361,17 @@
                 <button id="save-ai-settings" type="button" disabled>Sauvegarder</button>
                 <button id="test-ai-connection" type="button" disabled>Tester Ollama</button>
               </div>
+              <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
             </form>
+            <div id="ai-suggestion-details" class="ai-suggestion-details">
+              Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale.
+            </div>
+            <div class="ai-suggestion-actions">
+              <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
+                Appliquer aux champs vides
+              </button>
+              <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer</button>
+            </div>
           </section>
 
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>

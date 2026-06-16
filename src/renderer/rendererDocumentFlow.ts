@@ -142,6 +142,7 @@ function selectDocument(documentItem: DocumentItem): void {
     status: "loading"
   };
   resetNamingState();
+  resetAiSuggestionState();
   render();
   void initializeNamingDraft(documentItem);
   void loadActivePreview(documentItem);

@@ -5,7 +5,12 @@ interface AiPanelOptions {
   onSaveSettings: () => void;
   onTestConnection: () => void;
   onRefreshStatus: () => void;
+  onRunSuggestion: () => void;
+  onApplySuggestionToEmptyFields: () => void;
+  onIgnoreSuggestion: () => void;
   isActionsDisabled: () => boolean;
+  canRunSuggestion: () => boolean;
+  canApplySuggestionToEmptyFields: () => boolean;
   formatDate: (isoDate: string) => string;
 }
 
@@ -23,6 +28,10 @@ interface AiPanelElements {
   saveButton: HTMLButtonElement | null;
   testButton: HTMLButtonElement | null;
   refreshButton: HTMLButtonElement | null;
+  runSuggestionButton: HTMLButtonElement | null;
+  suggestionDetails: HTMLElement | null;
+  applySuggestionButton: HTMLButtonElement | null;
+  ignoreSuggestionButton: HTMLButtonElement | null;
 }
 
 interface AiPanelFactoryApi {
@@ -62,6 +71,18 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       options.onRefreshStatus();
     });
 
+    elements.runSuggestionButton?.addEventListener("click", () => {
+      options.onRunSuggestion();
+    });
+
+    elements.applySuggestionButton?.addEventListener("click", () => {
+      options.onApplySuggestionToEmptyFields();
+    });
+
+    elements.ignoreSuggestionButton?.addEventListener("click", () => {
+      options.onIgnoreSuggestion();
+    });
+
     function render(): void {
       const state = options.getState();
       syncDraft(elements, state.draft);
@@ -73,7 +94,8 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       const busy =
         state.panelStatus === "loading" ||
         state.panelStatus === "saving" ||
-        state.panelStatus === "testing";
+        state.panelStatus === "testing" ||
+        state.panelStatus === "analyzing";
       const disabled = options.isActionsDisabled() || busy;
       const canSave = !disabled && state.dirty && isDraftSavable(state.draft);
       const canTest =
@@ -106,6 +128,26 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       if (elements.refreshButton) {
         elements.refreshButton.disabled = disabled;
       }
+
+      if (elements.runSuggestionButton) {
+        elements.runSuggestionButton.disabled = disabled || !options.canRunSuggestion();
+        elements.runSuggestionButton.textContent =
+          state.panelStatus === "analyzing" ? "Analyse IA..." : "Analyser avec IA locale";
+      }
+
+      if (elements.suggestionDetails) {
+        elements.suggestionDetails.replaceChildren(...createSuggestionContent(state, options));
+      }
+
+      if (elements.applySuggestionButton) {
+        elements.applySuggestionButton.disabled = disabled || !options.canApplySuggestionToEmptyFields();
+        elements.applySuggestionButton.hidden = !state.suggestion;
+      }
+
+      if (elements.ignoreSuggestionButton) {
+        elements.ignoreSuggestionButton.disabled = disabled || !state.suggestion;
+        elements.ignoreSuggestionButton.hidden = !state.suggestion;
+      }
     }
 
     return {
@@ -123,7 +165,11 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       timeoutInput: root.querySelector<HTMLInputElement>("#ai-timeout"),
       saveButton: root.querySelector<HTMLButtonElement>("#save-ai-settings"),
       testButton: root.querySelector<HTMLButtonElement>("#test-ai-connection"),
-      refreshButton: root.querySelector<HTMLButtonElement>("#refresh-ai-status")
+      refreshButton: root.querySelector<HTMLButtonElement>("#refresh-ai-status"),
+      runSuggestionButton: root.querySelector<HTMLButtonElement>("#run-ai-suggestion"),
+      suggestionDetails: root.querySelector<HTMLElement>("#ai-suggestion-details"),
+      applySuggestionButton: root.querySelector<HTMLButtonElement>("#apply-ai-suggestion-empty"),
+      ignoreSuggestionButton: root.querySelector<HTMLButtonElement>("#ignore-ai-suggestion")
     };
   }
 
@@ -199,6 +245,14 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       return "Test Ollama en cours...";
     }
 
+    if (state.panelStatus === "analyzing") {
+      return "Analyse IA locale en cours...";
+    }
+
+    if (state.panelStatus === "suggestion-ready") {
+      return "Suggestion IA prête";
+    }
+
     if (state.status?.status === "disabled") {
       return "IA locale désactivée";
     }
@@ -232,6 +286,87 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     line.className = "ai-warning";
     line.textContent = value;
     return line;
+  }
+
+  function createSuggestionContent(state: AiState, options: AiPanelOptions): Node[] {
+    if (state.panelStatus === "analyzing") {
+      return [createMetaLine("Analyse du document actif en cours...")];
+    }
+
+    if (!state.suggestion) {
+      return [
+        createMetaLine(
+          "Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale."
+        )
+      ];
+    }
+
+    const suggestion = state.suggestion.suggestion;
+    const container = document.createElement("div");
+    const heading = document.createElement("div");
+    const score = document.createElement("strong");
+    const meta = document.createElement("span");
+
+    container.className = "ai-suggestion-summary";
+    heading.className = "ai-suggestion-heading";
+    score.textContent = `Score ${suggestion.confidence} %`;
+    meta.textContent = `${state.suggestion.model} - ${options.formatDate(state.suggestion.suggestedAt)}`;
+    heading.append(score, meta);
+    container.append(heading, createAiSuggestionGrid(state.suggestion));
+
+    if (state.suggestion.differsFromLocalRules) {
+      container.append(createWarningLine("Diffère des règles locales."));
+    }
+
+    if (suggestion.reasons.length > 0) {
+      container.append(createList("Raisons", suggestion.reasons));
+    }
+
+    if (suggestion.warnings.length > 0) {
+      container.append(createList("Avertissements", suggestion.warnings));
+    }
+
+    return [container];
+  }
+
+  function createAiSuggestionGrid(suggestion: RendererAiDocumentSuggestion): HTMLDListElement {
+    const grid = document.createElement("dl");
+    grid.className = "ai-suggestion-grid";
+    grid.append(
+      createSuggestionRow("Date", suggestion.suggestion.date),
+      createSuggestionRow("Sujet", suggestion.suggestion.subject),
+      createSuggestionRow("Type", suggestion.suggestion.documentType),
+      createSuggestionRow("Dossier", suggestion.suggestion.targetFolder),
+      createSuggestionRow("Mots-clés", suggestion.suggestion.keywords.join(" "))
+    );
+    return grid;
+  }
+
+  function createSuggestionRow(label: string, value: string | undefined): HTMLDivElement {
+    const row = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value?.trim() || "Aucune suggestion";
+    row.append(term, description);
+    return row;
+  }
+
+  function createList(label: string, values: string[]): HTMLElement {
+    const section = document.createElement("div");
+    const title = document.createElement("strong");
+    const list = document.createElement("ul");
+    section.className = "ai-suggestion-list";
+    title.textContent = label;
+    list.replaceChildren(
+      ...values.map((value) => {
+        const item = document.createElement("li");
+        item.textContent = value;
+        return item;
+      })
+    );
+    section.append(title, list);
+    return section;
   }
 
   function compactText(value: string): string {

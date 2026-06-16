@@ -31,6 +31,7 @@ let textExtractionRequestId = 0;
 let targetFolderRequestId = 0;
 let ocrRequestId = 0;
 let aiRequestId = 0;
+let aiSuggestionRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
@@ -250,7 +251,14 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onRefreshStatus: () => {
     void refreshAiStatus();
   },
+  onRunSuggestion: () => {
+    void runAiSuggestionForActiveDocument();
+  },
+  onApplySuggestionToEmptyFields: applyAiSuggestionToEmptyFields,
+  onIgnoreSuggestion: ignoreAiSuggestion,
   isActionsDisabled: isClassificationBusy,
+  canRunSuggestion: canRunAiSuggestion,
+  canApplySuggestionToEmptyFields: canApplyAiSuggestionToEmptyFields,
   formatDate
 });
 

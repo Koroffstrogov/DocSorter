@@ -26,6 +26,7 @@ export const IPC_CHANNELS = {
   aiGetSettings: "ai:getSettings",
   aiSaveSettings: "ai:saveSettings",
   aiTestConnection: "ai:testConnection",
+  aiRunSuggestion: "ai:runSuggestion",
   historyGetRecent: "history:getRecent",
   rulesGetStatus: "rules:getStatus",
   rulesGetUserCatalog: "rules:getUserCatalog",

@@ -3,6 +3,10 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
+  AiDocumentSuggestion,
+  AiDocumentTextContext
+} from "../ai/ollamaDocumentSuggestion";
+import type {
   AiSettings,
   AiSettingsInput,
   AiSettingsResult,
@@ -87,6 +91,7 @@ describe("sensitive IPC handler contract", () => {
       IPC_CHANNELS.previewGetData,
       IPC_CHANNELS.extractionExtractPdfText,
       IPC_CHANNELS.ocrRunImage,
+      IPC_CHANNELS.aiRunSuggestion,
       IPC_CHANNELS.classificationPreparePlan,
       IPC_CHANNELS.classificationExecute
     ]);
@@ -161,6 +166,13 @@ describe("sensitive IPC handler contract", () => {
       acceptsRendererPath: false,
       usesUserDataPath: true,
       serviceName: "testAiConnection"
+    });
+    expect(contractFor(IPC_CHANNELS.aiRunSuggestion)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesMainTarget: true,
+      usesUserDataPath: true,
+      serviceName: "runAiSuggestionForDocument"
     });
   });
 });
@@ -427,6 +439,35 @@ describe("registerIpcHandlers", () => {
     expect(services.saveAiSettings).toHaveBeenCalledWith(USER_DATA_PATH, settings);
     expect(services.testAiConnection).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(harness.appPathCalls).toEqual(["userData", "userData", "userData", "userData"]);
+  });
+
+  it("runs AI suggestions only for the active document with main-state queue and local context", async () => {
+    const appState = createStateWithQueue({ selectedTargetFolder: TARGET_FOLDER });
+    const services = createServices();
+    const harness = createHarness({ appState, services });
+    const textContext: AiDocumentTextContext = {
+      source: "pdf-native",
+      excerpt: "texte extrait"
+    };
+
+    await harness.invoke(
+      IPC_CHANNELS.aiRunSuggestion,
+      DOCUMENT_PATH,
+      textContext,
+      "C:\\renderer-target"
+    );
+
+    expect(services.loadMergedNamingRulesCatalog).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.listTargetSubdirectories).toHaveBeenCalledWith(TARGET_PATH);
+    expect(services.runAiSuggestionForDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      textContext,
+      queuedDocuments: appState.queuedDocuments,
+      queuedDocumentPaths: appState.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      rulesCatalog: createEmptyCatalog(),
+      knownRelativeFolders: [TARGET_FOLDER]
+    });
   });
 
   it("selects OCR paths through reviewed dialogs only", async () => {
@@ -733,6 +774,10 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
         }
       }
     } as AiSettingsResult<AiConnectionTestStatus>)),
+    runAiSuggestionForDocument: vi.fn(async () => ({
+      ok: true,
+      value: createAiDocumentSuggestion()
+    } as AiSettingsResult<AiDocumentSuggestion>)),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()
@@ -813,6 +858,42 @@ function createAiStatus(): AiStatus {
     status: "ok",
     message: "Connexion Ollama locale OK.",
     error: null
+  };
+}
+
+function createAiDocumentSuggestion(): AiDocumentSuggestion {
+  return {
+    status: "ready",
+    documentName: "document.pdf",
+    extension: ".pdf",
+    model: "llama3.2",
+    suggestedAt: "2026-06-16T10:00:00.000Z",
+    textSource: "pdf-native",
+    input: {
+      filename: "document.pdf",
+      extension: ".pdf",
+      extractedTextExcerpt: "texte extrait",
+      ocrTextExcerpt: "",
+      currentRuleSuggestions: null,
+      availableRootFolders: ["Vehicules"],
+      knownRelativeFolders: [TARGET_FOLDER],
+      namingConvention: "AAAA-MM-JJ_Sujet_Type_MotsCles.ext",
+      detectedDate: "",
+      detectedYear: ""
+    },
+    suggestion: {
+      documentType: "facture",
+      subject: "Renault-Captur",
+      keywords: ["entretien"],
+      targetFolder: TARGET_FOLDER,
+      confidence: 70,
+      reasons: ["Analyse locale Ollama."],
+      warnings: [],
+      source: "ollama"
+    },
+    promptCharacterCount: 1200,
+    differsFromLocalRules: false,
+    message: "Suggestion IA prête."
   };
 }
 

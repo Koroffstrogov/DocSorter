@@ -42,6 +42,19 @@ describe("validateAiClassificationSuggestion", () => {
     expect(result.status === "invalid" && result.error.code).toBe("AI_OUTPUT_NOT_OBJECT");
   });
 
+  it("accepts controlled Ollama outputs", () => {
+    const result = validateAiClassificationSuggestion({
+      confidence: 70,
+      keywords: [],
+      reasons: ["Analyse locale Ollama."],
+      warnings: [],
+      source: "ollama"
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.suggestion.source).toBe("ollama");
+  });
+
   it("rejects unknown output fields", () => {
     const result = validateAiClassificationSuggestion({
       confidence: 50,
@@ -147,8 +160,8 @@ describe("boundAiClassificationInput", () => {
 
     expect(bounded.filename).toHaveLength(180);
     expect(bounded.extension).toBe(".pdf");
-    expect(bounded.extractedTextExcerpt).toHaveLength(5_000);
-    expect(bounded.ocrTextExcerpt).toHaveLength(5_000);
+    expect(bounded.extractedTextExcerpt).toHaveLength(6_000);
+    expect(bounded.ocrTextExcerpt).toHaveLength(6_000);
     expect(bounded.knownRelativeFolders).toEqual(["Maison/Assurance"]);
     expect(bounded.availableRootFolders).toEqual(["Maison"]);
     expect(bounded.namingConvention).toHaveLength(500);

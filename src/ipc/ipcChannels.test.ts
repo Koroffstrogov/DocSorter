@@ -30,6 +30,7 @@ const REVIEWED_IPC_CHANNELS = [
   "ai:getSettings",
   "ai:saveSettings",
   "ai:testConnection",
+  "ai:runSuggestion",
   "history:getRecent",
   "rules:getStatus",
   "rules:getUserCatalog",

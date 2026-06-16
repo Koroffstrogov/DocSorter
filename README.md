@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 + IA-1 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA simulé et configuration/test Ollama local optionnel, désactivé par défaut.
+Lot 7 + 8A + OCR-2 + IA-2 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut et suggestion IA locale explicite sur document actif.
 
 ## Commandes
 
@@ -121,7 +121,15 @@ npm run dev
 - validation main process des URL Ollama : seuls `localhost`, `127.0.0.1` et `::1` sont acceptés, sans chemin API ;
 - test manuel Ollama limité à `/api/version` et `/api/tags`, sans document, sans prompt et sans mutation ;
 - détection sobre d'un modèle absent, d'une erreur réseau ou d'un timeout ;
-- provider Ollama préparé côté domaine, mais non branché au flux document.
+- bouton explicite `Analyser avec IA locale` après extraction PDF native ou OCR image du document actif ;
+- appel Ollama documentaire uniquement si l'IA est activée, sauvegardée, testée OK et si le document appartient encore à la dernière file scannée ;
+- prompt Ollama borné à partir du nom de fichier, de l'extension, de l'extrait PDF/OCR, des règles locales et des dossiers relatifs connus, sans chemin Windows complet, sans journal, sans cache complet, sans autres documents et sans texte intégral ;
+- génération Ollama locale via `/api/generate` avec sortie JSON demandée strictement ;
+- validation IA-0 obligatoire de toute réponse Ollama, avec refus sobre des JSON invalides et des dossiers cible dangereux ;
+- affichage séparé de la suggestion IA : date, type, sujet, mots-clés, dossier, score, raisons, avertissements et conflit avec les règles locales ;
+- bouton `Appliquer aux champs vides` pour la suggestion IA, sans remplacement des champs déjà saisis ;
+- application éventuelle du dossier IA uniquement dans le champ de sous-dossier cible vide, puis relance des contrôles dossier/collision existants ;
+- action `Ignorer` pour masquer la suggestion IA courante, sans mutation fichier.
 
 ## Convention de nommage
 
@@ -256,19 +264,21 @@ Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli
 
 ## IA locale
 
-IA-0 prépare un contrat de classification pour une future IA locale. IA-1 ajoute uniquement la configuration et le test de connexion d'un Ollama local optionnel. Aucun document n'est envoyé à un modèle dans ce lot.
+IA-0 prépare un contrat de classification pour une IA locale. IA-1 ajoute la configuration et le test de connexion d'un Ollama local optionnel. IA-2 branche Ollama sur le document actif, uniquement via le bouton explicite `Analyser avec IA locale`.
+
+Aucune analyse IA n'est lancée automatiquement au changement de document, au scan, à l'extraction texte ou à l'OCR. L'IA propose seulement : elle ne renomme pas, ne déplace pas, ne classe pas, ne crée pas de dossier et ne remplace pas les champs déjà saisis.
 
 L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, les suggestions de règles locales déjà calculées, les dossiers relatifs connus, la convention de nommage et une date ou année détectée.
 
 La sortie IA validée peut proposer uniquement :
 
 ```text
-date?, documentType?, subject?, keywords[], targetFolder?, confidence, reasons[], warnings[], source="simulated-ai"
+date?, documentType?, subject?, keywords[], targetFolder?, confidence, reasons[], warnings[], source="simulated-ai"|"ollama"
 ```
 
 Le validateur refuse les objets non JSON, les champs inconnus, les scores hors `0..100`, les dates invalides et les dossiers absolus, trop profonds ou avec traversée `..`. Les types, sujets et mots-clés sont normalisés avec la logique de nommage existante.
 
-Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Ces suggestions ne remplacent pas les règles utilisateur, ne modifient aucun fichier et ne déclenchent jamais de classement.
+Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Les suggestions IA restent séparées des règles utilisateur, ne modifient aucun fichier et ne déclenchent jamais de classement.
 
 La configuration Ollama est stockée localement dans :
 
@@ -280,7 +290,11 @@ Elle contient seulement `enabled`, `provider`, `baseUrl`, `model`, `timeoutMs`, 
 
 Les URL Ollama sont refusées si elles pointent vers une machine externe, une IP LAN, un domaine public, des identifiants, une query string, un fragment ou un chemin comme `/api/generate`. Les codes principaux sont `AI_URL_NOT_LOCAL`, `AI_PROVIDER_DISABLED` et `AI_CONFIG_INVALID`.
 
-Le bouton `Tester Ollama` appelle seulement `/api/version` puis `/api/tags`. Il peut afficher connexion OK, modèle absent, erreur réseau ou timeout. Le provider Ollama est préparé pour un lot futur, mais il n'est pas utilisé par l'UI document et ne produit aucune suggestion IA dans IA-1.
+Le bouton `Tester Ollama` appelle seulement `/api/version` puis `/api/tags`. Il peut afficher connexion OK, modèle absent, erreur réseau ou timeout.
+
+Le bouton `Analyser avec IA locale` envoie à Ollama un prompt borné, construit depuis l'extrait PDF/OCR du document actif. La réponse doit être un JSON strict conforme au contrat IA-0. Si la sortie est invalide, dangereuse ou trop éloignée du contrat, l'interface affiche `Suggestion IA invalide` sans crash et sans application automatique.
+
+Le bouton `Appliquer aux champs vides` peut recopier date, sujet, type et mots-clés uniquement quand les champs correspondants sont vides. Si le dossier cible IA est appliqué, l'application relance les contrôles existants de dossier et de collision. La fusion intelligente entre règles locales et IA est volontairement reportée.
 
 ## Raccourcis clavier
 
@@ -316,7 +330,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas d'application automatique des suggestions ;
 - pas d'éditeur JSON avancé ;
 - pas de gestion multi-profils de règles ;
-- pas d'OCR PDF, pas de suggestion IA sur document actif, pas de prompt modèle, pas de doublons probables, packaging avancé ou DOCX.
+- pas d'OCR PDF, pas de fusion automatique IA/règles, pas de suggestion IA batch, pas de doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
@@ -329,7 +343,7 @@ Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR-3 pourra ajouter l'OCR limité des PDF scannés, dans un lot séparé et explicitement validé ;
-- IA-2 pourra ajouter une suggestion IA locale sur document actif, dans un lot séparé et explicitement validé ;
+- IA-3 pourra ajouter une fusion contrôlée entre suggestions IA et règles locales, avec arbitrage explicite des conflits ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
@@ -437,14 +451,22 @@ Un prochain lot pourra ajouter :
 - un PDF ne déclenche pas l'OCR image et garde l'extraction texte native ;
 - après OCR image réussi, `Analyser les suggestions` puis `Appliquer aux champs vides` fonctionnent sans remplacer les champs déjà saisis ;
 - aucun OCR batch, aucune conversion PDF/image et aucune écriture source/cible ne sont déclenchés depuis OCR-2 ;
-- le panneau `IA locale` est visible et affiche `Aucun document n’est envoyé dans ce lot.` ;
+- le panneau `IA locale` est visible et reste désactivé par défaut ;
 - au premier démarrage, l'IA locale est désactivée par défaut ;
 - activer l'IA locale avec `http://localhost:11434/`, saisir un modèle puis sauvegarder crée `userData/config/ai-settings.json` ;
 - avec Ollama lancé, `Tester Ollama` affiche une connexion OK si le modèle est présent ;
 - avec Ollama lancé mais modèle absent, `Tester Ollama` affiche un état modèle absent ;
 - avec Ollama arrêté, `Tester Ollama` affiche une erreur sobre ou un timeout ;
 - une URL externe ou LAN est refusée par la configuration IA ;
-- aucun bouton d'analyse IA documentaire n'est affiché et aucun document n'est envoyé à Ollama ;
+- après extraction texte PDF ou OCR image, le bouton `Analyser avec IA locale` devient disponible si Ollama est activé, sauvegardé et testé OK ;
+- cliquer sur `Analyser avec IA locale` affiche une suggestion validée ou une erreur sobre, sans modifier le document ;
+- la suggestion IA affiche date, type, sujet, mots-clés, dossier, score, raisons et avertissements ;
+- si Ollama est arrêté ou si le modèle est absent, l'analyse IA affiche une erreur sobre ;
+- une réponse Ollama non JSON ou hors contrat affiche `Suggestion IA invalide` sans crash ;
+- `Appliquer aux champs vides` depuis la suggestion IA ne remplace pas les champs déjà saisis ;
+- appliquer un dossier IA dans un champ cible vide relance les contrôles existants de dossier et collision ;
+- changer de document ou relancer extraction/OCR efface la suggestion IA courante ;
+- ignorer une suggestion IA ne modifie aucun fichier et ne modifie pas le journal ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;
