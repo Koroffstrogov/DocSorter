@@ -1,4 +1,4 @@
-import type { DocSorterApi } from "../preload/preload";
+import type { DocSorterApi } from "../preload/preloadApiContract";
 
 declare global {
   interface ImagePreviewRenderOptions {

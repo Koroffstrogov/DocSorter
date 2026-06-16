@@ -123,6 +123,12 @@ Le journal contient les chemins source/cible nécessaires à l'annulation, les n
 
 Le journal est relu au démarrage pour retrouver la dernière action `classify completed` non déjà annulée. L'annulation refait les contrôles au clic : fichier classé présent, ancien chemin source libre, hash inchangé si disponible, puis déplacement inverse par `fs.rename`.
 
+## Sécurité IPC / preload
+
+Le renderer n'a pas d'accès direct au système de fichiers. Toutes les actions passent par une API preload limitée et testée, exposée sous `window.docSorter`.
+
+Les canaux IPC sont listés dans un contrat explicite. Toute nouvelle méthode preload ou tout nouveau canal IPC doit être ajouté volontairement au contrat et aux tests de surface. Les chemins sensibles sont re-vérifiés côté main process avant lecture, extraction, classement ou annulation.
+
 ## Doublons exacts
 
 L'analyse des doublons est volontairement explicite : elle ne se lance pas automatiquement au choix de la source. Elle calcule des empreintes SHA-256 localement et compare :

@@ -12,6 +12,7 @@ import {
   readRecentActions
 } from "../history/actionJournal";
 import type { UndoableClassificationAction } from "../history/historyTypes";
+import { IPC_CHANNELS } from "../ipc/ipcChannels";
 import {
   buildProposedFilename,
   createInitialNamingDraft,
@@ -54,19 +55,19 @@ function createMainWindow(): void {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle("app:getVersion", () => app.getVersion());
+  ipcMain.handle(IPC_CHANNELS.appGetVersion, () => app.getVersion());
 
-  ipcMain.handle("directory:selectSource", () => selectSourceDirectory());
-  ipcMain.handle("directory:selectTarget", () => selectTargetDirectory());
-  ipcMain.handle("documents:refreshSource", () => refreshSelectedSourceDocuments());
-  ipcMain.handle("naming:createInitialDraft", (_event, originalName: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.directorySelectSource, () => selectSourceDirectory());
+  ipcMain.handle(IPC_CHANNELS.directorySelectTarget, () => selectTargetDirectory());
+  ipcMain.handle(IPC_CHANNELS.documentsRefreshSource, () => refreshSelectedSourceDocuments());
+  ipcMain.handle(IPC_CHANNELS.namingCreateInitialDraft, (_event, originalName: unknown) => {
     if (typeof originalName !== "string") {
       return createInitialNamingDraft("");
     }
 
     return createInitialNamingDraft(originalName);
   });
-  ipcMain.handle("naming:buildProposal", (_event, draft: unknown, originalExtension: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.namingBuildProposal, (_event, draft: unknown, originalExtension: unknown) => {
     if (!isNamingDraft(draft) || typeof originalExtension !== "string") {
       return buildProposedFilename(
         {
@@ -81,14 +82,14 @@ function registerIpcHandlers(): void {
 
     return buildProposedFilename(draft, originalExtension);
   });
-  ipcMain.handle("naming:checkDestinationAvailability", (_event, proposedFilename: unknown) =>
+  ipcMain.handle(IPC_CHANNELS.namingCheckDestinationAvailability, (_event, proposedFilename: unknown) =>
     checkDestinationNameAvailability(
       selectedTargetPath,
       typeof proposedFilename === "string" ? proposedFilename : ""
     )
   );
   ipcMain.handle(
-    "classification:preparePlan",
+    IPC_CHANNELS.classificationPreparePlan,
     (_event, documentPath: unknown, proposedFilename: unknown) =>
       prepareClassificationPlan({
         documentPath: typeof documentPath === "string" ? documentPath : "",
@@ -98,7 +99,7 @@ function registerIpcHandlers(): void {
       })
   );
   ipcMain.handle(
-    "classification:execute",
+    IPC_CHANNELS.classificationExecute,
     async (_event, documentPath: unknown, proposedFilename: unknown) => {
       const result = await executeClassification({
         documentPath: typeof documentPath === "string" ? documentPath : "",
@@ -121,7 +122,7 @@ function registerIpcHandlers(): void {
       return result;
     }
   );
-  ipcMain.handle("classification:undoLast", async () => {
+  ipcMain.handle(IPC_CHANNELS.classificationUndoLast, async () => {
     const result = await undoLastClassification({
       undoableAction: lastUndoableAction,
       journalFilePath: getActionJournalFilePath(app.getPath("userData"))
@@ -139,27 +140,27 @@ function registerIpcHandlers(): void {
 
     return result;
   });
-  ipcMain.handle("classification:getLastUndoableAction", () => getLastUndoableAction());
-  ipcMain.handle("duplicates:analyzeExact", () => analyzeQueuedExactDuplicates());
-  ipcMain.handle("extraction:extractPdfText", (_event, documentPath: unknown) =>
+  ipcMain.handle(IPC_CHANNELS.classificationGetLastUndoableAction, () => getLastUndoableAction());
+  ipcMain.handle(IPC_CHANNELS.duplicatesAnalyzeExact, () => analyzeQueuedExactDuplicates());
+  ipcMain.handle(IPC_CHANNELS.extractionExtractPdfText, (_event, documentPath: unknown) =>
     extractTextFromActivePdf(typeof documentPath === "string" ? documentPath : "")
   );
-  ipcMain.handle("history:getRecent", (_event, limit: unknown) =>
+  ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     readRecentActions(
       getJournalFilePath(),
       typeof limit === "number" && Number.isFinite(limit) ? limit : 8
     )
   );
-  ipcMain.handle("rules:getStatus", () =>
+  ipcMain.handle(IPC_CHANNELS.rulesGetStatus, () =>
     loadMergedNamingRulesCatalog(app.getPath("userData"))
   );
-  ipcMain.handle("rules:getUserCatalog", () =>
+  ipcMain.handle(IPC_CHANNELS.rulesGetUserCatalog, () =>
     loadUserRulesCatalog(app.getPath("userData"))
   );
-  ipcMain.handle("rules:reload", () =>
+  ipcMain.handle(IPC_CHANNELS.rulesReload, () =>
     loadMergedNamingRulesCatalog(app.getPath("userData"))
   );
-  ipcMain.handle("rules:saveUserCatalog", async (_event, catalog: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.rulesSaveUserCatalog, async (_event, catalog: unknown) => {
     const result = await saveUserRulesCatalog(
       app.getPath("userData"),
       catalog as NamingSuggestionRulesCatalog
@@ -172,7 +173,7 @@ function registerIpcHandlers(): void {
     return loadMergedNamingRulesCatalog(app.getPath("userData"));
   });
 
-  ipcMain.handle("preview:getData", (_event, documentPath: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.previewGetData, (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {
       return getPreviewData(undefined, {
         sourcePath: selectedSourcePath,

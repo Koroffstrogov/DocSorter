@@ -1,0 +1,134 @@
+import type { PrepareClassificationPlanResult } from "../classification/classificationPlan";
+import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
+import type { ExactDuplicateAnalysisResult } from "../duplicates/exactDuplicates";
+import type { PdfTextExtractionResult } from "../extraction/pdfTextExtraction";
+import type { ExecuteClassificationResult, UndoClassificationResult } from "../file-ops/classifyFile";
+import type { ActionJournalReadResult } from "../history/actionJournal";
+import type { UndoableClassificationAction } from "../history/historyTypes";
+import type { ActionJournalEntry } from "../history/historyTypes";
+import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
+import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
+import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
+import type { PreviewData } from "../preview/previewTypes";
+import type {
+  NamingRulesStatus,
+  UserRulesLoadResult,
+  UserRulesResult
+} from "../rules/userNamingRulesStore";
+
+interface DirectorySelection {
+  path: string;
+}
+
+export interface IpcInvoker {
+  invoke: (channel: IpcChannel, ...args: unknown[]) => Promise<unknown>;
+}
+
+export const ALLOWED_PRELOAD_API_METHODS = [
+  "getVersion",
+  "selectSourceDirectory",
+  "selectTargetDirectory",
+  "refreshSourceDocuments",
+  "getPreviewData",
+  "createInitialNamingDraft",
+  "buildNamingProposal",
+  "checkDestinationAvailability",
+  "prepareClassificationPlan",
+  "executeClassification",
+  "undoLastClassification",
+  "getLastUndoableAction",
+  "analyzeExactDuplicates",
+  "extractTextFromActivePdf",
+  "getRecentHistory",
+  "getRulesStatus",
+  "getUserRulesCatalog",
+  "saveUserRulesCatalog",
+  "reloadNamingRules"
+] as const;
+
+export type PreloadApiMethod = (typeof ALLOWED_PRELOAD_API_METHODS)[number];
+
+export function createPreloadApi(ipc: IpcInvoker) {
+  return {
+    getVersion: (): Promise<string> =>
+      ipc.invoke(IPC_CHANNELS.appGetVersion) as Promise<string>,
+    selectSourceDirectory: (): Promise<Result<DirectorySelection | null>> =>
+      ipc.invoke(IPC_CHANNELS.directorySelectSource) as Promise<Result<DirectorySelection | null>>,
+    selectTargetDirectory: (): Promise<Result<DirectorySelection | null>> =>
+      ipc.invoke(IPC_CHANNELS.directorySelectTarget) as Promise<Result<DirectorySelection | null>>,
+    refreshSourceDocuments: (): Promise<Result<DocumentDiscoveryResult>> =>
+      ipc.invoke(IPC_CHANNELS.documentsRefreshSource) as Promise<Result<DocumentDiscoveryResult>>,
+    getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>
+      ipc.invoke(IPC_CHANNELS.previewGetData, documentPath) as Promise<Result<PreviewData>>,
+    createInitialNamingDraft: (originalName: string): Promise<NamingDraft> =>
+      ipc.invoke(IPC_CHANNELS.namingCreateInitialDraft, originalName) as Promise<NamingDraft>,
+    buildNamingProposal: (
+      draft: NamingDraft,
+      originalExtension: string
+    ): Promise<ProposedFilename> =>
+      ipc.invoke(
+        IPC_CHANNELS.namingBuildProposal,
+        draft,
+        originalExtension
+      ) as Promise<ProposedFilename>,
+    checkDestinationAvailability: (
+      proposedFilename: string
+    ): Promise<DestinationAvailabilityResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.namingCheckDestinationAvailability,
+        proposedFilename
+      ) as Promise<DestinationAvailabilityResult>,
+    prepareClassificationPlan: (
+      documentPath: string,
+      proposedFilename: string
+    ): Promise<PrepareClassificationPlanResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.classificationPreparePlan,
+        documentPath,
+        proposedFilename
+      ) as Promise<PrepareClassificationPlanResult>,
+    executeClassification: (
+      documentPath: string,
+      proposedFilename: string
+    ): Promise<ExecuteClassificationResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.classificationExecute,
+        documentPath,
+        proposedFilename
+      ) as Promise<ExecuteClassificationResult>,
+    undoLastClassification: (): Promise<UndoClassificationResult> =>
+      ipc.invoke(IPC_CHANNELS.classificationUndoLast) as Promise<UndoClassificationResult>,
+    getLastUndoableAction: (): Promise<UndoableClassificationAction | null> =>
+      ipc.invoke(
+        IPC_CHANNELS.classificationGetLastUndoableAction
+      ) as Promise<UndoableClassificationAction | null>,
+    analyzeExactDuplicates: (): Promise<ExactDuplicateAnalysisResult> =>
+      ipc.invoke(IPC_CHANNELS.duplicatesAnalyzeExact) as Promise<ExactDuplicateAnalysisResult>,
+    extractTextFromActivePdf: (documentPath: string): Promise<PdfTextExtractionResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.extractionExtractPdfText,
+        documentPath
+      ) as Promise<PdfTextExtractionResult>,
+    getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
+      ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
+        ActionJournalReadResult<ActionJournalEntry[]>
+      >,
+    getRulesStatus: (): Promise<UserRulesResult<NamingRulesStatus>> =>
+      ipc.invoke(IPC_CHANNELS.rulesGetStatus) as Promise<UserRulesResult<NamingRulesStatus>>,
+    getUserRulesCatalog: (): Promise<UserRulesResult<UserRulesLoadResult>> =>
+      ipc.invoke(IPC_CHANNELS.rulesGetUserCatalog) as Promise<
+        UserRulesResult<UserRulesLoadResult>
+      >,
+    saveUserRulesCatalog: (
+      catalog: NamingSuggestionRulesCatalog
+    ): Promise<UserRulesResult<NamingRulesStatus>> =>
+      ipc.invoke(
+        IPC_CHANNELS.rulesSaveUserCatalog,
+        catalog
+      ) as Promise<UserRulesResult<NamingRulesStatus>>,
+    reloadNamingRules: (): Promise<UserRulesResult<NamingRulesStatus>> =>
+      ipc.invoke(IPC_CHANNELS.rulesReload) as Promise<UserRulesResult<NamingRulesStatus>>
+  };
+}
+
+export type DocSorterApi = ReturnType<typeof createPreloadApi>;
