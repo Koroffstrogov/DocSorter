@@ -1920,7 +1920,7 @@ function createNamingSuggestionsSummary(
   container.className = "suggestion-summary";
   confidence.className = "suggestions-confidence";
   score.textContent = `Score ${formatSuggestionConfidence(suggestions.confidence)}`;
-  source.textContent = "Mémoire locale uniquement";
+  source.textContent = "Règles locales par défaut";
   confidence.append(score, source);
 
   container.append(confidence, createSuggestionGrid(suggestions));

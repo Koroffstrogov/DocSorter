@@ -1,4 +1,4 @@
-type NamingSuggestionSource = "text" | "filename" | "filename+text";
+type NamingSuggestionSource = RuleSource;
 
 interface SuggestedNamingField {
   value: string;
@@ -19,6 +19,7 @@ interface NamingSuggestions {
 interface NamingSuggestionsInput {
   filename: string;
   extractedText: string;
+  rulesCatalog?: NamingSuggestionRulesCatalog;
 }
 
 interface NamingSuggestionDraft {
@@ -60,178 +61,41 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     combinedSearch: string;
   }
 
-  interface PatternRule {
-    value: string;
-    patterns: string[];
-    confidence: number;
-    reason: string;
-  }
-
   interface DateCandidate {
     value: string;
     source: SearchSource;
     index: number;
   }
 
+  interface MatchedSuggestionRule {
+    rule: NamingSuggestionRule;
+    source: NamingSuggestionSource;
+    confidence: number;
+  }
+
   const combiningMarks = /[\u0300-\u036f]/g;
   const forbiddenFilenameChars = /[<>:"/\\|?*\u0000-\u001F]/g;
-
-  const documentTypeRules: PatternRule[] = [
-    {
-      value: "avis-imposition",
-      patterns: ["avis d imposition", "avis imposition", "impot", "impots", "revenu fiscal"],
-      confidence: 0.82,
-      reason: "Type avis d'imposition reconnu."
-    },
-    {
-      value: "facture",
-      patterns: ["facture", "invoice", "montant ttc"],
-      confidence: 0.8,
-      reason: "Type facture reconnu."
-    },
-    {
-      value: "attestation",
-      patterns: ["attestation"],
-      confidence: 0.76,
-      reason: "Type attestation reconnu."
-    },
-    {
-      value: "certificat",
-      patterns: ["certificat"],
-      confidence: 0.76,
-      reason: "Type certificat reconnu."
-    },
-    {
-      value: "contrat",
-      patterns: ["contrat"],
-      confidence: 0.74,
-      reason: "Type contrat reconnu."
-    },
-    {
-      value: "releve",
-      patterns: ["releve de compte", "releve bancaire", "releve"],
-      confidence: 0.76,
-      reason: "Type releve reconnu."
-    },
-    {
-      value: "assurance",
-      patterns: ["assurance habitation", "attestation assurance", "assurance"],
-      confidence: 0.74,
-      reason: "Type assurance reconnu."
-    },
-    {
-      value: "courrier",
-      patterns: ["courrier", "lettre"],
-      confidence: 0.66,
-      reason: "Type courrier reconnu."
-    },
-    {
-      value: "devis",
-      patterns: ["devis"],
-      confidence: 0.78,
-      reason: "Type devis reconnu."
-    },
-    {
-      value: "quittance",
-      patterns: ["quittance"],
-      confidence: 0.78,
-      reason: "Type quittance reconnu."
-    },
-    {
-      value: "bulletin",
-      patterns: ["bulletin de salaire", "bulletin"],
-      confidence: 0.74,
-      reason: "Type bulletin reconnu."
-    }
-  ];
-
-  const keywordRules: PatternRule[] = [
-    {
-      value: "controle-technique",
-      patterns: ["controle technique", "controle-technique"],
-      confidence: 0.68,
-      reason: "Mot-cle controle technique detecte."
-    },
-    {
-      value: "vidange",
-      patterns: ["vidange"],
-      confidence: 0.66,
-      reason: "Mot-cle vidange detecte."
-    },
-    {
-      value: "mutuelle",
-      patterns: ["mutuelle", "complementaire sante"],
-      confidence: 0.66,
-      reason: "Mot-cle mutuelle detecte."
-    },
-    {
-      value: "habitation",
-      patterns: ["habitation", "logement"],
-      confidence: 0.64,
-      reason: "Mot-cle habitation detecte."
-    },
-    {
-      value: "scolarite",
-      patterns: ["scolarite", "ecole", "college", "lycee"],
-      confidence: 0.64,
-      reason: "Mot-cle scolarite detecte."
-    },
-    {
-      value: "impots",
-      patterns: ["impot", "impots", "fiscal"],
-      confidence: 0.66,
-      reason: "Mot-cle impots detecte."
-    },
-    {
-      value: "banque",
-      patterns: ["banque", "bancaire", "compte courant"],
-      confidence: 0.64,
-      reason: "Mot-cle banque detecte."
-    },
-    {
-      value: "energie",
-      patterns: ["energie", "electricite", "gaz", "edf", "engie"],
-      confidence: 0.64,
-      reason: "Mot-cle energie detecte."
-    },
-    {
-      value: "echeancier",
-      patterns: ["echeancier", "mensualite"],
-      confidence: 0.64,
-      reason: "Mot-cle echeancier detecte."
-    },
-    {
-      value: "cotisation",
-      patterns: ["cotisation"],
-      confidence: 0.62,
-      reason: "Mot-cle cotisation detecte."
-    },
-    {
-      value: "ttc",
-      patterns: ["ttc", "montant ttc"],
-      confidence: 0.58,
-      reason: "Mot-cle TTC detecte."
-    },
-    {
-      value: "devis",
-      patterns: ["devis"],
-      confidence: 0.58,
-      reason: "Mot-cle devis detecte."
-    },
-    {
-      value: "facture",
-      patterns: ["facture"],
-      confidence: 0.58,
-      reason: "Mot-cle facture detecte."
-    }
-  ];
+  const maxKeywords = 5;
 
   function buildNamingSuggestions(input: NamingSuggestionsInput): NamingSuggestions {
+    const rulesCatalog = resolveRulesCatalog(input.rulesCatalog);
     const normalizedInput = createNormalizedInput(input);
+    const documentTypeRuleMatches = findMatchingSuggestionRules(
+      normalizedInput,
+      rulesCatalog.documentTypeRules
+    );
+    const subjectRuleMatches = findMatchingSuggestionRules(normalizedInput, rulesCatalog.subjectRules);
     const date = detectDate(normalizedInput);
-    const documentType = detectDocumentType(normalizedInput);
-    const subject = detectSubject(normalizedInput);
-    const keywords = detectKeywords(normalizedInput);
+    const documentType = selectRuleOutputField(documentTypeRuleMatches, "documentType");
+    const subject =
+      selectRuleOutputField(subjectRuleMatches, "subject") ??
+      detectFilenameFallbackSubject(normalizedInput.filename, rulesCatalog.stopWords);
+    const keywords = detectKeywords(
+      normalizedInput,
+      rulesCatalog,
+      documentTypeRuleMatches,
+      subjectRuleMatches
+    );
     const reasons = collectReasons(date, subject, documentType, keywords);
 
     return {
@@ -347,11 +211,19 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
 
   function findFullDateCandidates(value: string, source: SearchSource): DateCandidate[] {
     const candidates: DateCandidate[] = [];
-    collectDateMatches(value, source, candidates, /(^|[^0-9])((?:19|20)\d{2})-(\d{2})-(\d{2})(?=$|[^0-9])/g, (match) =>
-      normalizeDateParts(Number(match[2]), Number(match[3]), Number(match[4]))
+    collectDateMatches(
+      value,
+      source,
+      candidates,
+      /(^|[^0-9])((?:19|20)\d{2})-(\d{2})-(\d{2})(?=$|[^0-9])/g,
+      (match) => normalizeDateParts(Number(match[2]), Number(match[3]), Number(match[4]))
     );
-    collectDateMatches(value, source, candidates, /(^|[^0-9])([0-3]?\d)[/.-]([01]?\d)[/.-]((?:19|20)\d{2})(?=$|[^0-9])/g, (match) =>
-      normalizeDateParts(Number(match[4]), Number(match[3]), Number(match[2]))
+    collectDateMatches(
+      value,
+      source,
+      candidates,
+      /(^|[^0-9])([0-3]?\d)[/.-]([01]?\d)[/.-]((?:19|20)\d{2})(?=$|[^0-9])/g,
+      (match) => normalizeDateParts(Number(match[4]), Number(match[3]), Number(match[2]))
     );
 
     return candidates;
@@ -379,11 +251,15 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
 
   function containsInvalidDateLike(value: string): boolean {
     return (
-      hasInvalidDateMatch(value, /(^|[^0-9])((?:19|20)\d{2})-(\d{2})-(\d{2})(?=$|[^0-9])/g, (match) =>
-        normalizeDateParts(Number(match[2]), Number(match[3]), Number(match[4]))
+      hasInvalidDateMatch(
+        value,
+        /(^|[^0-9])((?:19|20)\d{2})-(\d{2})-(\d{2})(?=$|[^0-9])/g,
+        (match) => normalizeDateParts(Number(match[2]), Number(match[3]), Number(match[4]))
       ) ||
-      hasInvalidDateMatch(value, /(^|[^0-9])([0-3]?\d)[/.-]([01]?\d)[/.-]((?:19|20)\d{2})(?=$|[^0-9])/g, (match) =>
-        normalizeDateParts(Number(match[4]), Number(match[3]), Number(match[2]))
+      hasInvalidDateMatch(
+        value,
+        /(^|[^0-9])([0-3]?\d)[/.-]([01]?\d)[/.-]((?:19|20)\d{2})(?=$|[^0-9])/g,
+        (match) => normalizeDateParts(Number(match[4]), Number(match[3]), Number(match[2]))
       )
     );
   }
@@ -460,7 +336,9 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     }
 
     return Array.from(grouped.values()).sort(
-      (left, right) => dateGroupSourceRank(left.sources) - dateGroupSourceRank(right.sources) || left.index - right.index
+      (left, right) =>
+        dateGroupSourceRank(left.sources) - dateGroupSourceRank(right.sources) ||
+        left.index - right.index
     );
   }
 
@@ -468,127 +346,197 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     return sources.has("text") ? 0 : 1;
   }
 
-  function detectDocumentType(input: NormalizedInput): SuggestedNamingField | null {
-    return detectPatternField(input, documentTypeRules);
+  function selectRuleOutputField(
+    matches: MatchedSuggestionRule[],
+    field: "documentType" | "subject"
+  ): SuggestedNamingField | null {
+    const sortedMatches = [...matches]
+      .filter((match) => Boolean(match.rule.output[field]))
+      .sort((left, right) => right.confidence - left.confidence);
+    const selected = sortedMatches[0];
+
+    if (!selected) {
+      return null;
+    }
+
+    return {
+      value: selected.rule.output[field] ?? "",
+      source: selected.source,
+      confidence: selected.confidence,
+      reason: createRuleReason(selected.rule)
+    };
   }
 
-  function detectKeywords(input: NormalizedInput): SuggestedNamingField[] {
+  function detectKeywords(
+    input: NormalizedInput,
+    rulesCatalog: NamingSuggestionRulesCatalog,
+    documentTypeRuleMatches: MatchedSuggestionRule[],
+    subjectRuleMatches: MatchedSuggestionRule[]
+  ): SuggestedNamingField[] {
     const keywords: SuggestedNamingField[] = [];
     const seenValues = new Set<string>();
 
-    for (const rule of keywordRules) {
-      if (keywords.length >= 5 || seenValues.has(rule.value)) {
+    for (const match of [...documentTypeRuleMatches, ...subjectRuleMatches]) {
+      for (const keyword of match.rule.output.keywords ?? []) {
+        addKeywordSuggestion(keywords, seenValues, {
+          value: normalizeFilenameBlock(keyword),
+          confidence: match.confidence,
+          reason: createRuleReason(match.rule),
+          source: match.source
+        });
+      }
+    }
+
+    for (const rule of rulesCatalog.keywordRules) {
+      if (keywords.length >= maxKeywords) {
+        break;
+      }
+
+      const match = matchKeywordAliasRule(input, rule);
+      if (!match) {
         continue;
       }
 
-      const detected = detectPatternField(input, [rule]);
-      if (!detected) {
-        continue;
-      }
-
-      keywords.push(detected);
-      seenValues.add(detected.value);
+      addKeywordSuggestion(keywords, seenValues, match);
     }
 
     return keywords;
   }
 
-  function detectSubject(input: NormalizedInput): SuggestedNamingField | null {
-    const subjectRules: PatternRule[] = [
-      {
-        value: "Renault-Captur",
-        patterns: ["renault captur"],
-        confidence: 0.86,
-        reason: "Sujet Renault Captur reconnu."
-      },
-      {
-        value: "Scenic",
-        patterns: ["scenic"],
-        confidence: 0.78,
-        reason: "Sujet Scenic reconnu."
-      },
-      {
-        value: "Maison",
-        patterns: ["assurance habitation"],
-        confidence: 0.76,
-        reason: "Sujet habitation reconnu."
-      },
-      {
-        value: "Impots",
-        patterns: ["avis d imposition", "avis imposition", "impot", "impots"],
-        confidence: 0.74,
-        reason: "Sujet impots reconnu."
-      },
-      {
-        value: "Ecole",
-        patterns: ["certificat de scolarite", "scolarite", "ecole"],
-        confidence: 0.74,
-        reason: "Sujet scolarite reconnu."
-      }
-    ];
-
-    const directSubject = detectPatternField(input, subjectRules);
-    if (directSubject) {
-      return directSubject;
+  function addKeywordSuggestion(
+    keywords: SuggestedNamingField[],
+    seenValues: Set<string>,
+    suggestion: SuggestedNamingField
+  ): void {
+    const value = normalizeFilenameBlock(suggestion.value);
+    if (!value || keywords.length >= maxKeywords || seenValues.has(value.toLowerCase())) {
+      return;
     }
 
-    return detectFilenameFallbackSubject(input.filename);
+    keywords.push({
+      ...suggestion,
+      value
+    });
+    seenValues.add(value.toLowerCase());
   }
 
-  function detectPatternField(
+  function findMatchingSuggestionRules(
     input: NormalizedInput,
-    rules: PatternRule[]
-  ): SuggestedNamingField | null {
+    rules: NamingSuggestionRule[]
+  ): MatchedSuggestionRule[] {
+    const matches: MatchedSuggestionRule[] = [];
+
     for (const rule of rules) {
-      const textMatch = rule.patterns.some((pattern) => input.textSearch.includes(pattern));
-      const filenameMatch = rule.patterns.some((pattern) => input.filenameSearch.includes(pattern));
-
-      if (!textMatch && !filenameMatch) {
-        continue;
+      const match = matchSuggestionRule(input, rule);
+      if (match) {
+        matches.push(match);
       }
-
-      const source = sourceFromBooleans(textMatch, filenameMatch);
-      return {
-        value: rule.value,
-        source,
-        confidence: Math.min(0.95, rule.confidence + (source === "filename+text" ? 0.08 : 0)),
-        reason: rule.reason
-      };
     }
 
-    return null;
+    return matches;
   }
 
-  function detectFilenameFallbackSubject(filename: string): SuggestedNamingField | null {
+  function matchSuggestionRule(
+    input: NormalizedInput,
+    rule: NamingSuggestionRule
+  ): MatchedSuggestionRule | null {
+    const textMatch = matchTerms(input.textSearch, rule.match);
+    const filenameMatch = matchTerms(input.filenameSearch, rule.match);
+    const combinedMatch = matchTerms(input.combinedSearch, rule.match);
+
+    if (rule.source === "text" && !textMatch) {
+      return null;
+    }
+
+    if (rule.source === "filename" && !filenameMatch) {
+      return null;
+    }
+
+    if (rule.source === "filename+text" && (!combinedMatch || !hasAnyRuleTerm(input.textSearch, rule.match) || !hasAnyRuleTerm(input.filenameSearch, rule.match))) {
+      return null;
+    }
+
+    if (!rule.source && !combinedMatch) {
+      return null;
+    }
+
+    const source =
+      rule.source ??
+      sourceFromBooleans(
+        textMatch || hasAnyRuleTerm(input.textSearch, rule.match),
+        filenameMatch || hasAnyRuleTerm(input.filenameSearch, rule.match)
+      );
+
+    return {
+      rule,
+      source,
+      confidence: applySourceBoost(normalizeRuleConfidence(rule.confidence), source)
+    };
+  }
+
+  function matchKeywordAliasRule(
+    input: NormalizedInput,
+    rule: KeywordAliasRule
+  ): SuggestedNamingField | null {
+    const aliases = rule.aliases.map(normalizeSearchText).filter(Boolean);
+    const textMatch = aliases.some((alias) => input.textSearch.includes(alias));
+    const filenameMatch = aliases.some((alias) => input.filenameSearch.includes(alias));
+
+    if (!textMatch && !filenameMatch) {
+      return null;
+    }
+
+    const source = sourceFromBooleans(textMatch, filenameMatch);
+    return {
+      value: rule.value,
+      source,
+      confidence: applySourceBoost(normalizeRuleConfidence(rule.confidence ?? 60), source),
+      reason: `Mot-cle ${normalizeFilenameBlock(rule.value)} detecte.`
+    };
+  }
+
+  function matchTerms(haystack: string, match: SuggestionRuleMatch): boolean {
+    const allOf = normalizeRuleTerms(match.allOf);
+    const anyOf = normalizeRuleTerms(match.anyOf);
+    const noneOf = normalizeRuleTerms(match.noneOf);
+
+    if (allOf.length > 0 && !allOf.every((term) => haystack.includes(term))) {
+      return false;
+    }
+
+    if (anyOf.length > 0 && !anyOf.some((term) => haystack.includes(term))) {
+      return false;
+    }
+
+    if (noneOf.length > 0 && noneOf.some((term) => haystack.includes(term))) {
+      return false;
+    }
+
+    return allOf.length > 0 || anyOf.length > 0;
+  }
+
+  function hasAnyRuleTerm(haystack: string, match: SuggestionRuleMatch): boolean {
+    return [...normalizeRuleTerms(match.allOf), ...normalizeRuleTerms(match.anyOf)].some((term) =>
+      haystack.includes(term)
+    );
+  }
+
+  function normalizeRuleTerms(value: string[] | undefined): string[] {
+    return (value ?? []).map(normalizeSearchText).filter(Boolean);
+  }
+
+  function detectFilenameFallbackSubject(
+    filename: string,
+    stopWords: string[]
+  ): SuggestedNamingField | null {
     const baseName = stripExtension(filename)
       .replace(/(?:19|20)\d{2}-\d{2}-\d{2}/g, " ")
       .replace(/[0-3]?\d[/.-][01]?\d[/.-](?:19|20)\d{2}/g, " ")
       .replace(/(?:19|20)\d{2}/g, " ");
-    const genericTokens = new Set([
-      "scan",
-      "document",
-      "doc",
-      "pdf",
-      "image",
-      "img",
-      "facture",
-      "devis",
-      "releve",
-      "avis",
-      "imposition",
-      "impot",
-      "impots",
-      "attestation",
-      "certificat",
-      "contrat",
-      "assurance",
-      "courrier",
-      "quittance",
-      "bulletin"
-    ]);
+    const normalizedStopWords = new Set(stopWords.map((word) => normalizeFilenameBlock(word).toLowerCase()));
     const tokens = normalizeFilenameBlock(baseName)
       .split("-")
-      .filter((token) => token.length > 1 && !genericTokens.has(token.toLowerCase()));
+      .filter((token) => token.length > 1 && !normalizedStopWords.has(token.toLowerCase()));
     const fallbackValue = tokens.slice(0, 4).join("-");
 
     if (!fallbackValue) {
@@ -667,9 +615,81 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     };
   }
 
+  function resolveRulesCatalog(
+    rulesCatalog: NamingSuggestionRulesCatalog | undefined
+  ): NamingSuggestionRulesCatalog {
+    if (!rulesCatalog) {
+      return getDefaultRulesCatalog();
+    }
+
+    const validation =
+      globalThis.DocSorterNamingSuggestionRulesCatalog.validateNamingSuggestionRulesCatalog(rulesCatalog);
+    return validation.catalog ?? createEmptyRulesCatalog();
+  }
+
+  function getDefaultRulesCatalog(): NamingSuggestionRulesCatalog {
+    if (globalThis.DocSorterNamingSuggestionRulesCatalog) {
+      return globalThis.DocSorterNamingSuggestionRulesCatalog.getDefaultNamingSuggestionRulesCatalog();
+    }
+
+    if (globalThis.DocSorterDefaultNamingSuggestionRules) {
+      return cloneRulesCatalog(globalThis.DocSorterDefaultNamingSuggestionRules);
+    }
+
+    return createEmptyRulesCatalog();
+  }
+
+  function createEmptyRulesCatalog(): NamingSuggestionRulesCatalog {
+    return {
+      version: 1,
+      documentTypeRules: [],
+      subjectRules: [],
+      keywordRules: [],
+      stopWords: []
+    };
+  }
+
+  function cloneRulesCatalog(catalog: NamingSuggestionRulesCatalog): NamingSuggestionRulesCatalog {
+    return {
+      version: 1,
+      documentTypeRules: catalog.documentTypeRules.map((rule) => ({
+        ...rule,
+        match: {
+          ...(rule.match.allOf ? { allOf: [...rule.match.allOf] } : {}),
+          ...(rule.match.anyOf ? { anyOf: [...rule.match.anyOf] } : {}),
+          ...(rule.match.noneOf ? { noneOf: [...rule.match.noneOf] } : {})
+        },
+        output: {
+          ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
+          ...(rule.output.subject ? { subject: rule.output.subject } : {}),
+          ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+        }
+      })),
+      subjectRules: catalog.subjectRules.map((rule) => ({
+        ...rule,
+        match: {
+          ...(rule.match.allOf ? { allOf: [...rule.match.allOf] } : {}),
+          ...(rule.match.anyOf ? { anyOf: [...rule.match.anyOf] } : {}),
+          ...(rule.match.noneOf ? { noneOf: [...rule.match.noneOf] } : {})
+        },
+        output: {
+          ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
+          ...(rule.output.subject ? { subject: rule.output.subject } : {}),
+          ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+        }
+      })),
+      keywordRules: catalog.keywordRules.map((rule) => ({
+        ...rule,
+        aliases: [...rule.aliases]
+      })),
+      stopWords: [...catalog.stopWords]
+    };
+  }
+
   function normalizeSearchText(value: string): string {
     return removeAccents(value)
       .toLowerCase()
+      .replace(/['’`-]+/g, " ")
       .replace(/[^a-z0-9]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
@@ -703,6 +723,19 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     }
 
     return baseName.slice(0, lastDotIndex);
+  }
+
+  function normalizeRuleConfidence(confidence: number): number {
+    const normalized = confidence > 1 ? confidence / 100 : confidence;
+    return Math.max(0, Math.min(1, normalized));
+  }
+
+  function applySourceBoost(confidence: number, source: NamingSuggestionSource): number {
+    return Math.min(0.95, confidence + (source === "filename+text" ? 0.08 : 0));
+  }
+
+  function createRuleReason(rule: NamingSuggestionRule): string {
+    return `Regle locale : ${rule.label}.`;
   }
 
   function sourceFromBooleans(textMatch: boolean, filenameMatch: boolean): NamingSuggestionSource {
