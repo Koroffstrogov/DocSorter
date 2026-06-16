@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 5B : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, détection explicite des doublons exacts et exploitation locale de la file par recherche, filtres, tri et navigation.
+Lot 5C : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, détection explicite des doublons exacts, exploitation locale de la file et raccourcis clavier sûrs.
 
 ## Commandes
 
@@ -65,7 +65,10 @@ npm run dev
 - filtres visuels `Tous`, `PDF`, `Images`, `Doublons`, `Indisponibles` et `À traiter` ;
 - tri stable de la file affichée par nom, date, taille, type ou statut ;
 - navigation précédent/suivant dans la file actuellement filtrée et triée ;
-- sélection rapide d'un autre fichier doublon présent dans la file source depuis le panneau `Doublons exacts`.
+- sélection rapide d'un autre fichier doublon présent dans la file source depuis le panneau `Doublons exacts` ;
+- raccourcis clavier pour naviguer, rechercher, filtrer, rafraîchir, vérifier, classer après plan prêt et annuler hors saisie ;
+- panneau d'aide `Raccourcis (?)` listant les touches disponibles ;
+- protection des champs de saisie : les raccourcis globaux ne se déclenchent pas pendant la saisie, sauf `Ctrl+F` et `Escape` dans la recherche.
 
 ## Convention de nommage
 
@@ -117,6 +120,22 @@ La recherche et les filtres s'appliquent uniquement aux documents déjà présen
 
 Le compteur de file affiche le nombre de documents visibles sur le total scanné. Si le document actif est masqué par la recherche ou un filtre, il reste sélectionné dans l'état réel et l'interface l'indique sobrement.
 
+## Raccourcis clavier
+
+Les raccourcis globaux sont désactivés dans les champs de saisie, les listes de sélection et les zones `contenteditable`. `Ctrl+Z` dans un champ texte reste l'annulation native de saisie.
+
+- `ArrowDown` / `ArrowUp` : document suivant / précédent dans la file visible ;
+- `PageDown` / `PageUp` : avancer / reculer de plusieurs documents ;
+- `Ctrl+F` : focaliser la recherche ;
+- `Escape` dans la recherche : vider la recherche, puis retirer le focus si elle est déjà vide ;
+- `D` : activer ou désactiver le filtre `Doublons` ;
+- `T` : revenir au filtre `Tous` ;
+- `R` : rafraîchir la source si disponible ;
+- `V` : lancer `Vérifier avant classement` si disponible ;
+- `Ctrl+Enter` : lancer le classement réel uniquement si un plan valide est affiché ;
+- `Ctrl+Z` : annuler la dernière action uniquement hors champ de saisie ;
+- `?` : afficher ou masquer l'aide des raccourcis.
+
 ## Dépendances
 
 - `pdfjs-dist` : utilisé pour rendre localement les PDF dans un canvas. Cette dépendance est limitée au Lot 2 et ne fait pas d'OCR, d'extraction texte, d'upload ou d'analyse distante.
@@ -138,7 +157,7 @@ Le compteur de file affiche le nombre de documents visibles sur le total scanné
 
 ## Recommandation de test
 
-Tester le Lot 5B d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Tester le Lot 5C d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
 Pour le classement réel et l'annulation, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
 ## Passage futur recommandé
@@ -146,7 +165,7 @@ Pour le classement réel et l'annulation, tester aussi la fermeture puis relance
 Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
-- raccourcis clavier de navigation si l'usage le justifie ;
+- persistance locale de préférences UI simples si l'usage le justifie ;
 - aide au choix de dossier cible, sans OCR ni upload.
 
 ## Validations manuelles
@@ -204,6 +223,20 @@ Un prochain lot pourra ajouter :
 - les boutons `Précédent` et `Suivant` suivent la liste actuellement filtrée et triée ;
 - si le document actif est masqué par un filtre, un message l'indique sans le supprimer de l'état réel ;
 - depuis le panneau `Doublons exacts`, cliquer un doublon présent dans la source sélectionne ce document ;
+- `ArrowDown` et `ArrowUp` changent de document dans la file visible et l'aperçu suit ;
+- `PageDown` et `PageUp` avancent ou reculent de plusieurs documents ;
+- `Ctrl+F` focalise le champ de recherche ;
+- `Escape` vide la recherche, puis retire le focus si elle est déjà vide ;
+- `D` active ou désactive le filtre `Doublons` hors champ de saisie ;
+- `T` revient au filtre `Tous` hors champ de saisie ;
+- `R` rafraîchit la source si le bouton est disponible ;
+- les touches lettres dans les champs date, sujet, type, mots-clés ou recherche ne déclenchent pas les raccourcis globaux ;
+- `V` lance seulement la vérification avant classement ;
+- une simple touche `Enter` ne lance jamais le classement réel ;
+- `Ctrl+Enter` lance le classement réel uniquement quand un plan valide est affiché ;
+- `Ctrl+Z` hors champ texte annule la dernière action si elle est disponible ;
+- `Ctrl+Z` dans un champ texte n'annule pas le classement ;
+- `?` affiche ou masque l'aide des raccourcis ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

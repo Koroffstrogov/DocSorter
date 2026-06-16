@@ -18,12 +18,15 @@
       </div>
       <div class="directory-controls" aria-label="Dossiers de travail">
         <button id="select-source" type="button">Choisir source</button>
-        <button id="refresh-source" type="button" disabled>Rafraîchir</button>
+        <button id="refresh-source" type="button" disabled>Rafraîchir (R)</button>
         <button id="select-target" type="button">Choisir cible</button>
       </div>
       <div class="header-meta">
         <span class="status-pill">Local</span>
         <span id="app-version">v0.1.0</span>
+        <button id="shortcut-help-toggle" class="shortcut-help-toggle" type="button" aria-pressed="false">
+          Raccourcis (?)
+        </button>
       </div>
     </header>
 
@@ -35,6 +38,24 @@
       <div>
         <span>Cible</span>
         <strong id="target-path">Aucun dossier cible sélectionné</strong>
+      </div>
+    </section>
+
+    <section id="shortcut-help" class="shortcut-help" aria-label="Aide raccourcis clavier" hidden>
+      <div>
+        <strong>Raccourcis clavier</strong>
+        <dl>
+          <div><dt>↑ / ↓</dt><dd>Document précédent / suivant</dd></div>
+          <div><dt>Page ↑ / Page ↓</dt><dd>Reculer / avancer dans la file visible</dd></div>
+          <div><dt>Ctrl+F</dt><dd>Rechercher dans la file</dd></div>
+          <div><dt>Échap</dt><dd>Vider ou quitter la recherche</dd></div>
+          <div><dt>D / T</dt><dd>Filtre doublons / tous</dd></div>
+          <div><dt>R</dt><dd>Rafraîchir la source</dd></div>
+          <div><dt>V</dt><dd>Vérifier avant classement</dd></div>
+          <div><dt>Ctrl+Entrée</dt><dd>Classer seulement si le plan est prêt</dd></div>
+          <div><dt>Ctrl+Z</dt><dd>Annuler la dernière action hors saisie</dd></div>
+          <div><dt>?</dt><dd>Afficher ou masquer cette aide</dd></div>
+        </dl>
       </div>
     </section>
 
@@ -177,8 +198,8 @@
               </div>
             </div>
             <div class="classification-actions">
-              <button id="prepare-classification" type="button" disabled>Vérifier avant classement</button>
-              <button id="execute-classification" type="button" disabled>Valider et classer</button>
+              <button id="prepare-classification" type="button" disabled>Vérifier avant classement (V)</button>
+              <button id="execute-classification" type="button" disabled>Valider et classer (Ctrl+Entrée)</button>
             </div>
             <section id="classification-summary" class="classification-summary" aria-live="polite" hidden></section>
           </section>
@@ -188,7 +209,7 @@
               <h3>Historique récent</h3>
               <div class="history-actions">
                 <button id="refresh-history" type="button">Rafraîchir</button>
-                <button id="undo-last-action" type="button" disabled>Annuler dernière action</button>
+                <button id="undo-last-action" type="button" disabled>Annuler dernière action (Ctrl+Z)</button>
               </div>
             </div>
             <div id="history-state" class="history-state">Lecture du journal...</div>
@@ -201,6 +222,7 @@
     <script src="./imagePreview.js"></script>
     <script src="./pdfPreview.js"></script>
     <script src="../documents/documentQueueView.js"></script>
+    <script src="./keyboardShortcuts.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>

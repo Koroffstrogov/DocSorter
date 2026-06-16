@@ -264,6 +264,7 @@ interface AppState {
   lastUndoableAction: UndoableClassificationAction | null;
   history: HistoryState;
   duplicates: DuplicateAnalysisState;
+  shortcutsHelpVisible: boolean;
 }
 
 interface RefreshOptions {
@@ -290,7 +291,8 @@ const state: AppState = {
   classification: createIdleClassificationState(),
   lastUndoableAction: null,
   history: createIdleHistoryState(),
-  duplicates: createIdleDuplicateAnalysisState()
+  duplicates: createIdleDuplicateAnalysisState(),
+  shortcutsHelpVisible: false
 };
 
 let previewRequestId = 0;
@@ -305,6 +307,8 @@ const version = document.querySelector<HTMLElement>("#app-version");
 const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-source");
 const refreshSourceButton = document.querySelector<HTMLButtonElement>("#refresh-source");
 const selectTargetButton = document.querySelector<HTMLButtonElement>("#select-target");
+const shortcutHelpToggleButton = document.querySelector<HTMLButtonElement>("#shortcut-help-toggle");
+const shortcutHelpPanel = document.querySelector<HTMLElement>("#shortcut-help");
 const analyzeDuplicatesButton = document.querySelector<HTMLButtonElement>("#analyze-duplicates");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
@@ -383,6 +387,10 @@ selectTargetButton?.addEventListener("click", () => {
   void selectTargetDirectory();
 });
 
+shortcutHelpToggleButton?.addEventListener("click", () => {
+  toggleShortcutHelp();
+});
+
 analyzeDuplicatesButton?.addEventListener("click", () => {
   void analyzeExactDuplicates();
 });
@@ -393,8 +401,7 @@ queueSearchInput?.addEventListener("input", () => {
 });
 
 clearQueueSearchButton?.addEventListener("click", () => {
-  state.queueView.query = "";
-  renderQueue();
+  clearQueueSearch();
 });
 
 queueFilterButtons.forEach((button) => {
@@ -404,8 +411,7 @@ queueFilterButtons.forEach((button) => {
       return;
     }
 
-    state.queueView.filter = filter;
-    renderQueue();
+    setQueueFilter(filter);
   });
 });
 
@@ -526,6 +532,10 @@ keepDuplicateButton?.addEventListener("click", () => {
 
 refreshHistoryButton?.addEventListener("click", () => {
   void refreshRecentHistory();
+});
+
+document.addEventListener("keydown", (event) => {
+  handleGlobalKeyboardShortcut(event);
 });
 
 render();
@@ -768,6 +778,7 @@ function render(): void {
   renderPreview();
   renderDetails();
   renderHistory();
+  renderShortcutHelp();
 }
 
 function renderControls(): void {
@@ -807,6 +818,109 @@ function renderControls(): void {
   if (refreshHistoryButton) {
     refreshHistoryButton.disabled = state.history.isLoading || isClassificationBusy();
   }
+}
+
+function handleGlobalKeyboardShortcut(event: KeyboardEvent): void {
+  const action = DocSorterKeyboardShortcuts.resolveKeyboardShortcut(event, {
+    focusKind: DocSorterKeyboardShortcuts.getShortcutFocusKind(document.activeElement),
+    searchHasText: state.queueView.query.length > 0,
+    sourceAvailable: canRefreshSource(),
+    prepareClassificationAvailable: canPrepareClassificationPlan(),
+    executeClassificationAvailable: canExecuteClassificationShortcut(),
+    undoAvailable: canUndoLastAction()
+  });
+
+  if (!action) {
+    return;
+  }
+
+  event.preventDefault();
+  executeKeyboardShortcut(action);
+}
+
+function executeKeyboardShortcut(action: KeyboardShortcutAction): void {
+  switch (action) {
+    case "navigate-next":
+      navigateVisibleQueue("next");
+      return;
+    case "navigate-previous":
+      navigateVisibleQueue("previous");
+      return;
+    case "page-next":
+      navigateVisibleQueueByOffset(8);
+      return;
+    case "page-previous":
+      navigateVisibleQueueByOffset(-8);
+      return;
+    case "focus-search":
+      focusQueueSearch();
+      return;
+    case "clear-search":
+      clearQueueSearch();
+      return;
+    case "blur-search":
+      queueSearchInput?.blur();
+      return;
+    case "toggle-duplicates-filter":
+      setQueueFilter(state.queueView.filter === "duplicates" ? "all" : "duplicates");
+      return;
+    case "show-all-filter":
+      setQueueFilter("all");
+      return;
+    case "refresh-source":
+      if (canRefreshSource()) {
+        void refreshDocuments({
+          preserveSelection: true,
+          successMessage: "Rafraîchissement réussi"
+        });
+      }
+      return;
+    case "prepare-classification":
+      if (canPrepareClassificationPlan()) {
+        void prepareClassificationSimulation();
+      }
+      return;
+    case "execute-classification":
+      if (canExecuteClassificationShortcut()) {
+        void executeClassificationAction();
+      }
+      return;
+    case "undo-last-action":
+      if (canUndoLastAction()) {
+        void undoLastClassificationAction();
+      }
+      return;
+    case "toggle-shortcuts-help":
+      toggleShortcutHelp();
+      return;
+  }
+}
+
+function renderShortcutHelp(): void {
+  if (shortcutHelpPanel) {
+    shortcutHelpPanel.hidden = !state.shortcutsHelpVisible;
+  }
+
+  if (shortcutHelpToggleButton) {
+    shortcutHelpToggleButton.ariaPressed = String(state.shortcutsHelpVisible);
+  }
+}
+
+function toggleShortcutHelp(): void {
+  state.shortcutsHelpVisible = !state.shortcutsHelpVisible;
+  renderShortcutHelp();
+}
+
+function canRefreshSource(): boolean {
+  return Boolean(state.sourcePath && !state.isLoading && !isClassificationBusy());
+}
+
+function canUndoLastAction(): boolean {
+  return Boolean(state.lastUndoableAction && !isClassificationBusy());
+}
+
+function canExecuteClassificationShortcut(): boolean {
+  return Boolean(canExecuteClassification() && classificationSummary && !classificationSummary.hidden);
 }
 
 function renderPaths(): void {
@@ -984,6 +1098,39 @@ function navigateVisibleQueue(direction: QueueViewNavigationDirection): void {
   }
 
   selectDocumentByPath(targetPath);
+}
+
+function navigateVisibleQueueByOffset(offset: number): void {
+  const visibleDocuments = getVisibleQueue().documents;
+  if (visibleDocuments.length === 0) {
+    return;
+  }
+
+  const activeIndex = state.activeDocumentPath
+    ? visibleDocuments.findIndex((documentItem) => documentItem.filePath === state.activeDocumentPath)
+    : -1;
+  const targetIndex =
+    activeIndex < 0 ? 0 : Math.min(visibleDocuments.length - 1, Math.max(0, activeIndex + offset));
+  selectDocument(visibleDocuments[targetIndex]);
+}
+
+function focusQueueSearch(): void {
+  if (!queueSearchInput) {
+    return;
+  }
+
+  queueSearchInput.focus();
+  queueSearchInput.select();
+}
+
+function clearQueueSearch(): void {
+  state.queueView.query = "";
+  renderQueue();
+}
+
+function setQueueFilter(filter: QueueViewFilter): void {
+  state.queueView.filter = filter;
+  renderQueue();
 }
 
 function selectDocumentByPath(filePath: string): void {
