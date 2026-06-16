@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { PrepareClassificationPlanResult } from "../classification/classificationPlan";
 import type { DocumentDiscoveryResult, Result } from "../documents/documentDiscovery";
 import type { ExactDuplicateAnalysisResult } from "../duplicates/exactDuplicates";
+import type { PdfTextExtractionResult } from "../extraction/pdfTextExtraction";
 import type { ExecuteClassificationResult, UndoClassificationResult } from "../file-ops/classifyFile";
 import type { ActionJournalReadResult } from "../history/actionJournal";
 import type { UndoableClassificationAction } from "../history/historyTypes";
@@ -51,6 +52,8 @@ const api = {
     ipcRenderer.invoke("classification:getLastUndoableAction"),
   analyzeExactDuplicates: (): Promise<ExactDuplicateAnalysisResult> =>
     ipcRenderer.invoke("duplicates:analyzeExact"),
+  extractTextFromActivePdf: (documentPath: string): Promise<PdfTextExtractionResult> =>
+    ipcRenderer.invoke("extraction:extractPdfText", documentPath),
   getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
     ipcRenderer.invoke("history:getRecent", limit)
 };

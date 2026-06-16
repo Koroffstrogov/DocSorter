@@ -219,6 +219,42 @@ interface DuplicateAnalysisState {
   analyzedAt: string;
 }
 
+type TextExtractionStatus = "idle" | "extracting" | "text-found" | "empty" | "error";
+
+interface PdfTextExtraction {
+  status: "text-found" | "empty";
+  pageCount: number;
+  pagesAnalyzed: number;
+  characterCount: number;
+  excerpt: string;
+  excerptCharacterCount: number;
+  truncated: boolean;
+  extractedAt: string;
+}
+
+interface PdfTextExtractionError {
+  code:
+    | "DOCUMENT_NOT_SELECTED"
+    | "DOCUMENT_NOT_IN_QUEUE"
+    | "DOCUMENT_NOT_FOUND"
+    | "DOCUMENT_NOT_PDF"
+    | "PDF_TEXT_EMPTY"
+    | "PDF_PROTECTED_OR_UNREADABLE"
+    | "PDF_EXTRACTION_FAILED"
+    | "UNKNOWN_ERROR";
+  message: string;
+}
+
+interface TextExtractionDocumentState {
+  status: TextExtractionStatus;
+  result: PdfTextExtraction | null;
+  error: PdfTextExtractionError | null;
+}
+
+interface TextExtractionState {
+  byDocumentPath: Record<string, TextExtractionDocumentState>;
+}
+
 interface ClassificationState {
   status: ClassificationPanelStatus;
   plan: ClassificationPlan | null;
@@ -264,6 +300,7 @@ interface AppState {
   lastUndoableAction: UndoableClassificationAction | null;
   history: HistoryState;
   duplicates: DuplicateAnalysisState;
+  textExtraction: TextExtractionState;
   shortcutsHelpVisible: boolean;
 }
 
@@ -292,6 +329,7 @@ const state: AppState = {
   lastUndoableAction: null,
   history: createIdleHistoryState(),
   duplicates: createIdleDuplicateAnalysisState(),
+  textExtraction: createIdleTextExtractionState(),
   shortcutsHelpVisible: false
 };
 
@@ -301,6 +339,7 @@ let namingRequestId = 0;
 let destinationRequestId = 0;
 let classificationRequestId = 0;
 let duplicateAnalysisRequestId = 0;
+let textExtractionRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
@@ -340,6 +379,9 @@ const duplicatePanel = document.querySelector<HTMLElement>("#duplicate-panel");
 const duplicateDetails = document.querySelector<HTMLElement>("#duplicate-details");
 const ignoreDuplicateButton = document.querySelector<HTMLButtonElement>("#ignore-duplicate");
 const keepDuplicateButton = document.querySelector<HTMLButtonElement>("#keep-duplicate");
+const textExtractionPanel = document.querySelector<HTMLElement>("#text-extraction-panel");
+const extractPdfTextButton = document.querySelector<HTMLButtonElement>("#extract-pdf-text");
+const textExtractionDetails = document.querySelector<HTMLElement>("#text-extraction-details");
 const namingPanel = document.querySelector<HTMLElement>("#naming-panel");
 const namingDateInput = document.querySelector<HTMLInputElement>("#naming-date");
 const namingSubjectInput = document.querySelector<HTMLInputElement>("#naming-subject");
@@ -530,6 +572,10 @@ keepDuplicateButton?.addEventListener("click", () => {
   ignoreActiveDuplicateForSession();
 });
 
+extractPdfTextButton?.addEventListener("click", () => {
+  void extractTextFromActivePdf();
+});
+
 refreshHistoryButton?.addEventListener("click", () => {
   void refreshRecentHistory();
 });
@@ -563,6 +609,7 @@ async function selectSourceDirectory(): Promise<void> {
   state.preview = createIdlePreviewState();
   resetNamingState();
   resetDuplicateAnalysisState();
+  resetTextExtractionState();
   state.queueMessage = "Analyse du dossier source";
   render();
 
@@ -621,6 +668,7 @@ async function refreshDocuments(options: RefreshOptions): Promise<void> {
   state.documents = result.value.documents;
   resetClassificationState();
   resetDuplicateAnalysisState();
+  resetTextExtractionState();
   const activeDocumentAfterRefresh = activeDocumentPathBeforeRefresh
     ? state.documents.find((documentItem) => documentItem.filePath === activeDocumentPathBeforeRefresh) ?? null
     : null;
@@ -664,6 +712,7 @@ function applyDiscoveryError(error: AppError): void {
   state.preview = createIdlePreviewState();
   resetNamingState();
   resetDuplicateAnalysisState();
+  resetTextExtractionState();
   state.queueMessage = error.message;
 }
 
@@ -805,6 +854,10 @@ function renderControls(): void {
 
   if (prepareClassificationButton) {
     prepareClassificationButton.disabled = !canPrepareClassificationPlan();
+  }
+
+  if (extractPdfTextButton) {
+    extractPdfTextButton.disabled = !canExtractTextFromActivePdf();
   }
 
   if (executeClassificationButton) {
@@ -1290,6 +1343,7 @@ function renderPdfPage(container: HTMLElement, pageNumber: number, zoom: number)
 function renderDetails(): void {
   if (!documentDetails) {
     renderDuplicatePanel();
+    renderTextExtractionPanel();
     renderNamingPanel(true);
     return;
   }
@@ -1299,6 +1353,7 @@ function renderDetails(): void {
     documentDetails.className = "details-empty";
     documentDetails.replaceChildren("Aucun document actif");
     renderDuplicatePanel();
+    renderTextExtractionPanel();
     renderNamingPanel(true);
     return;
   }
@@ -1314,6 +1369,7 @@ function renderDetails(): void {
     createDetailRow("Dossier cible", state.targetPath ?? "Aucun dossier cible sélectionné")
   );
   renderDuplicatePanel();
+  renderTextExtractionPanel();
   renderNamingPanel(true);
 }
 
@@ -1518,7 +1574,7 @@ function documentQueueStatusLabel(documentItem: DocumentItem): string {
 
   return documentHasVisibleDuplicate(documentItem.filePath)
     ? "Doublon exact"
-    : statusLabel(documentItem.status);
+    : textExtractionQueueLabel(documentItem) ?? statusLabel(documentItem.status);
 }
 
 function duplicateAnalysisSummary(analysis: ExactDuplicateAnalysis): string {
@@ -1573,6 +1629,181 @@ function formatDuplicateNames(files: DuplicateFileReference[]): string {
 
 function shortHash(hash: string): string {
   return hash.length > 16 ? `${hash.slice(0, 16)}...` : hash;
+}
+
+async function extractTextFromActivePdf(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canExtractTextFromActivePdf(activeDocument)) {
+    return;
+  }
+
+  const requestId = ++textExtractionRequestId;
+  setTextExtractionState(activeDocument.filePath, {
+    status: "extracting",
+    result: null,
+    error: null
+  });
+  render();
+
+  const result = await window.docSorter.extractTextFromActivePdf(activeDocument.filePath);
+  if (requestId !== textExtractionRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    if (result.error.code === "DOCUMENT_NOT_FOUND") {
+      markDocumentUnavailable(activeDocument.filePath);
+    }
+
+    setTextExtractionState(activeDocument.filePath, {
+      status: "error",
+      result: null,
+      error: result.error as PdfTextExtractionError
+    });
+    render();
+    return;
+  }
+
+  const extraction = result.value as PdfTextExtraction;
+  setTextExtractionState(activeDocument.filePath, {
+    status: extraction.status,
+    result: extraction,
+    error: null
+  });
+  render();
+}
+
+function renderTextExtractionPanel(): void {
+  if (!textExtractionPanel || !textExtractionDetails) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || activeDocument.extension !== ".pdf") {
+    textExtractionPanel.hidden = true;
+    textExtractionDetails.replaceChildren();
+    return;
+  }
+
+  const extractionState = getTextExtractionState(activeDocument.filePath);
+  textExtractionPanel.hidden = false;
+
+  if (extractPdfTextButton) {
+    extractPdfTextButton.disabled = !canExtractTextFromActivePdf(activeDocument);
+  }
+
+  if (extractionState.status === "idle") {
+    textExtractionDetails.replaceChildren("Texte non analysé");
+    return;
+  }
+
+  if (extractionState.status === "extracting") {
+    textExtractionDetails.replaceChildren("Extraction du texte...");
+    return;
+  }
+
+  if (extractionState.status === "error") {
+    textExtractionDetails.replaceChildren(
+      extractionState.error?.message ?? "Extraction du texte PDF impossible."
+    );
+    return;
+  }
+
+  if (!extractionState.result || extractionState.status === "empty") {
+    textExtractionDetails.replaceChildren(
+      createTextExtractionMeta(extractionState.result),
+      "Aucun texte exploitable détecté — OCR nécessaire plus tard."
+    );
+    return;
+  }
+
+  textExtractionDetails.replaceChildren(
+    createTextExtractionMeta(extractionState.result),
+    createTextExtractionExcerpt(extractionState.result)
+  );
+}
+
+function createTextExtractionMeta(extraction: PdfTextExtraction | null): HTMLDivElement {
+  const meta = document.createElement("div");
+  meta.className = "text-extraction-meta";
+
+  if (!extraction) {
+    return meta;
+  }
+
+  const pages = document.createElement("span");
+  const characters = document.createElement("span");
+  const extractedAt = document.createElement("span");
+
+  pages.textContent = `${extraction.pagesAnalyzed} / ${extraction.pageCount} page${
+    extraction.pageCount > 1 ? "s" : ""
+  }`;
+  characters.textContent = `${extraction.characterCount} caractère${
+    extraction.characterCount > 1 ? "s" : ""
+  }`;
+  extractedAt.textContent = formatDate(extraction.extractedAt);
+  meta.append(pages, characters, extractedAt);
+
+  return meta;
+}
+
+function createTextExtractionExcerpt(extraction: PdfTextExtraction): HTMLDivElement {
+  const container = document.createElement("div");
+  const heading = document.createElement("strong");
+  const excerpt = document.createElement("pre");
+
+  heading.textContent = extraction.truncated ? "Extrait limité" : "Extrait";
+  excerpt.className = "text-extraction-excerpt";
+  excerpt.textContent = extraction.excerpt;
+  container.append(heading, excerpt);
+
+  return container;
+}
+
+function canExtractTextFromActivePdf(documentItem = getActiveDocument()): boolean {
+  if (!documentItem) {
+    return false;
+  }
+
+  return (
+    documentItem.extension === ".pdf" &&
+    documentItem.status !== "missing" &&
+    getTextExtractionState(documentItem.filePath).status !== "extracting" &&
+    !isClassificationBusy()
+  );
+}
+
+function getTextExtractionState(filePath: string): TextExtractionDocumentState {
+  return state.textExtraction.byDocumentPath[filePath] ?? createIdleTextExtractionDocumentState();
+}
+
+function setTextExtractionState(filePath: string, value: TextExtractionDocumentState): void {
+  state.textExtraction = {
+    byDocumentPath: {
+      ...state.textExtraction.byDocumentPath,
+      [filePath]: value
+    }
+  };
+}
+
+function textExtractionQueueLabel(documentItem: DocumentItem): string | null {
+  if (documentItem.extension !== ".pdf") {
+    return null;
+  }
+
+  const extractionState = getTextExtractionState(documentItem.filePath);
+  switch (extractionState.status) {
+    case "text-found":
+      return "Texte extrait";
+    case "empty":
+      return "PDF sans texte";
+    case "extracting":
+      return "Extraction texte";
+    case "error":
+      return "Texte indisponible";
+    case "idle":
+      return null;
+  }
 }
 
 function createPlaceholder(message: string): HTMLDivElement {
@@ -1891,6 +2122,7 @@ function applySuccessfulClassification(classifiedDocumentPath: string): void {
   resetNamingState();
   resetClassificationState();
   resetDuplicateAnalysisState();
+  resetTextExtractionState();
   render();
 
   if (!nextDocument) {
@@ -2542,6 +2774,20 @@ function createIdleDuplicateAnalysisState(): DuplicateAnalysisState {
   };
 }
 
+function createIdleTextExtractionState(): TextExtractionState {
+  return {
+    byDocumentPath: {}
+  };
+}
+
+function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
+  return {
+    status: "idle",
+    result: null,
+    error: null
+  };
+}
+
 function resetNamingState(): void {
   namingRequestId += 1;
   state.naming = createIdleNamingState();
@@ -2557,6 +2803,11 @@ function resetClassificationState(): void {
 function resetDuplicateAnalysisState(): void {
   duplicateAnalysisRequestId += 1;
   state.duplicates = createIdleDuplicateAnalysisState();
+}
+
+function resetTextExtractionState(): void {
+  textExtractionRequestId += 1;
+  state.textExtraction = createIdleTextExtractionState();
 }
 
 function clampPreviewZoom(zoom: number): number {

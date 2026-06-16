@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 5C : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, détection explicite des doublons exacts, exploitation locale de la file et raccourcis clavier sûrs.
+Lot 6A : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs et extraction locale du texte PDF natif sans OCR.
 
 ## Commandes
 
@@ -68,7 +68,12 @@ npm run dev
 - sélection rapide d'un autre fichier doublon présent dans la file source depuis le panneau `Doublons exacts` ;
 - raccourcis clavier pour naviguer, rechercher, filtrer, rafraîchir, vérifier, classer après plan prêt et annuler hors saisie ;
 - panneau d'aide `Raccourcis (?)` listant les touches disponibles ;
-- protection des champs de saisie : les raccourcis globaux ne se déclenchent pas pendant la saisie, sauf `Ctrl+F` et `Escape` dans la recherche.
+- protection des champs de saisie : les raccourcis globaux ne se déclenchent pas pendant la saisie, sauf `Ctrl+F` et `Escape` dans la recherche ;
+- bouton explicite `Extraire le texte PDF` pour le PDF actif ;
+- extraction locale du texte natif des PDF via `pdfjs-dist`, sans OCR ;
+- affichage d'un extrait limité, du nombre de caractères et du nombre de pages analysées ;
+- message clair si aucun texte exploitable n'est détecté dans un PDF scanné ;
+- texte extrait conservé uniquement en mémoire pendant la session.
 
 ## Convention de nommage
 
@@ -120,6 +125,12 @@ La recherche et les filtres s'appliquent uniquement aux documents déjà présen
 
 Le compteur de file affiche le nombre de documents visibles sur le total scanné. Si le document actif est masqué par la recherche ou un filtre, il reste sélectionné dans l'état réel et l'interface l'indique sobrement.
 
+## Texte PDF natif
+
+L'extraction texte est déclenchée manuellement sur le document PDF actif. Elle vérifie côté main process que le document appartient à la dernière file scannée, existe encore et possède l'extension `.pdf`.
+
+Le texte extrait n'est pas persisté, pas ajouté au journal et pas utilisé automatiquement pour suggérer un nom, un type ou un dossier. Les PDF scannés sans couche texte affichent un message indiquant qu'un OCR sera nécessaire plus tard.
+
 ## Raccourcis clavier
 
 Les raccourcis globaux sont désactivés dans les champs de saisie, les listes de sélection et les zones `contenteditable`. `Ctrl+Z` dans un champ texte reste l'annulation native de saisie.
@@ -138,7 +149,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 
 ## Dépendances
 
-- `pdfjs-dist` : utilisé pour rendre localement les PDF dans un canvas. Cette dépendance est limitée au Lot 2 et ne fait pas d'OCR, d'extraction texte, d'upload ou d'analyse distante.
+- `pdfjs-dist` : utilisé pour rendre localement les PDF dans un canvas et extraire le texte natif des PDF. Cette dépendance ne fait pas d'OCR, d'upload ou d'analyse distante.
 
 ## Ce qui ne fonctionne pas encore
 
@@ -153,11 +164,13 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas de doublons probables ou similaires ;
 - pas de recherche globale dans les documents classés ;
 - pas de recherche plein texte dans les PDF ou images ;
+- pas d'extraction texte pour les images ;
+- pas de suggestion automatique basée sur le texte extrait ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
-Tester le Lot 5C d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
+Tester le Lot 6A d'abord avec des dossiers temporaires, jamais directement sur un dossier personnel important.
 Pour le classement réel et l'annulation, tester aussi la fermeture puis relance de l'application avant d'annuler.
 
 ## Passage futur recommandé
@@ -165,6 +178,7 @@ Pour le classement réel et l'annulation, tester aussi la fermeture puis relance
 Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
+- OCR local optionnel pour PDF scannés, dans un lot séparé et explicitement validé ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
 - aide au choix de dossier cible, sans OCR ni upload.
 
@@ -237,6 +251,13 @@ Un prochain lot pourra ajouter :
 - `Ctrl+Z` hors champ texte annule la dernière action si elle est disponible ;
 - `Ctrl+Z` dans un champ texte n'annule pas le classement ;
 - `?` affiche ou masque l'aide des raccourcis ;
+- le bouton `Extraire le texte PDF` est disponible seulement pour un PDF actif ;
+- cliquer sur `Extraire le texte PDF` affiche un extrait lisible pour un PDF contenant du texte natif ;
+- l'extrait PDF affiche le nombre de caractères et de pages analysées ;
+- un PDF scanné sans texte affiche `Aucun texte exploitable détecté — OCR nécessaire plus tard` ;
+- une image sélectionnée ne permet pas l'extraction texte PDF ;
+- supprimer ou déplacer un PDF après scan puis lancer l'extraction affiche une erreur propre ;
+- l'extraction texte ne crée pas de cache, ne modifie pas le journal et ne modifie aucun fichier ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

@@ -4,6 +4,7 @@ import path from "node:path";
 import { prepareClassificationPlan } from "../classification/classificationPlan";
 import { discoverDocuments, type Result } from "../documents/documentDiscovery";
 import { analyzeExactDuplicates, type DuplicateSourceDocument } from "../duplicates/exactDuplicates";
+import { extractTextFromPdfDocument } from "../extraction/pdfTextExtraction";
 import { executeClassification, undoLastClassification } from "../file-ops/classifyFile";
 import {
   getActionJournalFilePath,
@@ -132,6 +133,9 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle("classification:getLastUndoableAction", () => getLastUndoableAction());
   ipcMain.handle("duplicates:analyzeExact", () => analyzeQueuedExactDuplicates());
+  ipcMain.handle("extraction:extractPdfText", (_event, documentPath: unknown) =>
+    extractTextFromActivePdf(typeof documentPath === "string" ? documentPath : "")
+  );
   ipcMain.handle("history:getRecent", (_event, limit: unknown) =>
     readRecentActions(
       getJournalFilePath(),
@@ -230,6 +234,13 @@ async function analyzeQueuedExactDuplicates() {
   return analyzeExactDuplicates({
     sourceDocuments: queuedDocuments,
     journalFilePath: getJournalFilePath()
+  });
+}
+
+async function extractTextFromActivePdf(documentPath: string) {
+  return extractTextFromPdfDocument({
+    documentPath,
+    queuedDocumentPaths
   });
 }
 

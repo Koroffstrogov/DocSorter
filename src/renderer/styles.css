@@ -768,6 +768,58 @@ h2 {
   background: #765d13;
 }
 
+.text-extraction-panel[hidden] {
+  display: none;
+}
+
+.text-extraction-details {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f9fbfd;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.text-extraction-details strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.text-extraction-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.text-extraction-meta span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--muted);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.text-extraction-excerpt {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .section-heading {
   display: flex;
   align-items: center;
