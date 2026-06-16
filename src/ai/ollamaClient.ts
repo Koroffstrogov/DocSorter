@@ -20,6 +20,11 @@ export interface OllamaGeneration {
   generatedAt: string;
 }
 
+export interface OllamaModelLifecycle {
+  model: string;
+  completedAt: string;
+}
+
 export interface OllamaHttpResponse {
   ok: boolean;
   status: number;
@@ -39,6 +44,7 @@ export type OllamaHttpClient = (
 export interface TestOllamaConnectionOptions {
   fetchClient?: OllamaHttpClient;
   now?: () => Date;
+  timeoutMs?: number;
 }
 
 interface OllamaVersionResponse {
@@ -53,6 +59,8 @@ interface OllamaGenerateResponse {
   response: string;
 }
 
+export const OLLAMA_MODEL_KEEP_ALIVE = "30m";
+
 export async function testOllamaConnection(
   settings: AiSettings,
   options: TestOllamaConnectionOptions = {}
@@ -66,7 +74,10 @@ export async function testOllamaConnection(
   const versionResult = await fetchOllamaJson<OllamaVersionResponse>(
     settings,
     "api/version",
-    fetchClient
+    fetchClient,
+    {
+      timeoutMs: options.timeoutMs
+    }
   );
   if (!versionResult.ok) {
     return versionResult;
@@ -82,7 +93,10 @@ export async function testOllamaConnection(
   const tagsResult = await fetchOllamaJson<OllamaTagsResponse>(
     settings,
     "api/tags",
-    fetchClient
+    fetchClient,
+    {
+      timeoutMs: options.timeoutMs
+    }
   );
   if (!tagsResult.ok) {
     return tagsResult;
@@ -133,8 +147,10 @@ export async function generateOllamaCompletion(
         model,
         prompt,
         stream: false,
-        format: "json"
-      }
+        format: "json",
+        keep_alive: OLLAMA_MODEL_KEEP_ALIVE
+      },
+      timeoutMs: options.timeoutMs
     }
   );
 
@@ -156,6 +172,60 @@ export async function generateOllamaCompletion(
   };
 }
 
+export async function preloadOllamaModel(
+  settings: AiSettings,
+  options: TestOllamaConnectionOptions = {}
+): Promise<AiSettingsResult<OllamaModelLifecycle>> {
+  return postOllamaModelLifecycle(settings, OLLAMA_MODEL_KEEP_ALIVE, options);
+}
+
+export async function unloadOllamaModel(
+  settings: AiSettings,
+  options: TestOllamaConnectionOptions = {}
+): Promise<AiSettingsResult<OllamaModelLifecycle>> {
+  return postOllamaModelLifecycle(settings, 0, options);
+}
+
+async function postOllamaModelLifecycle(
+  settings: AiSettings,
+  keepAlive: string | 0,
+  options: TestOllamaConnectionOptions
+): Promise<AiSettingsResult<OllamaModelLifecycle>> {
+  const model = settings.model.trim();
+  if (!model) {
+    return aiFailure("AI_CONFIG_INVALID", "Modèle Ollama non renseigné.");
+  }
+
+  const completedAt = (options.now ?? (() => new Date()))().toISOString();
+  const result = await fetchOllamaJson<unknown>(
+    settings,
+    "api/chat",
+    options.fetchClient ?? defaultFetchClient,
+    {
+      method: "POST",
+      body: {
+        model,
+        messages: [],
+        stream: false,
+        keep_alive: keepAlive
+      },
+      timeoutMs: options.timeoutMs
+    }
+  );
+
+  if (!result.ok) {
+    return result;
+  }
+
+  return {
+    ok: true,
+    value: {
+      model,
+      completedAt
+    }
+  };
+}
+
 async function fetchOllamaJson<TValue>(
   settings: AiSettings,
   endpoint: string,
@@ -163,10 +233,11 @@ async function fetchOllamaJson<TValue>(
   options: {
     method?: "GET" | "POST";
     body?: unknown;
+    timeoutMs?: number;
   } = {}
 ): Promise<AiSettingsResult<TValue>> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), settings.timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? settings.timeoutMs);
 
   try {
     const response = await fetchClient(new URL(endpoint, settings.baseUrl).href, {

@@ -1,7 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 
+import { unloadConfiguredOllamaModel } from "../ai/ollamaModelManager";
 import { registerIpcHandlers } from "./ipcHandlers";
+
+let aiModelUnloadAttempted = false;
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -40,4 +43,20 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", (event) => {
+  if (aiModelUnloadAttempted) {
+    return;
+  }
+
+  aiModelUnloadAttempted = true;
+  event.preventDefault();
+  void unloadConfiguredOllamaModel(app.getPath("userData"), { timeoutMs: 2_000 })
+    .catch(() => {
+      console.warn("Déchargement du modèle IA local échoué.");
+    })
+    .finally(() => {
+      app.quit();
+    });
 });

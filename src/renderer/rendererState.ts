@@ -143,6 +143,7 @@ function createIdleAiState(): AiState {
     message: "Chargement de la configuration IA locale...",
     error: null,
     dirty: false,
+    modelStatus: null,
     suggestion: null,
     suggestionDocumentPath: null
   };

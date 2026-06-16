@@ -327,7 +327,7 @@
               <button id="refresh-ai-status" type="button">Rafraîchir</button>
             </div>
             <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
-            <p class="ai-note">Aucun document n’est envoyé dans ce lot.</p>
+            <p class="ai-note">Analyse locale explicite uniquement. Aucun classement automatique.</p>
             <form id="ai-settings-form" class="ai-settings-form">
               <label class="ai-checkbox">
                 <input id="ai-enabled" name="enabled" type="checkbox" />
@@ -360,6 +360,9 @@
               <div class="ai-actions">
                 <button id="save-ai-settings" type="button" disabled>Sauvegarder</button>
                 <button id="test-ai-connection" type="button" disabled>Tester Ollama</button>
+              </div>
+              <div class="ai-advanced-actions">
+                <button id="unload-ai-model" type="button" disabled>Libérer le modèle IA</button>
               </div>
               <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
             </form>

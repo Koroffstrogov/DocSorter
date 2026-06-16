@@ -10,6 +10,7 @@ import {
   type AiDocumentTextContext
 } from "./ollamaDocumentSuggestion";
 import type { OllamaHttpClient } from "./ollamaClient";
+import type { OllamaModelManagerLike, OllamaModelStatus } from "./ollamaModelManager";
 
 const temporaryRoots: string[] = [];
 
@@ -86,6 +87,7 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.input.extractedTextExcerpt).toHaveLength(6_000);
+    expect(result.ok && result.value.modelStatus.status).toBe("ready");
     const generateCall = fetchClient.calls.find((call) => call.url.endsWith("/api/generate"));
     const body = JSON.parse(generateCall?.options.body ?? "{}") as { prompt?: string };
     expect(body.prompt).not.toContain(workspace.documentPath);
@@ -124,6 +126,11 @@ describe("runOllamaSuggestionForDocument", () => {
       source: "ollama"
     });
     expect(result.ok && result.value.suggestedAt).toBe("2026-06-16T10:00:00.000Z");
+    expect(result.ok && result.value.modelStatus).toMatchObject({
+      status: "ready",
+      model: "llama3.2",
+      keepAliveUntil: "2026-06-16T10:30:00.000Z"
+    });
   });
 
   it("refuses invalid JSON without crashing", async () => {
@@ -227,6 +234,7 @@ function createOptions(
     userDataPath: workspace.userData,
     rulesCatalog: createEmptyCatalog(),
     knownRelativeFolders: ["Vehicules/Renault-Captur/Entretien"],
+    modelManager: createReadyModelManager(),
     now: () => new Date("2026-06-16T10:00:00.000Z")
   };
 }
@@ -237,8 +245,6 @@ function createSuccessfulFetch(
   } = {}
 ) {
   return createMockFetch([
-    { version: "0.5.1" },
-    { models: [{ name: "llama3.2" }] },
     {
       response:
         options.response ??
@@ -251,6 +257,26 @@ function createSuccessfulFetch(
         })
     }
   ]);
+}
+
+function createReadyModelManager(): OllamaModelManagerLike {
+  return {
+    getStatus: () => createModelStatus(),
+    ensureModelReady: async () => ({ ok: true, value: createModelStatus() }),
+    unloadModel: async () => ({ ok: true, value: { ...createModelStatus(), status: "idle" } })
+  };
+}
+
+function createModelStatus(): OllamaModelStatus {
+  return {
+    status: "ready",
+    model: "llama3.2",
+    message: "IA locale prête.",
+    loadedAt: "2026-06-16T10:00:00.000Z",
+    keepAliveUntil: "2026-06-16T10:30:00.000Z",
+    lastCheckedAt: "2026-06-16T10:00:00.000Z",
+    error: null
+  };
 }
 
 function createMockFetch(

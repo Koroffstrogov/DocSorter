@@ -13,9 +13,13 @@ import type {
 } from "./aiClassificationTypes";
 import {
   generateOllamaCompletion,
-  testOllamaConnection,
   type OllamaHttpClient
 } from "./ollamaClient";
+import {
+  defaultOllamaModelManager,
+  type OllamaModelManagerLike,
+  type OllamaModelStatus
+} from "./ollamaModelManager";
 import { buildOllamaClassificationPrompt } from "./ollamaPromptBuilder";
 import {
   aiFailure,
@@ -45,6 +49,7 @@ export interface AiDocumentSuggestion {
   model: string;
   suggestedAt: string;
   textSource: AiDocumentTextSource;
+  modelStatus: OllamaModelStatus;
   input: BoundedAiClassificationInput;
   suggestion: AiClassificationSuggestion;
   promptCharacterCount: number;
@@ -61,6 +66,7 @@ export interface RunOllamaSuggestionForDocumentOptions {
   rulesCatalog: NamingSuggestionRulesCatalog;
   knownRelativeFolders?: string[];
   fetchClient?: OllamaHttpClient;
+  modelManager?: OllamaModelManagerLike;
   statFile?: (filePath: string) => Promise<Pick<Stats, "isFile">>;
   now?: () => Date;
 }
@@ -104,6 +110,11 @@ export async function runOllamaSuggestionForDocument(
     return aiFailure("AI_CONFIG_INVALID", "Modèle Ollama non renseigné.");
   }
 
+  const modelReady = await (options.modelManager ?? defaultOllamaModelManager).ensureModelReady(settings);
+  if (!modelReady.ok) {
+    return modelReady;
+  }
+
   const localSuggestions = buildLocalRuleSuggestions(
     activeDocument.value.name,
     textContext.excerpt,
@@ -117,19 +128,6 @@ export async function runOllamaSuggestionForDocument(
     knownRelativeFolders: options.knownRelativeFolders ?? []
   });
   const prompt = buildOllamaClassificationPrompt(aiInput);
-  const connection = await testOllamaConnection(settings, {
-    fetchClient: options.fetchClient,
-    now: options.now
-  });
-
-  if (!connection.ok) {
-    return connection;
-  }
-
-  if (connection.value.status === "model-missing") {
-    return aiFailure("AI_MODEL_NOT_FOUND", connection.value.message);
-  }
-
   const generation = await generateOllamaCompletion(settings, prompt.prompt, {
     fetchClient: options.fetchClient,
     now: options.now
@@ -162,6 +160,7 @@ export async function runOllamaSuggestionForDocument(
       model: generation.value.model,
       suggestedAt: generation.value.generatedAt,
       textSource: textContext.source,
+      modelStatus: modelReady.value,
       input: prompt.input,
       suggestion: classified.suggestion,
       promptCharacterCount: prompt.prompt.length,

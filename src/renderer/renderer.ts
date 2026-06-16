@@ -251,6 +251,9 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onRefreshStatus: () => {
     void refreshAiStatus();
   },
+  onUnloadModel: () => {
+    void unloadAiModelFromPanel();
+  },
   onRunSuggestion: () => {
     void runAiSuggestionForActiveDocument();
   },
@@ -258,6 +261,7 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onIgnoreSuggestion: ignoreAiSuggestion,
   isActionsDisabled: isClassificationBusy,
   canRunSuggestion: canRunAiSuggestion,
+  canUnloadModel: canUnloadAiModel,
   canApplySuggestionToEmptyFields: canApplyAiSuggestionToEmptyFields,
   formatDate
 });

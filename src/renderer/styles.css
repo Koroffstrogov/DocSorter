@@ -992,10 +992,15 @@ h2 {
 }
 
 .ocr-actions,
-.ai-actions {
+.ai-actions,
+.ai-advanced-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
+}
+
+.ai-advanced-actions {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .ocr-settings-form button,

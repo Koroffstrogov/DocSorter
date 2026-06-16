@@ -3,6 +3,7 @@ import type {
   AiDocumentSuggestion,
   AiDocumentTextContext
 } from "../ai/ollamaDocumentSuggestion";
+import type { OllamaModelStatus } from "../ai/ollamaModelManager";
 import type { AiConnectionTestStatus } from "../ai/ollamaProvider";
 import type {
   AiSettings,
@@ -77,6 +78,8 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "getAiSettings",
   "saveAiSettings",
   "testAiConnection",
+  "getAiModelStatus",
+  "unloadAiModel",
   "runAiSuggestionForActiveDocument",
   "getRecentHistory",
   "getRulesStatus",
@@ -188,6 +191,10 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.aiTestConnection) as Promise<
         AiSettingsResult<AiConnectionTestStatus>
       >,
+    getAiModelStatus: (): Promise<AiSettingsResult<OllamaModelStatus>> =>
+      ipc.invoke(IPC_CHANNELS.aiGetModelStatus) as Promise<AiSettingsResult<OllamaModelStatus>>,
+    unloadAiModel: (): Promise<AiSettingsResult<OllamaModelStatus>> =>
+      ipc.invoke(IPC_CHANNELS.aiUnloadModel) as Promise<AiSettingsResult<OllamaModelStatus>>,
     runAiSuggestionForActiveDocument: (
       documentPath: string,
       textContext: AiDocumentTextContext

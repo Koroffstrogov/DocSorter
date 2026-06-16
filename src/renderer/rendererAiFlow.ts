@@ -5,6 +5,7 @@ async function refreshAiStatus(): Promise<void> {
     panelStatus: "loading",
     message: "Chargement de la configuration IA locale...",
     error: null,
+    modelStatus: null,
     suggestion: null,
     suggestionDocumentPath: null
   };
@@ -21,6 +22,7 @@ async function refreshAiStatus(): Promise<void> {
   }
 
   applyAiStatus(result.value as RendererAiStatus);
+  void refreshAiModelStatus();
 }
 
 async function saveAiSettingsFromPanel(): Promise<void> {
@@ -43,6 +45,7 @@ async function saveAiSettingsFromPanel(): Promise<void> {
     panelStatus: "saving",
     message: "Sauvegarde de la configuration IA locale...",
     error: null,
+    modelStatus: null,
     suggestion: null,
     suggestionDocumentPath: null
   };
@@ -59,6 +62,7 @@ async function saveAiSettingsFromPanel(): Promise<void> {
   }
 
   applyAiStatus(result.value as RendererAiStatus);
+  void refreshAiModelStatus();
 }
 
 async function testAiConnectionFromPanel(): Promise<void> {
@@ -72,6 +76,7 @@ async function testAiConnectionFromPanel(): Promise<void> {
     panelStatus: "testing",
     message: "Test local d'Ollama sans envoi de document...",
     error: null,
+    modelStatus: null,
     suggestion: null,
     suggestionDocumentPath: null
   };
@@ -89,6 +94,7 @@ async function testAiConnectionFromPanel(): Promise<void> {
   }
 
   applyAiStatus(result.value as RendererAiStatus);
+  void refreshAiModelStatus();
 }
 
 function updateAiDraft(draft: AiSettingsDraft): void {
@@ -99,6 +105,7 @@ function updateAiDraft(draft: AiSettingsDraft): void {
     panelStatus: "ready",
     message: "Configuration IA modifiée. Sauvegardez avant de tester Ollama.",
     error: null,
+    modelStatus: null,
     suggestion: null,
     suggestionDocumentPath: null
   };
@@ -107,6 +114,58 @@ function updateAiDraft(draft: AiSettingsDraft): void {
 
 function renderAiPanel(): void {
   aiPanel.render();
+}
+
+async function refreshAiModelStatus(): Promise<void> {
+  const result = await window.docSorter.getAiModelStatus();
+  if (!result.ok) {
+    state.ai = {
+      ...state.ai,
+      modelStatus: null
+    };
+    renderAiPanel();
+    return;
+  }
+
+  state.ai = {
+    ...state.ai,
+    modelStatus: result.value as RendererAiModelStatus
+  };
+  renderAiPanel();
+}
+
+async function unloadAiModelFromPanel(): Promise<void> {
+  if (isAiBusy() || !canUnloadAiModel()) {
+    return;
+  }
+
+  const requestId = ++aiRequestId;
+  state.ai = {
+    ...state.ai,
+    panelStatus: "unloading",
+    message: "Libération du modèle IA local...",
+    error: null
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.unloadAiModel();
+  if (requestId !== aiRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    applyAiError(result.error as RendererAiError);
+    return;
+  }
+
+  state.ai = {
+    ...state.ai,
+    panelStatus: "ready",
+    message: result.value.message,
+    error: null,
+    modelStatus: result.value as RendererAiModelStatus
+  };
+  render();
 }
 
 async function runAiSuggestionForActiveDocument(): Promise<void> {
@@ -133,11 +192,27 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
   }
 
   const requestId = ++aiSuggestionRequestId;
+  const message =
+    state.ai.modelStatus?.status === "ready"
+      ? "Analyse IA locale du document actif..."
+      : "Chargement du modèle IA...";
   state.ai = {
     ...state.ai,
     panelStatus: "analyzing",
-    message: "Analyse IA locale du document actif...",
+    message,
     error: null,
+    modelStatus:
+      state.ai.modelStatus?.status === "ready"
+        ? state.ai.modelStatus
+        : {
+            status: "loading",
+            model: state.ai.status?.settings.model ?? "",
+            message: "Chargement du modèle IA...",
+            loadedAt: null,
+            keepAliveUntil: null,
+            lastCheckedAt: null,
+            error: null
+          },
     suggestion: null,
     suggestionDocumentPath: null
   };
@@ -153,6 +228,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
 
   if (!result.ok) {
     applyAiError(result.error as RendererAiError);
+    void refreshAiModelStatus();
     return;
   }
 
@@ -161,6 +237,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     panelStatus: "suggestion-ready",
     message: result.value.message,
     error: null,
+    modelStatus: result.value.modelStatus as RendererAiModelStatus,
     suggestion: result.value as RendererAiDocumentSuggestion,
     suggestionDocumentPath: activeDocument.filePath
   };
@@ -177,6 +254,14 @@ function canRunAiSuggestion(): boolean {
       !state.ai.dirty &&
       !isAiBusy() &&
       getActiveAiTextContext(activeDocument)
+  );
+}
+
+function canUnloadAiModel(): boolean {
+  return Boolean(
+    state.ai.status?.settings.enabled &&
+      state.ai.modelStatus &&
+      (state.ai.modelStatus.status === "ready" || state.ai.modelStatus.status === "error")
   );
 }
 
@@ -259,6 +344,7 @@ function applyAiStatus(status: RendererAiStatus): void {
     message: status.message,
     error: status.error,
     dirty: false,
+    modelStatus: null,
     suggestion: null,
     suggestionDocumentPath: null
   };
@@ -307,6 +393,7 @@ function isAiBusy(): boolean {
     state.ai.panelStatus === "loading" ||
     state.ai.panelStatus === "saving" ||
     state.ai.panelStatus === "testing" ||
+    state.ai.panelStatus === "unloading" ||
     state.ai.panelStatus === "analyzing" ||
     isClassificationBusy()
   );

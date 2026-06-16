@@ -121,9 +121,7 @@ var DocSorterQueuePanel: QueuePanelFactoryApi;
           visibleQueue.totalCount > 1 ? "s" : ""
         } affiché${visibleQueue.visibleCount > 1 ? "s" : ""}`
       );
-      elements.list?.replaceChildren(
-        ...visibleQueue.documents.map((documentItem) => createDocumentListItem(documentItem))
-      );
+      renderDocumentList(visibleQueue.documents);
       renderQueueTools(visibleQueue, viewState);
       renderQueueState(visibleQueue, viewState);
 
@@ -208,6 +206,18 @@ var DocSorterQueuePanel: QueuePanelFactoryApi;
       }
 
       options.onSelectDocument(documentItem);
+    }
+
+    function renderDocumentList(documents: TDocument[]): void {
+      if (!elements.list) {
+        return;
+      }
+
+      const scrollTop = elements.list.scrollTop;
+      elements.list.replaceChildren(
+        ...documents.map((documentItem) => createDocumentListItem(documentItem))
+      );
+      elements.list.scrollTop = scrollTop;
     }
 
     function createDocumentListItem(documentItem: TDocument): HTMLLIElement {

@@ -5,11 +5,13 @@ interface AiPanelOptions {
   onSaveSettings: () => void;
   onTestConnection: () => void;
   onRefreshStatus: () => void;
+  onUnloadModel: () => void;
   onRunSuggestion: () => void;
   onApplySuggestionToEmptyFields: () => void;
   onIgnoreSuggestion: () => void;
   isActionsDisabled: () => boolean;
   canRunSuggestion: () => boolean;
+  canUnloadModel: () => boolean;
   canApplySuggestionToEmptyFields: () => boolean;
   formatDate: (isoDate: string) => string;
 }
@@ -28,6 +30,7 @@ interface AiPanelElements {
   saveButton: HTMLButtonElement | null;
   testButton: HTMLButtonElement | null;
   refreshButton: HTMLButtonElement | null;
+  unloadModelButton: HTMLButtonElement | null;
   runSuggestionButton: HTMLButtonElement | null;
   suggestionDetails: HTMLElement | null;
   applySuggestionButton: HTMLButtonElement | null;
@@ -71,6 +74,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       options.onRefreshStatus();
     });
 
+    elements.unloadModelButton?.addEventListener("click", () => {
+      options.onUnloadModel();
+    });
+
     elements.runSuggestionButton?.addEventListener("click", () => {
       options.onRunSuggestion();
     });
@@ -95,7 +102,8 @@ var DocSorterAiPanel: AiPanelFactoryApi;
         state.panelStatus === "loading" ||
         state.panelStatus === "saving" ||
         state.panelStatus === "testing" ||
-        state.panelStatus === "analyzing";
+        state.panelStatus === "analyzing" ||
+        state.panelStatus === "unloading";
       const disabled = options.isActionsDisabled() || busy;
       const canSave = !disabled && state.dirty && isDraftSavable(state.draft);
       const canTest =
@@ -127,6 +135,12 @@ var DocSorterAiPanel: AiPanelFactoryApi;
 
       if (elements.refreshButton) {
         elements.refreshButton.disabled = disabled;
+      }
+
+      if (elements.unloadModelButton) {
+        elements.unloadModelButton.disabled = disabled || !options.canUnloadModel();
+        elements.unloadModelButton.textContent =
+          state.panelStatus === "unloading" ? "Libération..." : "Libérer le modèle IA";
       }
 
       if (elements.runSuggestionButton) {
@@ -166,6 +180,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       saveButton: root.querySelector<HTMLButtonElement>("#save-ai-settings"),
       testButton: root.querySelector<HTMLButtonElement>("#test-ai-connection"),
       refreshButton: root.querySelector<HTMLButtonElement>("#refresh-ai-status"),
+      unloadModelButton: root.querySelector<HTMLButtonElement>("#unload-ai-model"),
       runSuggestionButton: root.querySelector<HTMLButtonElement>("#run-ai-suggestion"),
       suggestionDetails: root.querySelector<HTMLElement>("#ai-suggestion-details"),
       applySuggestionButton: root.querySelector<HTMLButtonElement>("#apply-ai-suggestion-empty"),
@@ -211,6 +226,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       lines.push(createMetaLine(`URL : ${compactText(state.status.settings.baseUrl)}`, state.status.settings.baseUrl));
       lines.push(createMetaLine(`Modèle : ${state.status.settings.model || "Non renseigné"}`));
       lines.push(createMetaLine(`Timeout : ${state.status.settings.timeoutMs} ms`));
+      lines.push(createAiModelStatusLine(state.modelStatus));
 
       if (state.status.settingsPath) {
         lines.push(createMetaLine(`Config : ${compactText(state.status.settingsPath)}`, state.status.settingsPath));
@@ -245,8 +261,14 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       return "Test Ollama en cours...";
     }
 
+    if (state.panelStatus === "unloading") {
+      return "Libération modèle IA...";
+    }
+
     if (state.panelStatus === "analyzing") {
-      return "Analyse IA locale en cours...";
+      return state.modelStatus?.status === "ready"
+        ? "Analyse IA locale en cours..."
+        : "Chargement du modèle IA...";
     }
 
     if (state.panelStatus === "suggestion-ready") {
@@ -286,6 +308,35 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     line.className = "ai-warning";
     line.textContent = value;
     return line;
+  }
+
+  function createAiModelStatusLine(status: RendererAiModelStatus | null): HTMLElement {
+    if (!status) {
+      return createMetaLine("Modèle IA : état non chargé");
+    }
+
+    const line = createMetaLine(`Modèle IA : ${aiModelStatusLabel(status)}`);
+    if (status.keepAliveUntil) {
+      line.title = `Conservé jusqu'à ${status.keepAliveUntil}`;
+    }
+    return line;
+  }
+
+  function aiModelStatusLabel(status: RendererAiModelStatus): string {
+    switch (status.status) {
+      case "ready":
+        return "IA locale prête";
+      case "loading":
+        return "Chargement du modèle IA...";
+      case "model_missing":
+        return "Modèle IA absent";
+      case "unavailable":
+        return status.error?.code === "AI_PROVIDER_DISABLED" ? "désactivé" : "Ollama indisponible";
+      case "error":
+        return "Erreur IA locale";
+      case "idle":
+        return "modèle non chargé";
+    }
   }
 
   function createSuggestionContent(state: AiState, options: AiPanelOptions): Node[] {

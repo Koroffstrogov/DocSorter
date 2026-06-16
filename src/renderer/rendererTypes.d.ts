@@ -37,9 +37,17 @@ type AiPanelStatus =
   | "saving"
   | "testing"
   | "analyzing"
+  | "unloading"
   | "suggestion-ready"
   | "error";
 type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
+type AiModelLifecycleStatus =
+  | "unavailable"
+  | "model_missing"
+  | "idle"
+  | "loading"
+  | "ready"
+  | "error";
 
 interface AppError {
   code:
@@ -477,6 +485,16 @@ interface RendererAiStatus {
   error: RendererAiError | null;
 }
 
+interface RendererAiModelStatus {
+  status: AiModelLifecycleStatus;
+  model: string;
+  message: string;
+  loadedAt: string | null;
+  keepAliveUntil: string | null;
+  lastCheckedAt: string | null;
+  error: RendererAiError | null;
+}
+
 interface AiSettingsDraft {
   enabled: boolean;
   baseUrl: string;
@@ -503,6 +521,7 @@ interface RendererAiDocumentSuggestion {
   model: string;
   suggestedAt: string;
   textSource: "pdf-native" | "tesseract-cli";
+  modelStatus: RendererAiModelStatus;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;
   differsFromLocalRules: boolean;
@@ -521,6 +540,7 @@ interface AiState {
   message: string;
   error: RendererAiError | null;
   dirty: boolean;
+  modelStatus: RendererAiModelStatus | null;
   suggestion: RendererAiDocumentSuggestion | null;
   suggestionDocumentPath: string | null;
 }

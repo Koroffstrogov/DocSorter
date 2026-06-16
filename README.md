@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 + IA-2 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut et suggestion IA locale explicite sur document actif.
+Lot 7 + 8A + OCR-2 + IA-2.5 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif et gestion du chargement/libération du modèle Ollama.
 
 ## Commandes
 
@@ -123,6 +123,11 @@ npm run dev
 - détection sobre d'un modèle absent, d'une erreur réseau ou d'un timeout ;
 - bouton explicite `Analyser avec IA locale` après extraction PDF native ou OCR image du document actif ;
 - appel Ollama documentaire uniquement si l'IA est activée, sauvegardée, testée OK et si le document appartient encore à la dernière file scannée ;
+- chargement du modèle Ollama uniquement à la première analyse IA utile ;
+- conservation du modèle via `keep_alive: "30m"` et réutilisation pour les documents suivants ;
+- statut discret du modèle IA : prêt, chargement, absent, Ollama indisponible ou erreur locale ;
+- bouton avancé `Libérer le modèle IA`, sans effet sur les documents ;
+- tentative sobre de libération du modèle à la fermeture de l'application avec timeout court ;
 - prompt Ollama borné à partir du nom de fichier, de l'extension, de l'extrait PDF/OCR, des règles locales et des dossiers relatifs connus, sans chemin Windows complet, sans journal, sans cache complet, sans autres documents et sans texte intégral ;
 - génération Ollama locale via `/api/generate` avec sortie JSON demandée strictement ;
 - validation IA-0 obligatoire de toute réponse Ollama, avec refus sobre des JSON invalides et des dossiers cible dangereux ;
@@ -264,7 +269,7 @@ Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli
 
 ## IA locale
 
-IA-0 prépare un contrat de classification pour une IA locale. IA-1 ajoute la configuration et le test de connexion d'un Ollama local optionnel. IA-2 branche Ollama sur le document actif, uniquement via le bouton explicite `Analyser avec IA locale`.
+IA-0 prépare un contrat de classification pour une IA locale. IA-1 ajoute la configuration et le test de connexion d'un Ollama local optionnel. IA-2 branche Ollama sur le document actif, uniquement via le bouton explicite `Analyser avec IA locale`. IA-2.5 gère le cycle de vie du modèle Ollama : chargement à la première analyse, conservation temporaire et libération contrôlée.
 
 Aucune analyse IA n'est lancée automatiquement au changement de document, au scan, à l'extraction texte ou à l'OCR. L'IA propose seulement : elle ne renomme pas, ne déplace pas, ne classe pas, ne crée pas de dossier et ne remplace pas les champs déjà saisis.
 
@@ -293,6 +298,10 @@ Les URL Ollama sont refusées si elles pointent vers une machine externe, une IP
 Le bouton `Tester Ollama` appelle seulement `/api/version` puis `/api/tags`. Il peut afficher connexion OK, modèle absent, erreur réseau ou timeout.
 
 Le bouton `Analyser avec IA locale` envoie à Ollama un prompt borné, construit depuis l'extrait PDF/OCR du document actif. La réponse doit être un JSON strict conforme au contrat IA-0. Si la sortie est invalide, dangereuse ou trop éloignée du contrat, l'interface affiche `Suggestion IA invalide` sans crash et sans application automatique.
+
+Avant l'envoi du prompt, DocSorter vérifie que le modèle configuré est disponible puis le charge via Ollama sans contenu documentaire. Un seul chargement peut être actif à la fois. Si le modèle est déjà prêt dans la session, les documents suivants réutilisent ce modèle et l'interface n'affiche plus `Chargement du modèle IA...`.
+
+La conservation utilise `keep_alive: "30m"`. L'action avancée `Libérer le modèle IA` envoie une requête de déchargement `keep_alive: 0`. À la fermeture, l'application tente aussi de libérer le modèle avec un timeout court, sans bloquer indéfiniment.
 
 Le bouton `Appliquer aux champs vides` peut recopier date, sujet, type et mots-clés uniquement quand les champs correspondants sont vides. Si le dossier cible IA est appliqué, l'application relance les contrôles existants de dossier et de collision. La fusion intelligente entre règles locales et IA est volontairement reportée.
 
@@ -344,6 +353,7 @@ Un prochain lot pourra ajouter :
 - annulation multiple si le journal et les chemins restent cohérents ;
 - OCR-3 pourra ajouter l'OCR limité des PDF scannés, dans un lot séparé et explicitement validé ;
 - IA-3 pourra ajouter une fusion contrôlée entre suggestions IA et règles locales, avec arbitrage explicite des conflits ;
+- amélioration des diagnostics modèles Ollama si certains modèles ne respectent pas le JSON mode attendu ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
@@ -459,6 +469,12 @@ Un prochain lot pourra ajouter :
 - avec Ollama arrêté, `Tester Ollama` affiche une erreur sobre ou un timeout ;
 - une URL externe ou LAN est refusée par la configuration IA ;
 - après extraction texte PDF ou OCR image, le bouton `Analyser avec IA locale` devient disponible si Ollama est activé, sauvegardé et testé OK ;
+- à la première analyse IA, le panneau peut afficher `Chargement du modèle IA...` ;
+- une deuxième analyse IA sur un autre document réutilise le modèle déjà chargé sans nouveau préchargement visible ;
+- le statut modèle affiche `IA locale prête` après chargement réussi ;
+- `Libérer le modèle IA` décharge le modèle et repasse le statut à non chargé ;
+- après libération manuelle, une nouvelle analyse recharge le modèle ;
+- fermer l'application tente de libérer le modèle sans écrire de contenu documentaire dans les logs ;
 - cliquer sur `Analyser avec IA locale` affiche une suggestion validée ou une erreur sobre, sans modifier le document ;
 - la suggestion IA affiche date, type, sujet, mots-clés, dossier, score, raisons et avertissements ;
 - si Ollama est arrêté ou si le modèle est absent, l'analyse IA affiche une erreur sobre ;

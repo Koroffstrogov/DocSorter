@@ -6,6 +6,7 @@ import type {
   AiDocumentSuggestion,
   AiDocumentTextContext
 } from "../ai/ollamaDocumentSuggestion";
+import type { OllamaModelStatus } from "../ai/ollamaModelManager";
 import type {
   AiSettings,
   AiSettingsInput,
@@ -166,6 +167,16 @@ describe("sensitive IPC handler contract", () => {
       acceptsRendererPath: false,
       usesUserDataPath: true,
       serviceName: "testAiConnection"
+    });
+    expect(contractFor(IPC_CHANNELS.aiGetModelStatus)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "getAiModelStatus"
+    });
+    expect(contractFor(IPC_CHANNELS.aiUnloadModel)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "unloadAiModel"
     });
     expect(contractFor(IPC_CHANNELS.aiRunSuggestion)).toMatchObject({
       acceptsRendererPath: true,
@@ -433,12 +444,23 @@ describe("registerIpcHandlers", () => {
     await harness.invoke(IPC_CHANNELS.aiGetSettings, "C:\\renderer-config");
     await harness.invoke(IPC_CHANNELS.aiSaveSettings, settings, "C:\\renderer-config");
     await harness.invoke(IPC_CHANNELS.aiTestConnection, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.aiGetModelStatus, "C:\\renderer-config");
+    await harness.invoke(IPC_CHANNELS.aiUnloadModel, "C:\\renderer-config");
 
     expect(services.getAiStatus).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(services.loadAiSettings).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(services.saveAiSettings).toHaveBeenCalledWith(USER_DATA_PATH, settings);
     expect(services.testAiConnection).toHaveBeenCalledWith(USER_DATA_PATH);
-    expect(harness.appPathCalls).toEqual(["userData", "userData", "userData", "userData"]);
+    expect(services.getAiModelStatus).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.unloadAiModel).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(harness.appPathCalls).toEqual([
+      "userData",
+      "userData",
+      "userData",
+      "userData",
+      "userData",
+      "userData"
+    ]);
   });
 
   it("runs AI suggestions only for the active document with main-state queue and local context", async () => {
@@ -774,6 +796,20 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
         }
       }
     } as AiSettingsResult<AiConnectionTestStatus>)),
+    getAiModelStatus: vi.fn(async () => ({
+      ok: true,
+      value: createAiModelStatus()
+    } as AiSettingsResult<OllamaModelStatus>)),
+    unloadAiModel: vi.fn(async () => ({
+      ok: true,
+      value: {
+        ...createAiModelStatus(),
+        status: "idle",
+        message: "Modèle IA libéré.",
+        loadedAt: null,
+        keepAliveUntil: null
+      }
+    } as AiSettingsResult<OllamaModelStatus>)),
     runAiSuggestionForDocument: vi.fn(async () => ({
       ok: true,
       value: createAiDocumentSuggestion()
@@ -861,6 +897,18 @@ function createAiStatus(): AiStatus {
   };
 }
 
+function createAiModelStatus(): OllamaModelStatus {
+  return {
+    status: "ready",
+    model: "llama3.2",
+    message: "IA locale prête.",
+    loadedAt: "2026-06-16T10:00:00.000Z",
+    keepAliveUntil: "2026-06-16T10:30:00.000Z",
+    lastCheckedAt: "2026-06-16T10:00:00.000Z",
+    error: null
+  };
+}
+
 function createAiDocumentSuggestion(): AiDocumentSuggestion {
   return {
     status: "ready",
@@ -869,6 +917,7 @@ function createAiDocumentSuggestion(): AiDocumentSuggestion {
     model: "llama3.2",
     suggestedAt: "2026-06-16T10:00:00.000Z",
     textSource: "pdf-native",
+    modelStatus: createAiModelStatus(),
     input: {
       filename: "document.pdf",
       extension: ".pdf",

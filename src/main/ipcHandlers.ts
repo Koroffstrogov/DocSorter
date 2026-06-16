@@ -6,6 +6,11 @@ import {
   type AiDocumentTextContext
 } from "../ai/ollamaDocumentSuggestion";
 import {
+  getConfiguredOllamaModelStatus as getConfiguredOllamaModelStatusService,
+  unloadConfiguredOllamaModel as unloadConfiguredOllamaModelService,
+  type OllamaModelStatus
+} from "../ai/ollamaModelManager";
+import {
   getAiStatus as getAiStatusService,
   loadAiSettings as loadAiSettingsService,
   saveAiSettings as saveAiSettingsService,
@@ -216,6 +221,8 @@ export interface IpcHandlerServices {
     settings: AiSettingsInput
   ) => Promise<AiSettingsResult<AiStatus>>;
   testAiConnection: (userDataPath: string) => Promise<AiSettingsResult<AiConnectionTestStatus>>;
+  getAiModelStatus: (userDataPath: string) => Promise<AiSettingsResult<OllamaModelStatus>>;
+  unloadAiModel: (userDataPath: string) => Promise<AiSettingsResult<OllamaModelStatus>>;
   runAiSuggestionForDocument: (options: {
     documentPath: string;
     textContext: AiDocumentTextContext | null;
@@ -400,6 +407,22 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "testAiConnection"
   },
   {
+    channel: IPC_CHANNELS.aiGetModelStatus,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "getAiModelStatus"
+  },
+  {
+    channel: IPC_CHANNELS.aiUnloadModel,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "unloadAiModel"
+  },
+  {
     channel: IPC_CHANNELS.aiRunSuggestion,
     acceptsRendererPath: true,
     usesMainSource: true,
@@ -524,6 +547,8 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   loadAiSettings: loadAiSettingsService,
   saveAiSettings: saveAiSettingsService,
   testAiConnection: testAiConnectionService,
+  getAiModelStatus: getConfiguredOllamaModelStatusService,
+  unloadAiModel: unloadConfiguredOllamaModelService,
   runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
@@ -718,6 +743,12 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   );
   options.ipcMain.handle(IPC_CHANNELS.aiTestConnection, () =>
     services.testAiConnection(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiGetModelStatus, () =>
+    services.getAiModelStatus(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiUnloadModel, () =>
+    services.unloadAiModel(options.app.getPath("userData"))
   );
   options.ipcMain.handle(
     IPC_CHANNELS.aiRunSuggestion,

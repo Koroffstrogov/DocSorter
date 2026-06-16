@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   generateOllamaCompletion,
+  preloadOllamaModel,
   testOllamaConnection,
+  unloadOllamaModel,
   type OllamaHttpClient
 } from "./ollamaClient";
 import type { AiSettings } from "./ollamaSettings";
@@ -165,7 +167,8 @@ describe("generateOllamaCompletion", () => {
       model: "llama3.2",
       prompt: "prompt borné",
       stream: false,
-      format: "json"
+      format: "json",
+      keep_alive: "30m"
     });
   });
 
@@ -184,6 +187,49 @@ describe("generateOllamaCompletion", () => {
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error.code).toBe("AI_CONFIG_INVALID");
     expect(fetchClient.calls).toEqual([]);
+  });
+});
+
+describe("Ollama model lifecycle", () => {
+  it("preloads and unloads the configured model through /api/chat keep_alive", async () => {
+    const fetchClient = createMockFetch([{ done: true }, { done: true }]);
+
+    const preload = await preloadOllamaModel(createSettings(), {
+      fetchClient,
+      now: () => new Date("2026-06-16T10:00:00.000Z")
+    });
+    const unload = await unloadOllamaModel(createSettings(), {
+      fetchClient,
+      now: () => new Date("2026-06-16T10:01:00.000Z"),
+      timeoutMs: 2000
+    });
+
+    expect(preload.ok && preload.value).toEqual({
+      model: "llama3.2",
+      completedAt: "2026-06-16T10:00:00.000Z"
+    });
+    expect(unload.ok && unload.value).toEqual({
+      model: "llama3.2",
+      completedAt: "2026-06-16T10:01:00.000Z"
+    });
+    expect(fetchClient.calls.map((call) => call.url)).toEqual([
+      "http://localhost:11434/api/chat",
+      "http://localhost:11434/api/chat"
+    ]);
+    expect(fetchClient.calls.map((call) => JSON.parse(call.options.body ?? "{}"))).toEqual([
+      {
+        model: "llama3.2",
+        messages: [],
+        stream: false,
+        keep_alive: "30m"
+      },
+      {
+        model: "llama3.2",
+        messages: [],
+        stream: false,
+        keep_alive: 0
+      }
+    ]);
   });
 });
 

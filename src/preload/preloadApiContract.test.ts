@@ -93,6 +93,8 @@ describe("preload API surface", () => {
       timeoutMs: 30_000
     });
     await api.testAiConnection();
+    await api.getAiModelStatus();
+    await api.unloadAiModel();
     await api.runAiSuggestionForActiveDocument("C:\\source\\document.pdf", {
       source: "pdf-native",
       excerpt: "texte extrait"
@@ -137,6 +139,8 @@ describe("preload API surface", () => {
       IPC_CHANNELS.aiGetSettings,
       IPC_CHANNELS.aiSaveSettings,
       IPC_CHANNELS.aiTestConnection,
+      IPC_CHANNELS.aiGetModelStatus,
+      IPC_CHANNELS.aiUnloadModel,
       IPC_CHANNELS.aiRunSuggestion,
       IPC_CHANNELS.historyGetRecent,
       IPC_CHANNELS.rulesGetStatus,
