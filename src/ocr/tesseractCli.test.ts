@@ -10,6 +10,7 @@ import {
   listTesseractLanguages,
   parseTesseractLanguages,
   runTesseractCommand,
+  runTesseractImageOcr,
   testTesseractEngineForSettings,
   type ExecFileRunner
 } from "./tesseractCli";
@@ -122,6 +123,34 @@ describe("tesseract CLI wrapper", () => {
     expect(result.stderr).toContain("[sortie tronquee]");
   });
 
+  it("runs image OCR with explicit Tesseract CLI arguments", async () => {
+    const workspace = await createWorkspace();
+    const runner = createExecFileRunner([
+      {
+        stdout: "texte OCR",
+        stderr: ""
+      }
+    ]);
+
+    const result = await runTesseractImageOcr(createSettings(workspace), workspace.imagePath, {
+      language: "fra",
+      psm: 6,
+      execFileRunner: runner
+    });
+
+    expect(result.ok).toBe(true);
+    expect(runner.calls[0].file).toBe(workspace.tesseractPath);
+    expect(runner.calls[0].args).toEqual([
+      workspace.imagePath,
+      "stdout",
+      "-l",
+      "fra",
+      "--psm",
+      "6"
+    ]);
+    expect(runner.calls[0].options.shell).toBe(false);
+  });
+
   it("parses language lists without keeping the Tesseract header", () => {
     expect(
       parseTesseractLanguages("List of available languages in tessdata/ (2):\nfra\neng\n")
@@ -162,13 +191,16 @@ async function createWorkspace() {
   temporaryRoots.push(root);
 
   const tesseractPath = path.join(root, "tesseract.exe");
+  const imagePath = path.join(root, "image.png");
   const tessdataPath = path.join(root, "tessdata");
   await mkdir(tessdataPath, { recursive: true });
   await writeFile(tesseractPath, "", "utf8");
+  await writeFile(imagePath, "", "utf8");
   await writeFile(path.join(tessdataPath, "fra.traineddata"), "", "utf8");
 
   return {
     tesseractPath,
+    imagePath,
     tessdataPath
   };
 }

@@ -46,7 +46,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
       }
 
       const activeDocument = options.getState().activeDocument;
-      if (!activeDocument || activeDocument.extension !== ".pdf") {
+      if (!activeDocument || !supportsTextExtractionPanel(activeDocument)) {
         elements.panel.hidden = true;
         elements.details.replaceChildren();
         return;
@@ -57,15 +57,23 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
 
       if (elements.extractButton) {
         elements.extractButton.disabled = !options.canExtract(activeDocument);
+        elements.extractButton.textContent =
+          activeDocument.extension === ".pdf"
+            ? "Extraire le texte PDF"
+            : "Lancer OCR sur cette image";
       }
 
       if (extractionState.status === "idle") {
-        elements.details.replaceChildren("Texte non analysé");
+        elements.details.replaceChildren(
+          activeDocument.extension === ".pdf" ? "Texte non analysé" : "OCR non lancé"
+        );
         return;
       }
 
       if (extractionState.status === "extracting") {
-        elements.details.replaceChildren("Extraction du texte...");
+        elements.details.replaceChildren(
+          activeDocument.extension === ".pdf" ? "Extraction du texte..." : "OCR en cours..."
+        );
         return;
       }
 
@@ -80,7 +88,9 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         elements.details.replaceChildren(
           createTextExtractionMeta(extractionState.result),
           ...createTextExtractionLimitNoticeNodes(extractionState.result),
-          "Aucun texte exploitable détecté — OCR nécessaire plus tard."
+          activeDocument.extension === ".pdf"
+            ? "Aucun texte exploitable détecté — OCR nécessaire plus tard."
+            : "Aucun texte exploitable détecté."
         );
         return;
       }
@@ -88,25 +98,26 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
       elements.details.replaceChildren(
         createTextExtractionMeta(extractionState.result),
         ...createTextExtractionLimitNoticeNodes(extractionState.result),
+        ...createTextExtractionWarningNodes(extractionState.result),
         createTextExtractionExcerpt(extractionState.result)
       );
     }
 
     function getQueueLabel(documentItem: DocumentItem): string | null {
-      if (documentItem.extension !== ".pdf") {
+      if (!supportsTextExtractionPanel(documentItem)) {
         return null;
       }
 
       const extractionState = getTextExtractionState(documentItem.filePath);
       switch (extractionState.status) {
         case "text-found":
-          return "Texte extrait";
+          return documentItem.extension === ".pdf" ? "Texte extrait" : "Texte OCR";
         case "empty":
-          return "PDF sans texte";
+          return documentItem.extension === ".pdf" ? "PDF sans texte" : "OCR sans texte";
         case "extracting":
-          return "Extraction texte";
+          return documentItem.extension === ".pdf" ? "Extraction texte" : "OCR en cours";
         case "error":
-          return "Texte indisponible";
+          return documentItem.extension === ".pdf" ? "Texte indisponible" : "OCR indisponible";
         case "idle":
           return null;
       }
@@ -127,20 +138,33 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         return meta;
       }
 
-      const pages = document.createElement("span");
       const characters = document.createElement("span");
       const extractedAt = document.createElement("span");
       const cacheStatus = document.createElement("span");
 
-      pages.textContent = `${extraction.pagesAnalyzed} / ${extraction.pageCount} page${
-        extraction.pageCount > 1 ? "s" : ""
-      }`;
+      if (extraction.source === "tesseract-cli") {
+        const engine = document.createElement("span");
+        const language = document.createElement("span");
+        const duration = document.createElement("span");
+        engine.textContent = "OCR Tesseract";
+        language.textContent = `${extraction.language ?? "fra"} / PSM ${extraction.psm ?? 6}`;
+        duration.textContent =
+          typeof extraction.durationMs === "number" ? `${extraction.durationMs} ms` : "durée OCR";
+        meta.append(engine, language, duration);
+      } else {
+        const pages = document.createElement("span");
+        const pageCount = extraction.pageCount ?? 1;
+        const pagesAnalyzed = extraction.pagesAnalyzed ?? pageCount;
+        pages.textContent = `${pagesAnalyzed} / ${pageCount} page${pageCount > 1 ? "s" : ""}`;
+        meta.append(pages);
+      }
+
       characters.textContent = `${extraction.characterCount} caractère${
         extraction.characterCount > 1 ? "s" : ""
       }`;
       extractedAt.textContent = options.formatDate(extraction.extractedAt);
       cacheStatus.textContent = extraction.fromCache ? "issu du cache" : "analyse locale";
-      meta.append(pages, characters, extractedAt, cacheStatus);
+      meta.append(characters, extractedAt, cacheStatus);
 
       return meta;
     }
@@ -173,7 +197,13 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
   }
 
   function createTextExtractionLimitNoticeNodes(extraction: PdfTextExtraction | null): HTMLElement[] {
-    if (!extraction || extraction.pagesAnalyzed >= extraction.pageCount) {
+    if (
+      !extraction ||
+      extraction.source === "tesseract-cli" ||
+      typeof extraction.pagesAnalyzed !== "number" ||
+      typeof extraction.pageCount !== "number" ||
+      extraction.pagesAnalyzed >= extraction.pageCount
+    ) {
       return [];
     }
 
@@ -183,12 +213,34 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     return [notice];
   }
 
+  function createTextExtractionWarningNodes(extraction: PdfTextExtraction | null): HTMLElement[] {
+    if (!extraction?.warnings || extraction.warnings.length === 0) {
+      return [];
+    }
+
+    return extraction.warnings.map((warningText) => {
+      const warning = document.createElement("p");
+      warning.className = "text-extraction-limit";
+      warning.textContent = warningText;
+      return warning;
+    });
+  }
+
   function createEmptyTextExtractionDocumentState(): TextExtractionDocumentState {
     return {
       status: "idle",
       result: null,
       error: null
     };
+  }
+
+  function supportsTextExtractionPanel(documentItem: DocumentItem): boolean {
+    return (
+      documentItem.extension === ".pdf" ||
+      documentItem.extension === ".jpg" ||
+      documentItem.extension === ".jpeg" ||
+      documentItem.extension === ".png"
+    );
   }
 
   DocSorterTextExtractionPanel = {

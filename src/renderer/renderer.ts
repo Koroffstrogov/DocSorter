@@ -137,9 +137,9 @@ const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPan
     activeDocument: getActiveDocument(),
     textExtraction: state.textExtraction
   }),
-  canExtract: (documentItem) => canExtractTextFromActivePdf(documentItem ?? getActiveDocument()),
+  canExtract: (documentItem) => canExtractTextFromActiveDocument(documentItem ?? getActiveDocument()),
   onExtract: () => {
-    void extractTextFromActivePdf();
+    void extractTextFromActiveDocument();
   },
   formatDate
 });

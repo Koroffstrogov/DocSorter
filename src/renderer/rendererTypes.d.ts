@@ -263,15 +263,21 @@ type NamingSuggestionStatus = "idle" | "ready" | "empty";
 
 interface PdfTextExtraction {
   status: "text-found" | "empty";
-  pageCount: number;
-  pagesAnalyzed: number;
+  source?: "pdf-native" | "tesseract-cli";
+  pageCount?: number;
+  pagesAnalyzed?: number;
+  language?: string;
+  psm?: number;
+  text?: string;
   characterCount: number;
   excerpt: string;
   excerptCharacterCount: number;
   truncated: boolean;
+  durationMs?: number;
   extractedAt: string;
   fromCache?: boolean;
   cachedSuggestions?: NamingSuggestions | null;
+  warnings?: string[];
 }
 
 interface PdfTextExtractionError {
@@ -284,6 +290,17 @@ interface PdfTextExtractionError {
     | "PDF_TEXT_EMPTY"
     | "PDF_PROTECTED_OR_UNREADABLE"
     | "PDF_EXTRACTION_FAILED"
+    | "OCR_ENGINE_NOT_CONFIGURED"
+    | "OCR_ENGINE_NOT_FOUND"
+    | "OCR_LANGUAGE_DATA_MISSING"
+    | "OCR_INPUT_NOT_SUPPORTED"
+    | "OCR_INPUT_NOT_FOUND"
+    | "OCR_INPUT_TOO_LARGE"
+    | "OCR_TIMEOUT"
+    | "OCR_PROCESS_FAILED"
+    | "OCR_TEXT_EMPTY"
+    | "OCR_CACHE_READ_FAILED"
+    | "OCR_CACHE_WRITE_FAILED"
     | "UNKNOWN_ERROR";
   message: string;
 }
@@ -357,6 +374,14 @@ interface RendererOcrError {
     | "OCR_VERSION_FAILED"
     | "OCR_LIST_LANGS_FAILED"
     | "OCR_PROCESS_TIMEOUT"
+    | "OCR_INPUT_NOT_SUPPORTED"
+    | "OCR_INPUT_NOT_FOUND"
+    | "OCR_INPUT_TOO_LARGE"
+    | "OCR_TIMEOUT"
+    | "OCR_PROCESS_FAILED"
+    | "OCR_TEXT_EMPTY"
+    | "OCR_CACHE_READ_FAILED"
+    | "OCR_CACHE_WRITE_FAILED"
     | "OCR_CONFIG_READ_FAILED"
     | "OCR_CONFIG_WRITE_FAILED"
     | "UNKNOWN_ERROR";

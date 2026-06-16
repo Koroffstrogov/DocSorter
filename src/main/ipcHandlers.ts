@@ -60,6 +60,10 @@ import {
 import type { PreviewDataResult } from "../preview/previewTypes";
 import { testOcrEngine as testOcrEngineService } from "../ocr/tesseractCli";
 import {
+  runImageOcrForDocument as runImageOcrForDocumentService,
+  type ImageOcrResult
+} from "../ocr/imageOcrService";
+import {
   getOcrStatus as getOcrStatusService,
   saveOcrSettings as saveOcrSettingsService
 } from "../ocr/tesseractConfig";
@@ -181,6 +185,12 @@ export interface IpcHandlerServices {
     settings: OcrSettingsInput
   ) => Promise<OcrResult<OcrStatus>>;
   testOcrEngine: (userDataPath: string) => Promise<OcrResult<OcrStatus>>;
+  runImageOcrForDocument: (options: {
+    documentPath: string;
+    queuedDocumentPaths: Iterable<string>;
+    userDataPath: string;
+    rulesCatalog: NamingSuggestionRulesCatalog;
+  }) => Promise<ImageOcrResult>;
   loadMergedNamingRulesCatalog: (
     userDataPath: string
   ) => Promise<UserRulesResult<NamingRulesStatus>>;
@@ -316,6 +326,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "testOcrEngine"
   },
   {
+    channel: IPC_CHANNELS.ocrRunImage,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "runImageOcrForDocument"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -427,6 +445,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   getOcrStatus: getOcrStatusService,
   saveOcrSettings: saveOcrSettingsService,
   testOcrEngine: testOcrEngineService,
+  runImageOcrForDocument: runImageOcrForDocumentService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
   saveUserRulesCatalog: saveUserRulesCatalogService
@@ -600,6 +619,14 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   );
   options.ipcMain.handle(IPC_CHANNELS.ocrTestEngine, () =>
     services.testOcrEngine(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrRunImage, async (_event, documentPath: unknown) =>
+    services.runImageOcrForDocument({
+      documentPath: typeof documentPath === "string" ? documentPath : "",
+      queuedDocumentPaths: state.queuedDocumentPaths,
+      userDataPath: options.app.getPath("userData"),
+      rulesCatalog: await getRulesCatalogForAnalysis(options.app, services)
+    })
   );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(

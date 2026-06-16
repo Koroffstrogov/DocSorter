@@ -20,6 +20,7 @@ import type {
   TargetFolderResult
 } from "../naming/targetFolder";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
+import type { ImageOcrResult } from "../ocr/imageOcrService";
 import type { OcrResult, OcrStatus } from "../ocr/ocrTypes";
 import type { PreviewDataResult } from "../preview/previewTypes";
 import type {
@@ -77,6 +78,7 @@ describe("sensitive IPC handler contract", () => {
     ).toEqual([
       IPC_CHANNELS.previewGetData,
       IPC_CHANNELS.extractionExtractPdfText,
+      IPC_CHANNELS.ocrRunImage,
       IPC_CHANNELS.classificationPreparePlan,
       IPC_CHANNELS.classificationExecute
     ]);
@@ -125,6 +127,12 @@ describe("sensitive IPC handler contract", () => {
       acceptsRendererPath: false,
       usesUserDataPath: true,
       serviceName: "testOcrEngine"
+    });
+    expect(contractFor(IPC_CHANNELS.ocrRunImage)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesUserDataPath: true,
+      serviceName: "runImageOcrForDocument"
     });
   });
 });
@@ -192,6 +200,22 @@ describe("registerIpcHandlers", () => {
 
     expect(services.loadMergedNamingRulesCatalog).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(services.extractTextFromPdfDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      queuedDocumentPaths: appState.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      rulesCatalog: createEmptyCatalog()
+    });
+  });
+
+  it("runs image OCR only for the active document with main-state queue and userData", async () => {
+    const appState = createStateWithQueue();
+    const services = createServices();
+    const harness = createHarness({ appState, services });
+
+    await harness.invoke(IPC_CHANNELS.ocrRunImage, DOCUMENT_PATH, "C:\\other.png");
+
+    expect(services.loadMergedNamingRulesCatalog).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.runImageOcrForDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
@@ -613,6 +637,25 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
       ok: true,
       value: createOcrStatus()
     } as OcrResult<OcrStatus>)),
+    runImageOcrForDocument: vi.fn(async () => ({
+      ok: true,
+      value: {
+        status: "text-found",
+        source: "tesseract-cli",
+        language: "fra",
+        psm: 6,
+        text: "texte OCR",
+        excerpt: "texte OCR",
+        characterCount: 9,
+        excerptCharacterCount: 9,
+        truncated: false,
+        durationMs: 123,
+        extractedAt: "2026-06-16T10:00:00.000Z",
+        fromCache: false,
+        cachedSuggestions: null,
+        warnings: []
+      }
+    } as ImageOcrResult)),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()

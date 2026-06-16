@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-1 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif sans OCR, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse et configuration locale de Tesseract CLI sans OCR documentaire.
+Lot 7 + 8A + OCR-2 : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI et OCR manuel des images JPG/JPEG/PNG.
 
 ## Commandes
 
@@ -105,6 +105,12 @@ npm run dev
 - détection locale prudente de Tesseract depuis la configuration, un futur dossier embarqué `resources/tesseract/tesseract.exe`, puis le `PATH` ;
 - test manuel de Tesseract limité à `--version` et `--list-langs`, sans document source, sans conversion PDF/image et sans cache OCR ;
 - vérification explicite de `fra.traineddata` et message sobre si les données de langue manquent.
+- bouton explicite `Lancer OCR sur cette image` pour les documents JPG/JPEG/PNG actifs ;
+- OCR image via Tesseract CLI uniquement après configuration et test du moteur local ;
+- commande OCR limitée à `tesseract <imagePath> stdout -l <lang> --psm <psm>` avec timeout et sorties bornées ;
+- refus des images trop volumineuses pour OCR ;
+- affichage borné du texte OCR et réutilisation manuelle pour les suggestions locales ;
+- cache local des résultats OCR image sous `userData/cache/analysis`, invalidé par chemin, taille, date de modification, moteur, version Tesseract, langue et PSM.
 
 ## Convention de nommage
 
@@ -213,7 +219,7 @@ Si le cache est absent, illisible, invalide ou obsolète, DocSorter relance simp
 
 ## OCR local
 
-OCR-1 prépare seulement l'intégration de Tesseract CLI. Le panneau `OCR local` permet de choisir un exécutable `tesseract.exe`, un dossier `tessdata`, une langue et un PSM, puis de tester le moteur avec les commandes Tesseract de diagnostic.
+Le panneau `OCR local` permet de choisir un exécutable `tesseract.exe`, un dossier `tessdata`, une langue et un PSM, puis de tester le moteur avec les commandes Tesseract de diagnostic.
 
 La configuration est stockée localement dans :
 
@@ -221,9 +227,21 @@ La configuration est stockée localement dans :
 app.getPath("userData")/config/ocr-settings.json
 ```
 
-Le test OCR-1 ne lance pas d'OCR sur les documents, ne lit aucun fichier de la source, ne convertit aucun PDF ou image, n'écrit pas dans la source ou la cible et ne télécharge pas de données de langue.
+Le test moteur ne lance pas d'OCR sur les documents, ne lit aucun fichier de la source, ne convertit aucun PDF ou image, n'écrit pas dans la source ou la cible et ne télécharge pas de données de langue.
 
 Les erreurs OCR principales sont volontairement explicites : moteur non configuré ou introuvable, dossier `tessdata` absent, langue manquante, échec version, échec liste de langues, timeout processus, configuration illisible ou non sauvegardable.
+
+OCR-2 ajoute l'OCR manuel du document image actif uniquement pour `.jpg`, `.jpeg` et `.png`. L'action passe par le main process, vérifie que le document appartient à la dernière file scannée, que le fichier existe encore, qu'il ne dépasse pas 20 Mo et que Tesseract a été testé.
+
+Le texte OCR est borné à 20 000 caractères et l'extrait affiché à 5 000 caractères. Il peut être utilisé pour `Analyser les suggestions`, puis `Appliquer aux champs vides`, sans application automatique.
+
+Le cache OCR image utilise le dossier existant :
+
+```text
+app.getPath("userData")/cache/analysis
+```
+
+Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli`, la version Tesseract détectée, la langue, le PSM, le texte OCR borné, l'extrait affichable, les suggestions locales calculées et la date d'analyse. Elle n'est pas écrite dans la source, la cible ou le journal. Si le cache est corrompu, il est ignoré et l'OCR est relancé.
 
 ## Raccourcis clavier
 
@@ -260,7 +278,7 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas d'application automatique des suggestions ;
 - pas d'éditeur JSON avancé ;
 - pas de gestion multi-profils de règles ;
-- pas d'OCR documentaire réel, IA, doublons probables, packaging avancé ou DOCX.
+- pas d'OCR PDF, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
 
@@ -272,8 +290,7 @@ Pour le classement réel et l'annulation, tester aussi la fermeture puis relance
 Un prochain lot pourra ajouter :
 
 - annulation multiple si le journal et les chemins restent cohérents ;
-- OCR local optionnel pour PDF scannés, dans un lot séparé et explicitement validé ;
-- OCR-2 pourra ajouter l'OCR explicite d'images JPG/PNG, sans OCR automatique ni mutation de documents ;
+- OCR-3 pourra ajouter l'OCR limité des PDF scannés, dans un lot séparé et explicitement validé ;
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
@@ -373,7 +390,14 @@ Un prochain lot pourra ajouter :
 - sauvegarder la configuration OCR crée ou met à jour `userData/config/ocr-settings.json` ;
 - si `fra.traineddata` manque, l'interface affiche une erreur sobre de langue manquante ;
 - `Tester Tesseract` lit seulement la version et les langues disponibles ;
-- aucun OCR documentaire, aucune conversion PDF/image et aucune écriture source/cible ne sont déclenchés depuis OCR-1 ;
+- sélectionner une image JPG/JPEG/PNG affiche le bouton `Lancer OCR sur cette image` si Tesseract est configuré et testé ;
+- lancer l'OCR sur une image affiche le texte OCR, la langue, le PSM, la durée et l'état cache ;
+- relancer l'OCR sur la même image non modifiée indique un résultat issu du cache ;
+- une image trop volumineuse affiche une erreur sobre et ne lance pas Tesseract ;
+- une image sans texte affiche `Aucun texte exploitable détecté` ;
+- un PDF ne déclenche pas l'OCR image et garde l'extraction texte native ;
+- après OCR image réussi, `Analyser les suggestions` puis `Appliquer aux champs vides` fonctionnent sans remplacer les champs déjà saisis ;
+- aucun OCR batch, aucune conversion PDF/image et aucune écriture source/cible ne sont déclenchés depuis OCR-2 ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

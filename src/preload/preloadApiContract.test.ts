@@ -82,6 +82,7 @@ describe("preload API surface", () => {
       psm: 3
     });
     await api.testOcrEngine();
+    await api.runOcrForActiveImage("C:\\source\\image.png");
     await api.getRecentHistory(8);
     await api.getRulesStatus();
     await api.getUserRulesCatalog();
@@ -117,6 +118,7 @@ describe("preload API surface", () => {
       IPC_CHANNELS.ocrSelectTessdataDirectory,
       IPC_CHANNELS.ocrSaveSettings,
       IPC_CHANNELS.ocrTestEngine,
+      IPC_CHANNELS.ocrRunImage,
       IPC_CHANNELS.historyGetRecent,
       IPC_CHANNELS.rulesGetStatus,
       IPC_CHANNELS.rulesGetUserCatalog,

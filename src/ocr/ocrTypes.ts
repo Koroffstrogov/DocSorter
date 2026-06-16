@@ -6,6 +6,14 @@ export type OcrErrorCode =
   | "OCR_VERSION_FAILED"
   | "OCR_LIST_LANGS_FAILED"
   | "OCR_PROCESS_TIMEOUT"
+  | "OCR_INPUT_NOT_SUPPORTED"
+  | "OCR_INPUT_NOT_FOUND"
+  | "OCR_INPUT_TOO_LARGE"
+  | "OCR_TIMEOUT"
+  | "OCR_PROCESS_FAILED"
+  | "OCR_TEXT_EMPTY"
+  | "OCR_CACHE_READ_FAILED"
+  | "OCR_CACHE_WRITE_FAILED"
   | "OCR_CONFIG_READ_FAILED"
   | "OCR_CONFIG_WRITE_FAILED"
   | "UNKNOWN_ERROR";
@@ -86,6 +94,22 @@ export function ocrErrorMessage(code: OcrErrorCode): string {
       return "Impossible de lister les langues Tesseract.";
     case "OCR_PROCESS_TIMEOUT":
       return "Le test Tesseract a dépassé le délai autorisé.";
+    case "OCR_INPUT_NOT_SUPPORTED":
+      return "OCR image disponible uniquement pour les images JPG, JPEG et PNG de la file.";
+    case "OCR_INPUT_NOT_FOUND":
+      return "Image indisponible pour OCR.";
+    case "OCR_INPUT_TOO_LARGE":
+      return "OCR non lancé : image trop volumineuse.";
+    case "OCR_TIMEOUT":
+      return "Timeout OCR.";
+    case "OCR_PROCESS_FAILED":
+      return "Erreur OCR.";
+    case "OCR_TEXT_EMPTY":
+      return "Aucun texte exploitable détecté.";
+    case "OCR_CACHE_READ_FAILED":
+      return "Cache OCR illisible.";
+    case "OCR_CACHE_WRITE_FAILED":
+      return "Cache OCR non sauvegardé.";
     case "OCR_CONFIG_READ_FAILED":
       return "Configuration OCR illisible.";
     case "OCR_CONFIG_WRITE_FAILED":

@@ -171,6 +171,59 @@ async function extractTextFromActivePdf(): Promise<void> {
   render();
 }
 
+async function runOcrForActiveImage(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canRunOcrForActiveImage(activeDocument)) {
+    return;
+  }
+
+  const requestId = ++textExtractionRequestId;
+  clearNamingSuggestionStateForDocument(activeDocument.filePath);
+  setTextExtractionState(activeDocument.filePath, {
+    status: "extracting",
+    result: null,
+    error: null
+  });
+  render();
+
+  const result = await window.docSorter.runOcrForActiveImage(activeDocument.filePath);
+  if (requestId !== textExtractionRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    if (result.error.code === "OCR_INPUT_NOT_FOUND") {
+      markDocumentUnavailable(activeDocument.filePath);
+    }
+
+    setTextExtractionState(activeDocument.filePath, {
+      status: "error",
+      result: null,
+      error: result.error as PdfTextExtractionError
+    });
+    render();
+    return;
+  }
+
+  const extraction = result.value as PdfTextExtraction;
+  clearNamingSuggestionStateForDocument(activeDocument.filePath);
+  setTextExtractionState(activeDocument.filePath, {
+    status: extraction.status,
+    result: extraction,
+    error: null
+  });
+  render();
+}
+
+function extractTextFromActiveDocument(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument) {
+    return Promise.resolve();
+  }
+
+  return activeDocument.extension === ".pdf" ? extractTextFromActivePdf() : runOcrForActiveImage();
+}
+
 function renderTextExtractionPanel(): void {
   textExtractionPanel.render();
 }
@@ -186,6 +239,30 @@ function canExtractTextFromActivePdf(documentItem = getActiveDocument()): boolea
     getTextExtractionState(documentItem.filePath).status !== "extracting" &&
     !isClassificationBusy()
   );
+}
+
+function canRunOcrForActiveImage(documentItem = getActiveDocument()): boolean {
+  if (!documentItem) {
+    return false;
+  }
+
+  const ocrReady = Boolean(
+    state.ocr.status?.status === "configured" &&
+      state.ocr.status.detectedVersion &&
+      !state.ocr.dirty
+  );
+
+  return (
+    isImageDocument(documentItem) &&
+    documentItem.status !== "missing" &&
+    getTextExtractionState(documentItem.filePath).status !== "extracting" &&
+    ocrReady &&
+    !isClassificationBusy()
+  );
+}
+
+function canExtractTextFromActiveDocument(documentItem = getActiveDocument()): boolean {
+  return canExtractTextFromActivePdf(documentItem) || canRunOcrForActiveImage(documentItem);
 }
 
 function getTextExtractionState(filePath: string): TextExtractionDocumentState {
@@ -303,11 +380,19 @@ function canAnalyzeNamingSuggestions(documentItem = getActiveDocument()): boolea
 
   const extractionState = getTextExtractionState(documentItem.filePath);
   return Boolean(
-    documentItem.extension === ".pdf" &&
+    (documentItem.extension === ".pdf" || isImageDocument(documentItem)) &&
       documentItem.status !== "missing" &&
       extractionState.status === "text-found" &&
       extractionState.result?.excerpt.trim() &&
       !isClassificationBusy()
+  );
+}
+
+function isImageDocument(documentItem: DocumentItem): boolean {
+  return (
+    documentItem.extension === ".jpg" ||
+    documentItem.extension === ".jpeg" ||
+    documentItem.extension === ".png"
   );
 }
 

@@ -25,6 +25,7 @@ const REVIEWED_IPC_CHANNELS = [
   "ocr:selectTessdataDirectory",
   "ocr:saveSettings",
   "ocr:testEngine",
+  "ocr:runImage",
   "history:getRecent",
   "rules:getStatus",
   "rules:getUserCatalog",

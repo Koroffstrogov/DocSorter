@@ -10,6 +10,9 @@ import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
 import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type {
+  ImageOcrResult
+} from "../ocr/imageOcrService";
+import type {
   OcrPathSelection,
   OcrResult,
   OcrSettingsInput,
@@ -58,6 +61,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "selectTessdataDirectory",
   "saveOcrSettings",
   "testOcrEngine",
+  "runOcrForActiveImage",
   "getRecentHistory",
   "getRulesStatus",
   "getUserRulesCatalog",
@@ -156,6 +160,8 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.ocrSaveSettings, settings) as Promise<OcrResult<OcrStatus>>,
     testOcrEngine: (): Promise<OcrResult<OcrStatus>> =>
       ipc.invoke(IPC_CHANNELS.ocrTestEngine) as Promise<OcrResult<OcrStatus>>,
+    runOcrForActiveImage: (documentPath: string): Promise<ImageOcrResult> =>
+      ipc.invoke(IPC_CHANNELS.ocrRunImage, documentPath) as Promise<ImageOcrResult>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
         ActionJournalReadResult<ActionJournalEntry[]>

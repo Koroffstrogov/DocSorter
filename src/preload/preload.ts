@@ -31,6 +31,7 @@ const api: DocSorterApi = {
   selectTessdataDirectory: () => ipcRenderer.invoke("ocr:selectTessdataDirectory"),
   saveOcrSettings: (settings) => ipcRenderer.invoke("ocr:saveSettings", settings),
   testOcrEngine: () => ipcRenderer.invoke("ocr:testEngine"),
+  runOcrForActiveImage: (documentPath) => ipcRenderer.invoke("ocr:runImage", documentPath),
   getRecentHistory: (limit) => ipcRenderer.invoke("history:getRecent", limit),
   getRulesStatus: () => ipcRenderer.invoke("rules:getStatus"),
   getUserRulesCatalog: () => ipcRenderer.invoke("rules:getUserCatalog"),

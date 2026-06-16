@@ -32,6 +32,16 @@ export interface TesseractEngineTestOptions extends TesseractCommandOptions {
   now?: () => Date;
 }
 
+export interface TesseractImageOcrOptions extends TesseractCommandOptions {
+  language: string;
+  psm: number;
+}
+
+export interface TesseractImageOcrOutput {
+  stdout: string;
+  stderr: string;
+}
+
 type ExecFileCallback = (
   error: NodeJS.ErrnoException | null,
   stdout: string | Buffer,
@@ -145,6 +155,33 @@ export async function listTesseractLanguages(
   return {
     ok: true,
     value: parseTesseractLanguages(result.stdout)
+  };
+}
+
+export async function runTesseractImageOcr(
+  settings: OcrSettings,
+  imagePath: string,
+  options: TesseractImageOcrOptions
+): Promise<OcrResult<TesseractImageOcrOutput>> {
+  const result = await runTesseractCommand(
+    settings.tesseractPath,
+    [imagePath, "stdout", "-l", options.language, "--psm", String(options.psm)],
+    options
+  );
+  if (result.timedOut) {
+    return ocrFailure("OCR_TIMEOUT", "Timeout OCR.");
+  }
+
+  if (result.exitCode !== 0) {
+    return ocrFailure("OCR_PROCESS_FAILED", "Tesseract n'a pas pu analyser cette image.");
+  }
+
+  return {
+    ok: true,
+    value: {
+      stdout: result.stdout,
+      stderr: result.stderr
+    }
   };
 }
 

@@ -21,6 +21,7 @@ export const IPC_CHANNELS = {
   ocrSelectTessdataDirectory: "ocr:selectTessdataDirectory",
   ocrSaveSettings: "ocr:saveSettings",
   ocrTestEngine: "ocr:testEngine",
+  ocrRunImage: "ocr:runImage",
   historyGetRecent: "history:getRecent",
   rulesGetStatus: "rules:getStatus",
   rulesGetUserCatalog: "rules:getUserCatalog",
