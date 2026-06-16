@@ -9,8 +9,10 @@ interface NamingSuggestionsPanelOptions {
   getState: () => NamingSuggestionsPanelState;
   canAnalyze: (documentItem?: DocumentItem | null) => boolean;
   canApplyToEmptyFields: () => boolean;
+  canApplyTargetFolderSuggestion: () => boolean;
   onAnalyze: () => void;
   onApplyToEmptyFields: () => void;
+  onApplyTargetFolderSuggestion: () => void;
 }
 
 interface NamingSuggestionsPanelApi {
@@ -21,6 +23,7 @@ interface NamingSuggestionsPanelElements {
   panel: HTMLElement | null;
   analyzeButton: HTMLButtonElement | null;
   details: HTMLElement | null;
+  applyTargetFolderButton: HTMLButtonElement | null;
   applyEmptyButton: HTMLButtonElement | null;
 }
 
@@ -50,6 +53,10 @@ var DocSorterNamingSuggestionsPanel: NamingSuggestionsPanelFactoryApi;
       options.onApplyToEmptyFields();
     });
 
+    elements.applyTargetFolderButton?.addEventListener("click", () => {
+      options.onApplyTargetFolderSuggestion();
+    });
+
     function render(): void {
       if (!elements.panel || !elements.details) {
         return;
@@ -69,6 +76,13 @@ var DocSorterNamingSuggestionsPanel: NamingSuggestionsPanelFactoryApi;
 
       if (elements.applyEmptyButton) {
         elements.applyEmptyButton.disabled = !options.canApplyToEmptyFields();
+      }
+
+      if (elements.applyTargetFolderButton) {
+        const hasTargetFolder = Boolean(suggestionState?.suggestions?.targetFolder);
+        elements.applyTargetFolderButton.hidden = !hasTargetFolder;
+        elements.applyTargetFolderButton.disabled =
+          !hasTargetFolder || !options.canApplyTargetFolderSuggestion();
       }
 
       if (!extractionState || extractionState.status === "idle") {
@@ -120,6 +134,9 @@ var DocSorterNamingSuggestionsPanel: NamingSuggestionsPanelFactoryApi;
       panel: root.querySelector<HTMLElement>("#suggestions-panel"),
       analyzeButton: root.querySelector<HTMLButtonElement>("#analyze-suggestions"),
       details: root.querySelector<HTMLElement>("#suggestions-details"),
+      applyTargetFolderButton: root.querySelector<HTMLButtonElement>(
+        "#apply-target-folder-suggestion"
+      ),
       applyEmptyButton: root.querySelector<HTMLButtonElement>("#apply-suggestions-empty")
     };
   }
@@ -170,6 +187,7 @@ var DocSorterNamingSuggestionsPanel: NamingSuggestionsPanelFactoryApi;
       createSuggestionRow("Date", suggestions.date),
       createSuggestionRow("Sujet", suggestions.subject),
       createSuggestionRow("Type", suggestions.documentType),
+      createSuggestionRow("Dossier", suggestions.targetFolder),
       createSuggestionRow("Mots-clés", createKeywordsSuggestion(suggestions.keywords))
     );
 

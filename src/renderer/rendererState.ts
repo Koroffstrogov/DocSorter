@@ -43,6 +43,15 @@ function createIdleDestinationCheckState(): DestinationCheckState {
   };
 }
 
+function createIdleTargetFolderState(): TargetFolderState {
+  return {
+    selectedFolder: "",
+    folders: [],
+    status: "idle",
+    message: "Classement à la racine cible"
+  };
+}
+
 function createIdleClassificationState(): ClassificationState {
   return {
     status: "idle",
@@ -130,7 +139,8 @@ function cloneRulesCatalog(catalog: NamingSuggestionRulesCatalog): NamingSuggest
       output: {
         ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
         ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
+        ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
       }
     })),
     subjectRules: catalog.subjectRules.map((rule) => ({
@@ -139,7 +149,8 @@ function cloneRulesCatalog(catalog: NamingSuggestionRulesCatalog): NamingSuggest
       output: {
         ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
         ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
+        ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
       }
     })),
     keywordRules: catalog.keywordRules.map((rule) => ({

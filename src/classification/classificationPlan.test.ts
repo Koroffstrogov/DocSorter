@@ -26,6 +26,8 @@ describe("prepareClassificationPlan", () => {
       expect(result.value.message).toBe("Plan prêt — aucun fichier modifié");
       expect(result.value.sourcePath).toBe(path.resolve(fixture.sourceFile));
       expect(result.value.currentName).toBe("source.pdf");
+      expect(result.value.targetRootPath).toBe(fixture.targetDir);
+      expect(result.value.targetFolder).toBe("");
       expect(result.value.targetPath).toBe(fixture.targetDir);
       expect(result.value.proposedFilename).toBe("2026-06-15_Facture_Energie.pdf");
       expect(result.value.destinationPath).toBe(
@@ -112,6 +114,114 @@ describe("prepareClassificationPlan", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("TARGET_NOT_FOUND");
       expect(result.value.targetDirectoryStatus).toBe("not-found");
+    }
+  });
+
+  it("prepares a ready plan inside an existing relative target folder", async () => {
+    const fixture = await createFixture();
+    await mkdir(path.join(fixture.targetDir, "Vehicules", "Renault-Captur", "Entretien"), {
+      recursive: true
+    });
+
+    const result = await prepareClassificationPlan({
+      documentPath: fixture.sourceFile,
+      proposedFilename: "2026-06-15_Facture_Energie.pdf",
+      selectedTargetPath: fixture.targetDir,
+      targetFolder: "Vehicules/Renault-Captur/Entretien",
+      queuedDocumentPaths: [fixture.sourceFile],
+      now: fixedNow
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.targetRootPath).toBe(fixture.targetDir);
+      expect(result.value.targetFolder).toBe("Vehicules/Renault-Captur/Entretien");
+      expect(result.value.targetPath).toBe(
+        path.join(fixture.targetDir, "Vehicules", "Renault-Captur", "Entretien")
+      );
+      expect(result.value.destinationPath).toBe(
+        path.join(
+          fixture.targetDir,
+          "Vehicules",
+          "Renault-Captur",
+          "Entretien",
+          "2026-06-15_Facture_Energie.pdf"
+        )
+      );
+    }
+  });
+
+  it("refuses traversal in the relative target folder", async () => {
+    const fixture = await createFixture();
+
+    const result = await prepareClassificationPlan({
+      documentPath: fixture.sourceFile,
+      proposedFilename: "2026-06-15_Facture_Energie.pdf",
+      selectedTargetPath: fixture.targetDir,
+      targetFolder: "../Outside",
+      queuedDocumentPaths: [fixture.sourceFile],
+      now: fixedNow
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_FOLDER_INVALID");
+      expect(result.value.targetDirectoryStatus).toBe("folder-invalid");
+    }
+  });
+
+  it("refuses an absolute relative target folder", async () => {
+    const fixture = await createFixture();
+
+    const result = await prepareClassificationPlan({
+      documentPath: fixture.sourceFile,
+      proposedFilename: "2026-06-15_Facture_Energie.pdf",
+      selectedTargetPath: fixture.targetDir,
+      targetFolder: "C:\\outside",
+      queuedDocumentPaths: [fixture.sourceFile],
+      now: fixedNow
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_FOLDER_INVALID");
+    }
+  });
+
+  it("refuses a relative target folder deeper than 3 levels", async () => {
+    const fixture = await createFixture();
+
+    const result = await prepareClassificationPlan({
+      documentPath: fixture.sourceFile,
+      proposedFilename: "2026-06-15_Facture_Energie.pdf",
+      selectedTargetPath: fixture.targetDir,
+      targetFolder: "A/B/C/D",
+      queuedDocumentPaths: [fixture.sourceFile],
+      now: fixedNow
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_FOLDER_INVALID");
+    }
+  });
+
+  it("refuses a missing relative target folder", async () => {
+    const fixture = await createFixture();
+
+    const result = await prepareClassificationPlan({
+      documentPath: fixture.sourceFile,
+      proposedFilename: "2026-06-15_Facture_Energie.pdf",
+      selectedTargetPath: fixture.targetDir,
+      targetFolder: "Missing",
+      queuedDocumentPaths: [fixture.sourceFile],
+      now: fixedNow
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_FOLDER_NOT_FOUND");
+      expect(result.value.targetDirectoryStatus).toBe("folder-missing");
     }
   });
 

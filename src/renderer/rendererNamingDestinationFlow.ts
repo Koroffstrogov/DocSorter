@@ -49,6 +49,153 @@ function applyDestinationAlternative(): void {
   scheduleDestinationCheck();
 }
 
+async function loadTargetFolders(): Promise<void> {
+  const requestId = ++targetFolderRequestId;
+
+  if (!state.targetPath) {
+    state.targetFolder = createIdleTargetFolderState();
+    renderPaths();
+    renderNamingPanel(false);
+    return;
+  }
+
+  state.targetFolder = {
+    ...state.targetFolder,
+    status: "loading",
+    message: "Lecture des sous-dossiers cible..."
+  };
+  renderPaths();
+  renderNamingPanel(false);
+
+  const result = await window.docSorter.listTargetFolders();
+  if (requestId !== targetFolderRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    state.targetFolder = {
+      ...state.targetFolder,
+      folders: [],
+      status: "error",
+      message: result.error.message
+    };
+    renderNamingPanel(false);
+    return;
+  }
+
+  state.targetFolder = {
+    ...state.targetFolder,
+    folders: result.value.folders,
+    status: "ready",
+    message: state.targetFolder.selectedFolder
+      ? "Sous-dossier cible prêt."
+      : "Classement à la racine cible."
+  };
+  renderNamingPanel(false);
+}
+
+async function updateTargetFolderFromInput(targetFolder: string): Promise<void> {
+  const requestId = ++targetFolderRequestId;
+  state.targetFolder = {
+    ...state.targetFolder,
+    selectedFolder: targetFolder,
+    status: state.targetPath ? "ready" : "idle",
+    message: targetFolder ? "Sous-dossier cible à vérifier." : "Classement à la racine cible."
+  };
+  resetClassificationState();
+  resetDestinationCheck();
+  renderPaths();
+  renderNamingPanel(false);
+
+  const result = await window.docSorter.setTargetFolder(targetFolder);
+  if (requestId !== targetFolderRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    state.targetFolder = {
+      ...state.targetFolder,
+      selectedFolder: targetFolder,
+      status: "invalid",
+      message: result.error.message
+    };
+    state.destination = {
+      ...createIdleDestinationCheckState(),
+      status: "error",
+      checkedFilename: getEffectiveProposedFilename(),
+      error: result.error as DestinationAvailabilityError
+    };
+    renderPaths();
+    renderDestinationCheck();
+    return;
+  }
+
+  state.targetFolder = {
+    ...state.targetFolder,
+    selectedFolder: result.value,
+    status: "ready",
+    message: result.value ? "Sous-dossier cible à vérifier." : "Classement à la racine cible."
+  };
+  renderPaths();
+  scheduleDestinationCheck();
+}
+
+async function createSelectedTargetFolder(): Promise<void> {
+  if (!state.targetPath || !state.targetFolder.selectedFolder || state.targetFolder.status === "creating") {
+    return;
+  }
+
+  const targetFolder = state.targetFolder.selectedFolder;
+  const confirmed = window.confirm(
+    `Créer le sous-dossier cible "${targetFolder}" sous la racine sélectionnée ?`
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  const requestId = ++targetFolderRequestId;
+  state.targetFolder = {
+    ...state.targetFolder,
+    status: "creating",
+    message: "Création du sous-dossier cible..."
+  };
+  resetClassificationState();
+  resetDestinationCheck();
+  renderNamingPanel(false);
+
+  const result = await window.docSorter.createTargetFolder(targetFolder);
+  if (requestId !== targetFolderRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    state.targetFolder = {
+      ...state.targetFolder,
+      status: "error",
+      message: result.error.message
+    };
+    state.destination = {
+      ...createIdleDestinationCheckState(),
+      status: "error",
+      checkedFilename: getEffectiveProposedFilename(),
+      error: result.error as DestinationAvailabilityError
+    };
+    renderDestinationCheck();
+    return;
+  }
+
+  state.targetFolder = {
+    selectedFolder: result.value.targetFolder,
+    folders: addFolderToList(state.targetFolder.folders, result.value.targetFolder),
+    status: result.value.created ? "created" : "ready",
+    message: result.value.message
+  };
+  renderPaths();
+  renderNamingPanel(false);
+  void loadTargetFolders();
+  scheduleDestinationCheck();
+}
+
 async function updateNamingProposal(
   originalExtension: SupportedDocumentExtension,
   requestId: number
@@ -188,3 +335,10 @@ function clearDestinationCheckTimer(): void {
   destinationCheckTimer = null;
 }
 
+function addFolderToList(folders: string[], targetFolder: string): string[] {
+  if (!targetFolder || folders.includes(targetFolder)) {
+    return folders;
+  }
+
+  return [...folders, targetFolder].sort((left, right) => left.localeCompare(right, "fr"));
+}

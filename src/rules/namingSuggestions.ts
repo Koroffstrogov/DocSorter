@@ -11,6 +11,7 @@ interface NamingSuggestions {
   date: SuggestedNamingField | null;
   subject: SuggestedNamingField | null;
   documentType: SuggestedNamingField | null;
+  targetFolder: SuggestedNamingField | null;
   keywords: SuggestedNamingField[];
   confidence: number;
   reasons: string[];
@@ -90,20 +91,25 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     const subject =
       selectRuleOutputField(subjectRuleMatches, "subject") ??
       detectFilenameFallbackSubject(normalizedInput.filename, rulesCatalog.stopWords);
+    const targetFolder = selectRuleOutputField(
+      [...documentTypeRuleMatches, ...subjectRuleMatches],
+      "targetFolder"
+    );
     const keywords = detectKeywords(
       normalizedInput,
       rulesCatalog,
       documentTypeRuleMatches,
       subjectRuleMatches
     );
-    const reasons = collectReasons(date, subject, documentType, keywords);
+    const reasons = collectReasons(date, subject, documentType, targetFolder, keywords);
 
     return {
       date,
       subject,
       documentType,
+      targetFolder,
       keywords,
-      confidence: computeOverallConfidence(date, subject, documentType, keywords),
+      confidence: computeOverallConfidence(date, subject, documentType, targetFolder, keywords),
       reasons
     };
   }
@@ -348,23 +354,66 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
 
   function selectRuleOutputField(
     matches: MatchedSuggestionRule[],
-    field: "documentType" | "subject"
+    field: "documentType" | "subject" | "targetFolder"
   ): SuggestedNamingField | null {
     const sortedMatches = [...matches]
       .filter((match) => Boolean(match.rule.output[field]))
       .sort((left, right) => right.confidence - left.confidence);
-    const selected = sortedMatches[0];
+    for (const selected of sortedMatches) {
+      const value = normalizeRuleOutputValue(field, selected.rule.output[field]);
+      if (!value) {
+        continue;
+      }
 
-    if (!selected) {
-      return null;
+      return {
+        value,
+        source: selected.source,
+        confidence: selected.confidence,
+        reason: createRuleReason(selected.rule)
+      };
     }
 
-    return {
-      value: selected.rule.output[field] ?? "",
-      source: selected.source,
-      confidence: selected.confidence,
-      reason: createRuleReason(selected.rule)
-    };
+    return null;
+  }
+
+  function normalizeRuleOutputValue(
+    field: "documentType" | "subject" | "targetFolder",
+    value: string | undefined
+  ): string {
+    if (!value) {
+      return "";
+    }
+
+    return field === "targetFolder" ? normalizeTargetFolderSuggestion(value) : value.trim();
+  }
+
+  function normalizeTargetFolderSuggestion(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed || /^[a-zA-Z]:/.test(trimmed) || /^[\\/]/.test(trimmed)) {
+      return "";
+    }
+
+    const segments = trimmed
+      .replace(/\\/g, "/")
+      .split("/")
+      .map((segment) => segment.trim());
+
+    if (segments.length > 3 || segments.some((segment) => !isValidTargetFolderSegment(segment))) {
+      return "";
+    }
+
+    return segments.join("/");
+  }
+
+  function isValidTargetFolderSegment(segment: string): boolean {
+    return Boolean(
+      segment &&
+        segment !== "." &&
+        segment !== ".." &&
+        !segment.includes("..") &&
+        !/[<>:"|?*\u0000-\u001F]/.test(segment) &&
+        !/[. ]$/.test(segment)
+    );
   }
 
   function detectKeywords(
@@ -585,9 +634,10 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     date: SuggestedNamingField | null,
     subject: SuggestedNamingField | null,
     documentType: SuggestedNamingField | null,
+    targetFolder: SuggestedNamingField | null,
     keywords: SuggestedNamingField[]
   ): string[] {
-    return [date, subject, documentType, ...keywords]
+    return [date, subject, documentType, targetFolder, ...keywords]
       .filter((suggestion): suggestion is SuggestedNamingField => Boolean(suggestion))
       .map((suggestion) => suggestion.reason)
       .filter((reason, index, reasons) => reasons.indexOf(reason) === index)
@@ -598,6 +648,7 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     date: SuggestedNamingField | null,
     subject: SuggestedNamingField | null,
     documentType: SuggestedNamingField | null,
+    targetFolder: SuggestedNamingField | null,
     keywords: SuggestedNamingField[]
   ): number {
     const weighted: Array<{ confidence: number; weight: number }> = [];
@@ -610,6 +661,9 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     if (documentType) {
       weighted.push({ confidence: documentType.confidence, weight: 0.9 });
     }
+    if (targetFolder) {
+      weighted.push({ confidence: targetFolder.confidence, weight: 0.65 });
+    }
     for (const keyword of keywords.slice(0, 3)) {
       weighted.push({ confidence: keyword.confidence, weight: 0.25 });
     }
@@ -621,8 +675,8 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
     const totalWeight = weighted.reduce((total, item) => total + item.weight, 0);
     const weightedAverage =
       weighted.reduce((total, item) => total + item.confidence * item.weight, 0) / totalWeight;
-    const coreSignalCount = [date, subject, documentType].filter(Boolean).length;
-    const convergentSource = [date, subject, documentType, ...keywords].some(
+    const coreSignalCount = [date, subject, documentType, targetFolder].filter(Boolean).length;
+    const convergentSource = [date, subject, documentType, targetFolder, ...keywords].some(
       (suggestion) => suggestion?.source === "filename+text"
     );
     const boost = (coreSignalCount >= 2 ? 0.06 : 0) + (convergentSource ? 0.04 : 0);
@@ -692,7 +746,8 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
         output: {
           ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
           ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-          ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+          ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
+          ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
         },
         ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
       })),
@@ -706,7 +761,8 @@ var DocSorterNamingSuggestions: NamingSuggestionsApi;
         output: {
           ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
           ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-          ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+          ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
+          ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
         },
         ...(rule.enabled === undefined ? {} : { enabled: rule.enabled })
       })),

@@ -50,6 +50,9 @@ describe("preload API surface", () => {
     await api.getVersion();
     await api.selectSourceDirectory();
     await api.selectTargetDirectory();
+    await api.listTargetFolders();
+    await api.setTargetFolder("Vehicules/Renault-Captur");
+    await api.createTargetFolder("Vehicules/Renault-Captur");
     await api.refreshSourceDocuments();
     await api.getPreviewData("C:\\source\\document.pdf");
     await api.createInitialNamingDraft("document.pdf");
@@ -85,6 +88,9 @@ describe("preload API surface", () => {
       IPC_CHANNELS.appGetVersion,
       IPC_CHANNELS.directorySelectSource,
       IPC_CHANNELS.directorySelectTarget,
+      IPC_CHANNELS.targetListFolders,
+      IPC_CHANNELS.targetSetFolder,
+      IPC_CHANNELS.targetCreateFolder,
       IPC_CHANNELS.documentsRefreshSource,
       IPC_CHANNELS.previewGetData,
       IPC_CHANNELS.namingCreateInitialDraft,

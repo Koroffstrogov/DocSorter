@@ -164,6 +164,9 @@
             <div id="suggestions-details" class="suggestions-details">
               Extrais le texte PDF pour obtenir des suggestions locales.
             </div>
+            <button id="apply-target-folder-suggestion" type="button" disabled hidden>
+              Appliquer le dossier suggéré
+            </button>
             <button id="apply-suggestions-empty" type="button" disabled>Appliquer aux champs vides</button>
           </section>
 
@@ -303,10 +306,24 @@
                   <span>Contrôle cible</span>
                   <strong id="destination-status" class="status-neutral">Contrôle cible non lancé</strong>
                 </div>
+                <div class="target-folder-controls" aria-label="Sous-dossier cible">
+                  <label>
+                    Sous-dossier cible
+                    <input
+                      id="target-folder-input"
+                      list="target-folder-options"
+                      autocomplete="off"
+                      placeholder="Racine cible"
+                    />
+                  </label>
+                  <datalist id="target-folder-options"></datalist>
+                  <p id="target-folder-status">Classement à la racine cible</p>
+                  <button id="create-target-folder" type="button" hidden>Créer ce dossier</button>
+                </div>
                 <dl class="destination-details">
                   <div>
-                    <dt>Cible</dt>
-                    <dd id="destination-target">Aucun dossier cible sélectionné</dd>
+                    <dt>Racine cible</dt>
+                    <dd id="destination-target">Aucune racine cible sélectionnée</dd>
                   </div>
                   <div>
                     <dt>Chemin final</dt>

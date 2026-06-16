@@ -159,6 +159,7 @@
     const documentType = validateOptionalString(value.documentType, `${label}.documentType`, errors);
     const subject = validateOptionalString(value.subject, `${label}.subject`, errors);
     const keywords = validateOptionalStringList(value.keywords, `${label}.keywords`, errors);
+    const targetFolder = validateOptionalString(value.targetFolder, `${label}.targetFolder`, errors);
     const output: SuggestionRuleOutput = {};
 
     if (documentType) {
@@ -170,8 +171,11 @@
     if (keywords?.length) {
       output.keywords = keywords;
     }
+    if (targetFolder) {
+      output.targetFolder = targetFolder.replace(/\\/g, "/");
+    }
 
-    if (!output.documentType && !output.subject && !output.keywords?.length) {
+    if (!output.documentType && !output.subject && !output.keywords?.length && !output.targetFolder) {
       errors.push(`${label} doit produire au moins un champ.`);
     }
 
@@ -392,7 +396,8 @@
       output: {
         ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
         ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {})
+        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
+        ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
       },
       confidence: rule.confidence,
       ...(rule.source ? { source: rule.source } : {}),

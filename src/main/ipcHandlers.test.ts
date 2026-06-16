@@ -14,6 +14,11 @@ import type { ActionJournalReadResult } from "../history/actionJournal";
 import type { ActionJournalEntry, UndoableClassificationAction } from "../history/historyTypes";
 import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
 import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
+import type {
+  TargetFolderCreation,
+  TargetFolderList,
+  TargetFolderResult
+} from "../naming/targetFolder";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type { PreviewDataResult } from "../preview/previewTypes";
 import type {
@@ -34,10 +39,11 @@ import {
 
 const SOURCE_PATH = "C:\\source";
 const TARGET_PATH = "C:\\target";
+const TARGET_FOLDER = "Vehicules/Renault-Captur";
 const USER_DATA_PATH = "C:\\user-data";
 const JOURNAL_PATH = path.join(USER_DATA_PATH, "history", "actions.jsonl");
 const DOCUMENT_PATH = path.join(SOURCE_PATH, "document.pdf");
-const CLASSIFIED_PATH = path.join(TARGET_PATH, "document-classe.pdf");
+const CLASSIFIED_PATH = path.join(TARGET_PATH, "Vehicules", "Renault-Captur", "document-classe.pdf");
 
 const DOCUMENT_ITEM = {
   name: "document.pdf",
@@ -76,6 +82,19 @@ describe("sensitive IPC handler contract", () => {
       acceptsRendererPath: false,
       usesMainTarget: true
     });
+    expect(contractFor(IPC_CHANNELS.targetSetFolder)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainTarget: true
+    });
+    expect(contractFor(IPC_CHANNELS.targetCreateFolder)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainTarget: true
+    });
+    expect(contractFor(IPC_CHANNELS.extractionExtractPdfText)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesUserDataPath: true
+    });
     expect(contractFor(IPC_CHANNELS.classificationExecute)).toMatchObject({
       acceptsRendererPath: true,
       usesMainTarget: true,
@@ -111,6 +130,7 @@ describe("registerIpcHandlers", () => {
 
     expect(appState.selectedSourcePath).toBe(SOURCE_PATH);
     expect(appState.selectedTargetPath).toBe(TARGET_PATH);
+    expect(appState.selectedTargetFolder).toBe("");
     expect(appState.queuedDocumentPaths.size).toBe(0);
     expect(appState.queuedDocuments).toEqual([]);
     expect(harness.dialogCalls.map((call) => call.title)).toEqual([
@@ -152,14 +172,17 @@ describe("registerIpcHandlers", () => {
 
     await harness.invoke(IPC_CHANNELS.extractionExtractPdfText, DOCUMENT_PATH, "C:\\other.pdf");
 
+    expect(services.loadMergedNamingRulesCatalog).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(services.extractTextFromPdfDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
-      queuedDocumentPaths: appState.queuedDocumentPaths
+      queuedDocumentPaths: appState.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      rulesCatalog: createEmptyCatalog()
     });
   });
 
   it("checks destination availability with the target stored in main state", async () => {
-    const appState = createState({ selectedTargetPath: TARGET_PATH });
+    const appState = createState({ selectedTargetPath: TARGET_PATH, selectedTargetFolder: TARGET_FOLDER });
     const services = createServices();
     const harness = createHarness({ appState, services });
 
@@ -171,12 +194,29 @@ describe("registerIpcHandlers", () => {
 
     expect(services.checkDestinationNameAvailability).toHaveBeenCalledWith(
       TARGET_PATH,
-      "document-classe.pdf"
+      "document-classe.pdf",
+      TARGET_FOLDER
     );
   });
 
+  it("lists, stores and creates only relative target folders under main-state target root", async () => {
+    const appState = createState({ selectedTargetPath: TARGET_PATH });
+    const services = createServices();
+    const harness = createHarness({ appState, services });
+
+    await harness.invoke(IPC_CHANNELS.targetListFolders, "C:\\renderer-target");
+    const setResult = await harness.invoke(IPC_CHANNELS.targetSetFolder, TARGET_FOLDER);
+    await harness.invoke(IPC_CHANNELS.targetCreateFolder, TARGET_FOLDER);
+
+    expect(services.listTargetSubdirectories).toHaveBeenCalledWith(TARGET_PATH);
+    expect(services.normalizeTargetFolderRelative).toHaveBeenCalledWith(TARGET_FOLDER);
+    expect(services.createTargetSubdirectory).toHaveBeenCalledWith(TARGET_PATH, TARGET_FOLDER);
+    expect(setResult).toEqual({ ok: true, value: TARGET_FOLDER });
+    expect(appState.selectedTargetFolder).toBe(TARGET_FOLDER);
+  });
+
   it("prepares and executes classification with main-state target, queue and journal path", async () => {
-    const appState = createStateWithQueue();
+    const appState = createStateWithQueue({ selectedTargetFolder: TARGET_FOLDER });
     const services = createServices();
     const harness = createHarness({ appState, services });
 
@@ -197,12 +237,14 @@ describe("registerIpcHandlers", () => {
       documentPath: DOCUMENT_PATH,
       proposedFilename: "document-classe.pdf",
       selectedTargetPath: TARGET_PATH,
+      targetFolder: TARGET_FOLDER,
       queuedDocumentPaths: appState.queuedDocumentPaths
     });
     expect(services.executeClassification).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       proposedFilename: "document-classe.pdf",
       selectedTargetPath: TARGET_PATH,
+      targetFolder: TARGET_FOLDER,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       journalFilePath: JOURNAL_PATH
     });
@@ -342,12 +384,13 @@ function createState(overrides: Partial<MainProcessAppState> = {}): MainProcessA
   };
 }
 
-function createStateWithQueue(): MainProcessAppState {
+function createStateWithQueue(overrides: Partial<MainProcessAppState> = {}): MainProcessAppState {
   return createState({
     selectedSourcePath: SOURCE_PATH,
     selectedTargetPath: TARGET_PATH,
     queuedDocumentPaths: new Set([path.resolve(DOCUMENT_PATH)]),
-    queuedDocuments: [{ filePath: DOCUMENT_PATH, name: "document.pdf" }]
+    queuedDocuments: [{ filePath: DOCUMENT_PATH, name: "document.pdf" }],
+    ...overrides
   });
 }
 
@@ -384,6 +427,8 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
       ok: true,
       value: {
         status: "available",
+        targetRootPath: TARGET_PATH,
+        targetFolder: TARGET_FOLDER,
         targetPath: TARGET_PATH,
         proposedFilename: "document-classe.pdf",
         finalFilename: "document-classe.pdf",
@@ -392,6 +437,28 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
         message: "Nom disponible dans la cible."
       }
     })),
+    normalizeTargetFolderRelative: vi.fn((targetFolder: string): TargetFolderResult<string> => ({
+      ok: true,
+      value: targetFolder
+    })),
+    listTargetSubdirectories: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targetRootPath: TARGET_PATH,
+        folders: [TARGET_FOLDER]
+      }
+    } as TargetFolderResult<TargetFolderList>)),
+    createTargetSubdirectory: vi.fn(async (_targetPath, targetFolder) => ({
+      ok: true,
+      value: {
+        targetRootPath: TARGET_PATH,
+        targetFolder,
+        targetPath: path.join(TARGET_PATH, ...targetFolder.split("/")),
+        exists: true,
+        created: true,
+        message: "Dossier cible créé."
+      }
+    } as TargetFolderResult<TargetFolderCreation>)),
     prepareClassificationPlan: vi.fn(async () => ({
       ok: true,
       value: {}

@@ -1,6 +1,9 @@
 function renderPaths(): void {
   sourcePath?.replaceChildren(state.sourcePath ?? "Aucun dossier source sélectionné");
-  targetPath?.replaceChildren(state.targetPath ?? "Aucun dossier cible sélectionné");
+  targetPath?.replaceChildren(formatTargetLocation());
+  if (targetPath) {
+    targetPath.title = formatTargetLocation();
+  }
 }
 
 function renderQueue(): void {
@@ -67,3 +70,14 @@ function renderDetails(): void {
   renderNamingPanel(true);
 }
 
+function formatTargetLocation(): string {
+  if (!state.targetPath) {
+    return "Aucune racine cible sélectionnée";
+  }
+
+  if (!state.targetFolder.selectedFolder) {
+    return `${state.targetPath} | Sous-dossier : racine`;
+  }
+
+  return `${state.targetPath} | Sous-dossier : ${state.targetFolder.selectedFolder}`;
+}

@@ -220,18 +220,22 @@ function analyzeNamingSuggestionsForActiveDocument(): void {
     return;
   }
 
-  const suggestions = DocSorterNamingSuggestions.buildNamingSuggestions({
-    filename: activeDocument.name,
-    extractedText: extraction.excerpt,
-    rulesCatalog: state.namingRules.mergedCatalog
-  });
+  const suggestions =
+    extraction.cachedSuggestions ??
+    DocSorterNamingSuggestions.buildNamingSuggestions({
+      filename: activeDocument.name,
+      extractedText: extraction.excerpt,
+      rulesCatalog: state.namingRules.mergedCatalog
+    });
   const hasSuggestions = namingSuggestionsHaveContent(suggestions);
 
   setNamingSuggestionState(activeDocument.filePath, {
     status: hasSuggestions ? "ready" : "empty",
     suggestions: hasSuggestions ? suggestions : null,
     message: hasSuggestions
-      ? "Suggestions générées localement depuis le texte extrait et le nom de fichier."
+      ? extraction.fromCache && extraction.cachedSuggestions
+        ? "Suggestions issues du cache local."
+        : "Suggestions générées localement depuis le texte extrait et le nom de fichier."
       : "Aucune suggestion locale exploitable détectée."
   });
   render();
@@ -274,6 +278,24 @@ function applyNamingSuggestionsToEmptyFields(): void {
   void updateNamingProposal(activeDocument.extension, ++namingRequestId);
 }
 
+function applyTargetFolderSuggestion(): void {
+  if (!canApplyTargetFolderSuggestion()) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  if (!activeDocument) {
+    return;
+  }
+
+  const targetFolder = getNamingSuggestionState(activeDocument.filePath).suggestions?.targetFolder?.value;
+  if (!targetFolder) {
+    return;
+  }
+
+  void updateTargetFolderFromInput(targetFolder);
+}
+
 function canAnalyzeNamingSuggestions(documentItem = getActiveDocument()): boolean {
   if (!documentItem) {
     return false;
@@ -299,6 +321,15 @@ function canApplyNamingSuggestionsToEmptyFields(): boolean {
   return Boolean(suggestions && hasEmptyFieldForSuggestion(state.naming.draft, suggestions));
 }
 
+function canApplyTargetFolderSuggestion(): boolean {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !state.targetPath || isClassificationBusy()) {
+    return false;
+  }
+
+  return Boolean(getNamingSuggestionState(activeDocument.filePath).suggestions?.targetFolder?.value);
+}
+
 function hasEmptyFieldForSuggestion(draft: NamingDraft, suggestions: NamingSuggestions): boolean {
   return (
     (!draft.documentDate.trim() && Boolean(suggestions.date?.value)) ||
@@ -310,7 +341,11 @@ function hasEmptyFieldForSuggestion(draft: NamingDraft, suggestions: NamingSugge
 
 function namingSuggestionsHaveContent(suggestions: NamingSuggestions): boolean {
   return Boolean(
-    suggestions.date || suggestions.subject || suggestions.documentType || suggestions.keywords.length > 0
+    suggestions.date ||
+      suggestions.subject ||
+      suggestions.documentType ||
+      suggestions.targetFolder ||
+      suggestions.keywords.length > 0
   );
 }
 

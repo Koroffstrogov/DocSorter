@@ -1,6 +1,9 @@
 import path from "node:path";
 
 import {
+  extractTextFromPdfDocumentWithAnalysisCache as extractTextFromPdfDocumentService
+} from "../analysis/pdfAnalysisCache";
+import {
   prepareClassificationPlan as prepareClassificationPlanService,
   type PrepareClassificationPlanResult
 } from "../classification/classificationPlan";
@@ -15,7 +18,6 @@ import {
   type ExactDuplicateAnalysisResult
 } from "../duplicates/exactDuplicates";
 import {
-  extractTextFromPdfDocument as extractTextFromPdfDocumentService,
   type PdfTextExtractionResult
 } from "../extraction/pdfTextExtraction";
 import {
@@ -36,6 +38,14 @@ import {
   checkDestinationNameAvailability as checkDestinationNameAvailabilityService,
   type DestinationAvailabilityResult
 } from "../naming/destinationNameAvailability";
+import {
+  createTargetSubdirectory as createTargetSubdirectoryService,
+  listTargetSubdirectories as listTargetSubdirectoriesService,
+  normalizeTargetFolderRelative as normalizeTargetFolderRelativeService,
+  type TargetFolderCreation,
+  type TargetFolderList,
+  type TargetFolderResult
+} from "../naming/targetFolder";
 import {
   buildProposedFilename as buildProposedFilenameService,
   createInitialNamingDraft as createInitialNamingDraftService,
@@ -85,6 +95,7 @@ export interface DialogLike {
 export interface MainProcessAppState {
   selectedSourcePath: string | null;
   selectedTargetPath: string | null;
+  selectedTargetFolder: string;
   queuedDocumentPaths: Set<string>;
   queuedDocuments: DuplicateSourceDocument[];
   lastUndoableAction: UndoableClassificationAction | null;
@@ -100,18 +111,29 @@ export interface IpcHandlerServices {
   buildProposedFilename: (draft: NamingDraft, originalExtension: string) => ProposedFilename;
   checkDestinationNameAvailability: (
     targetPath: string | null | undefined,
-    proposedFilename: string
+    proposedFilename: string,
+    targetFolder?: string
   ) => Promise<DestinationAvailabilityResult>;
+  normalizeTargetFolderRelative: (targetFolder: string) => TargetFolderResult<string>;
+  listTargetSubdirectories: (
+    targetPath: string | null | undefined
+  ) => Promise<TargetFolderResult<TargetFolderList>>;
+  createTargetSubdirectory: (
+    targetPath: string | null | undefined,
+    targetFolder: string
+  ) => Promise<TargetFolderResult<TargetFolderCreation>>;
   prepareClassificationPlan: (options: {
     documentPath: string;
     proposedFilename: string;
     selectedTargetPath: string | null | undefined;
+    targetFolder?: string;
     queuedDocumentPaths: Iterable<string>;
   }) => Promise<PrepareClassificationPlanResult>;
   executeClassification: (options: {
     documentPath: string;
     proposedFilename: string;
     selectedTargetPath: string | null | undefined;
+    targetFolder?: string;
     queuedDocumentPaths: Iterable<string>;
     journalFilePath: string;
   }) => Promise<ExecuteClassificationResult>;
@@ -134,6 +156,8 @@ export interface IpcHandlerServices {
   extractTextFromPdfDocument: (options: {
     documentPath: string;
     queuedDocumentPaths: Iterable<string>;
+    userDataPath: string;
+    rulesCatalog: NamingSuggestionRulesCatalog;
   }) => Promise<PdfTextExtractionResult>;
   getPreviewData: (
     documentPath: string | undefined,
@@ -186,6 +210,30 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "dialog.showOpenDialog"
   },
   {
+    channel: IPC_CHANNELS.targetListFolders,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: true,
+    usesUserDataPath: false,
+    serviceName: "listTargetSubdirectories"
+  },
+  {
+    channel: IPC_CHANNELS.targetSetFolder,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: true,
+    usesUserDataPath: false,
+    serviceName: "normalizeTargetFolderRelative"
+  },
+  {
+    channel: IPC_CHANNELS.targetCreateFolder,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: true,
+    usesUserDataPath: false,
+    serviceName: "createTargetSubdirectory"
+  },
+  {
     channel: IPC_CHANNELS.documentsRefreshSource,
     acceptsRendererPath: false,
     usesMainSource: true,
@@ -206,7 +254,7 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     acceptsRendererPath: true,
     usesMainSource: true,
     usesMainTarget: false,
-    usesUserDataPath: false,
+    usesUserDataPath: true,
     serviceName: "extractTextFromPdfDocument"
   },
   {
@@ -304,7 +352,11 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   createInitialNamingDraft: createInitialNamingDraftService,
   isNamingDraft: isNamingDraftService,
   buildProposedFilename: buildProposedFilenameService,
-  checkDestinationNameAvailability: checkDestinationNameAvailabilityService,
+  checkDestinationNameAvailability: (targetPath, proposedFilename, targetFolder) =>
+    checkDestinationNameAvailabilityService(targetPath, proposedFilename, { targetFolder }),
+  normalizeTargetFolderRelative: normalizeTargetFolderRelativeService,
+  listTargetSubdirectories: listTargetSubdirectoriesService,
+  createTargetSubdirectory: createTargetSubdirectoryService,
   prepareClassificationPlan: prepareClassificationPlanService,
   executeClassification: executeClassificationService,
   undoLastClassification: undoLastClassificationService,
@@ -323,6 +375,7 @@ export function createMainProcessAppState(): MainProcessAppState {
   return {
     selectedSourcePath: null,
     selectedTargetPath: null,
+    selectedTargetFolder: "",
     queuedDocumentPaths: new Set(),
     queuedDocuments: [],
     lastUndoableAction: null,
@@ -345,6 +398,30 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   options.ipcMain.handle(IPC_CHANNELS.documentsRefreshSource, () =>
     refreshSelectedSourceDocuments(state, services)
   );
+  options.ipcMain.handle(IPC_CHANNELS.targetListFolders, () =>
+    services.listTargetSubdirectories(state.selectedTargetPath)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.targetSetFolder, (_event, targetFolder: unknown) => {
+    const result = services.normalizeTargetFolderRelative(
+      typeof targetFolder === "string" ? targetFolder : ""
+    );
+    if (result.ok) {
+      state.selectedTargetFolder = result.value;
+    }
+
+    return result;
+  });
+  options.ipcMain.handle(IPC_CHANNELS.targetCreateFolder, async (_event, targetFolder: unknown) => {
+    const result = await services.createTargetSubdirectory(
+      state.selectedTargetPath,
+      typeof targetFolder === "string" ? targetFolder : ""
+    );
+    if (result.ok) {
+      state.selectedTargetFolder = result.value.targetFolder;
+    }
+
+    return result;
+  });
   options.ipcMain.handle(IPC_CHANNELS.namingCreateInitialDraft, (_event, originalName: unknown) => {
     if (typeof originalName !== "string") {
       return services.createInitialNamingDraft("");
@@ -375,7 +452,8 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
     (_event, proposedFilename: unknown) =>
       services.checkDestinationNameAvailability(
         state.selectedTargetPath,
-        typeof proposedFilename === "string" ? proposedFilename : ""
+        typeof proposedFilename === "string" ? proposedFilename : "",
+        state.selectedTargetFolder
       )
   );
   options.ipcMain.handle(
@@ -385,6 +463,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         documentPath: typeof documentPath === "string" ? documentPath : "",
         proposedFilename: typeof proposedFilename === "string" ? proposedFilename : "",
         selectedTargetPath: state.selectedTargetPath,
+        targetFolder: state.selectedTargetFolder,
         queuedDocumentPaths: state.queuedDocumentPaths
       })
   );
@@ -395,6 +474,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         documentPath: typeof documentPath === "string" ? documentPath : "",
         proposedFilename: typeof proposedFilename === "string" ? proposedFilename : "",
         selectedTargetPath: state.selectedTargetPath,
+        targetFolder: state.selectedTargetFolder,
         queuedDocumentPaths: state.queuedDocumentPaths,
         journalFilePath: getJournalFilePath(options.app, services)
       });
@@ -437,10 +517,12 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   options.ipcMain.handle(IPC_CHANNELS.duplicatesAnalyzeExact, () =>
     analyzeQueuedExactDuplicates(options.app, state, services)
   );
-  options.ipcMain.handle(IPC_CHANNELS.extractionExtractPdfText, (_event, documentPath: unknown) =>
+  options.ipcMain.handle(IPC_CHANNELS.extractionExtractPdfText, async (_event, documentPath: unknown) =>
     services.extractTextFromPdfDocument({
       documentPath: typeof documentPath === "string" ? documentPath : "",
-      queuedDocumentPaths: state.queuedDocumentPaths
+      queuedDocumentPaths: state.queuedDocumentPaths,
+      userDataPath: options.app.getPath("userData"),
+      rulesCatalog: await getRulesCatalogForAnalysis(options.app, services)
     })
   );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
@@ -509,6 +591,7 @@ async function selectTargetDirectory(
   const selection = await selectDirectory(dialog, "Choisir le dossier cible");
   if (selection.ok && selection.value) {
     state.selectedTargetPath = selection.value.path;
+    state.selectedTargetFolder = "";
   }
 
   return selection;
@@ -601,6 +684,18 @@ async function analyzeQueuedExactDuplicates(
 
 function getJournalFilePath(app: AppLike, services: IpcHandlerServices): string {
   return services.getActionJournalFilePath(app.getPath("userData"));
+}
+
+async function getRulesCatalogForAnalysis(
+  app: AppLike,
+  services: IpcHandlerServices
+): Promise<NamingSuggestionRulesCatalog> {
+  const status = await services.loadMergedNamingRulesCatalog(app.getPath("userData"));
+  if (status.ok) {
+    return status.value.mergedCatalog;
+  }
+
+  return globalThis.DocSorterNamingSuggestionRulesCatalog.getDefaultNamingSuggestionRulesCatalog();
 }
 
 async function selectDirectory(

@@ -1,6 +1,7 @@
 interface DocumentDetailsPanelState {
   activeDocument: DocumentItem | null;
   targetPath: string | null;
+  targetFolder: string;
 }
 
 interface DocumentDetailsPanelOptions {
@@ -33,7 +34,7 @@ var DocSorterDocumentDetailsPanel: DocumentDetailsPanelFactoryApi;
         return;
       }
 
-      const { activeDocument, targetPath } = options.getState();
+      const { activeDocument, targetPath, targetFolder } = options.getState();
       if (!activeDocument) {
         details.className = "details-empty";
         details.replaceChildren("Aucun document actif");
@@ -48,7 +49,8 @@ var DocSorterDocumentDetailsPanel: DocumentDetailsPanelFactoryApi;
         createDetailRow("Taille", activeDocument.sizeLabel),
         createDetailRow("Date de modification", options.formatDate(activeDocument.modifiedAt)),
         createDetailRow("Statut", options.statusLabel(activeDocument.status)),
-        createDetailRow("Dossier cible", targetPath ?? "Aucun dossier cible sélectionné")
+        createDetailRow("Racine cible", targetPath ?? "Aucune racine cible sélectionnée"),
+        createDetailRow("Sous-dossier cible", targetFolder || "Racine cible")
       );
     }
 

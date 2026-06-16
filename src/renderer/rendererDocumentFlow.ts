@@ -47,8 +47,10 @@ async function selectTargetDirectory(): Promise<void> {
   }
 
   state.targetPath = selection.value.path;
+  state.targetFolder = createIdleTargetFolderState();
   resetClassificationState();
   render();
+  await loadTargetFolders();
   scheduleDestinationCheck();
 }
 

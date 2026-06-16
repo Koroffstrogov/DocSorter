@@ -185,7 +185,9 @@ var DocSorterClassificationPanel: ClassificationPanelFactoryApi;
     details.append(
       createDetail("Source", plan.sourcePath),
       createDetail("Nom actuel", plan.currentName),
-      createDetail("Cible", plan.targetPath),
+      createDetail("Racine cible", plan.targetRootPath),
+      createDetail("Sous-dossier cible", plan.targetFolder || "Racine cible"),
+      createDetail("Dossier final", plan.targetPath),
       createDetail("Nom proposé", plan.proposedFilename),
       createDetail("Chemin final prévu", plan.destinationPath || "Non déterminé"),
       createDetail("Préparé le", formatDate(plan.preparedAt))

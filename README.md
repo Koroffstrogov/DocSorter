@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 6D : source, cible, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif sans OCR, suggestions locales de nommage et règles utilisateur locales avec éditeur minimal.
+Lot 7 + 8A : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif sans OCR, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible et cache local minimal d'analyse.
 
 ## Commandes
 
@@ -21,6 +21,10 @@ npm run dev
 - application Electron locale avec `contextIsolation: true` et `nodeIntegration: false` ;
 - choix d'un dossier source pendant la session ;
 - choix d'un dossier cible pendant la session ;
+- cible utilisée comme racine de classement ;
+- sélection d'un sous-dossier cible relatif, vide si classement à la racine ;
+- liste locale des sous-dossiers existants de la racine cible, limitée à trois niveaux ;
+- refus côté main process des sous-dossiers absolus, trop profonds ou avec traversée `..` ;
 - scan non récursif du dossier source ;
 - rafraîchissement manuel du dossier source déjà sélectionné ;
 - file d'attente réelle pour `.pdf`, `.jpg`, `.jpeg` et `.png` ;
@@ -40,6 +44,7 @@ npm run dev
 - détection prudente d'une date dans le nom de fichier existant ;
 - validation visuelle des champs nécessaires avant futur classement ;
 - contrôle en lecture seule de la disponibilité du nom proposé dans le dossier cible sélectionné ;
+- contrôle de collision dans le sous-dossier cible relatif choisi ;
 - proposition d'un suffixe `_2` à `_99` si le nom existe déjà dans la cible ;
 - application visuelle du suffixe proposé sans renommage ni déplacement ;
 - bouton `Vérifier avant classement` pour préparer un plan de classement simulé ;
@@ -79,6 +84,10 @@ npm run dev
 - texte extrait conservé uniquement en mémoire pendant la session ;
 - bouton explicite `Analyser les suggestions` après extraction texte d'un PDF ;
 - suggestions locales de date, sujet, type et mots-clés depuis l'extrait texte et le nom de fichier ;
+- suggestions locales de sous-dossier cible depuis les règles, sans application automatique ;
+- bouton explicite pour appliquer le sous-dossier suggéré au champ cible ;
+- message `Dossier inexistant` et bouton `Créer ce dossier` si le sous-dossier choisi n'existe pas ;
+- création du sous-dossier cible uniquement après confirmation explicite, sous la racine cible ;
 - règles de suggestion par défaut externalisées dans un catalogue typé ;
 - moteur de suggestions capable de consommer un catalogue de règles injecté ;
 - fichier local de règles utilisateur créé automatiquement si absent ;
@@ -87,6 +96,9 @@ npm run dev
 - score indicatif et raisons sobres pour contrôler les suggestions ;
 - bouton `Appliquer aux champs vides` qui ne remplace jamais une saisie déjà présente ;
 - recalcul du nom proposé et du contrôle cible après application des suggestions ;
+- cache local minimal d'analyse sous `app.getPath("userData")/cache` ;
+- cache utilisé pour éviter de refaire l'extraction texte et les suggestions si taille et date de modification du PDF n'ont pas changé ;
+- indication `issu du cache` quand un texte PDF est restauré depuis le cache ;
 - tests légers des handlers IPC sensibles côté main process pour vérifier source, cible, journal, file scannée et règles utilisateur contrôlés côté main.
 
 ## Convention de nommage
@@ -164,9 +176,11 @@ Garde-fous MVP :
 
 ## Suggestions locales
 
-Les suggestions sont déclenchées manuellement après extraction du texte PDF natif. Elles utilisent uniquement l'extrait conservé en mémoire et le nom du fichier actif comme signal secondaire.
+L'affichage et l'application des suggestions restent déclenchés manuellement après extraction du texte PDF natif. Les suggestions utilisent uniquement l'extrait local borné et le nom du fichier actif comme signal secondaire.
 
-L'application peut proposer une date documentaire, un sujet, un type et jusqu'à cinq mots-clés. Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides, puis relance le calcul du nom proposé et le contrôle cible. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
+L'application peut proposer une date documentaire, un sujet, un type, un sous-dossier cible relatif et jusqu'à cinq mots-clés. Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides, puis relance le calcul du nom proposé et le contrôle cible. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
+
+La suggestion de sous-dossier cible utilise un bouton séparé. Elle ne crée jamais de dossier automatiquement et ne déclenche aucun classement réel.
 
 Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
 
@@ -178,7 +192,19 @@ app.getPath("userData")/config/naming-suggestion-rules.json
 
 L'application crée ce fichier s'il est absent avec un catalogue vide. Le renderer ne reçoit pas d'accès `fs` et ne fournit jamais le chemin du fichier au main process.
 
-Ces règles restent prudentes : elles ne créent pas de cache, n'écrivent pas dans le journal, ne modifient aucun fichier et ne lancent ni OCR, ni IA, ni appel réseau.
+Ces règles restent prudentes : elles n'écrivent pas dans le journal, ne modifient aucun fichier et ne lancent ni OCR, ni IA, ni appel réseau.
+
+## Cache local d'analyse
+
+Le cache d'analyse est stocké localement dans :
+
+```text
+app.getPath("userData")/cache/analysis
+```
+
+Il sert uniquement à éviter de relire un PDF déjà analysé si son chemin résolu, sa taille et sa date de modification n'ont pas changé. Il peut contenir l'extrait texte borné déjà affichable, les suggestions locales calculées, la date d'analyse et des erreurs sobres. Il ne contient pas d'OCR, n'est pas écrit dans la source ou la cible et n'est pas ajouté au journal.
+
+Si le cache est absent, illisible, invalide ou obsolète, DocSorter relance simplement l'analyse locale.
 
 ## Raccourcis clavier
 
@@ -204,10 +230,8 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 
 - pas de suppression ;
 - pas de configuration persistée ;
-- pas de cache ;
 - pas de watcher automatique du dossier source ;
 - pas d'annulation multiple ;
-- pas de création de dossier cible ;
 - pas de fallback `copy + delete` pour les déplacements entre volumes ;
 - pas de suppression, remplacement ou fusion de doublons ;
 - pas de doublons probables ou similaires ;
@@ -217,7 +241,6 @@ Les raccourcis globaux sont désactivés dans les champs de saisie, les listes d
 - pas d'application automatique des suggestions ;
 - pas d'éditeur JSON avancé ;
 - pas de gestion multi-profils de règles ;
-- pas de suggestion automatique de dossier cible ;
 - pas d'OCR, IA, doublons probables, packaging avancé ou DOCX.
 
 ## Recommandation de test
@@ -234,7 +257,7 @@ Un prochain lot pourra ajouter :
 - amélioration progressive des règles de suggestion à partir de cas réels validés manuellement ;
 - audit du code avant d'élargir l'éditeur de règles ;
 - persistance locale de préférences UI simples si l'usage le justifie ;
-- aide au choix de dossier cible, sans OCR ni upload.
+- amélioration progressive de l'aide au choix de dossier cible, sans OCR ni upload.
 
 ## Validations manuelles
 
@@ -320,11 +343,11 @@ Un prochain lot pourra ajouter :
 - `Appliquer aux champs vides` remplit seulement les champs vides du panneau `Renommage proposé` ;
 - les champs déjà saisis manuellement ne sont pas remplacés par une suggestion ;
 - après application, le nom proposé et le contrôle cible sont recalculés ;
-- les suggestions ne créent pas de cache, ne modifient pas le journal et ne modifient aucun fichier ;
+- les suggestions peuvent être relues depuis le cache local, ne modifient pas le journal et ne modifient aucun fichier ;
 - le fichier de règles utilisateur ne contient pas de texte extrait, pas de chemins documentaires et pas de contenu OCR ;
 - une image sélectionnée ne permet pas l'extraction texte PDF ;
 - supprimer ou déplacer un PDF après scan puis lancer l'extraction affiche une erreur propre ;
-- l'extraction texte ne crée pas de cache, ne modifie pas le journal et ne modifie aucun fichier ;
+- l'extraction texte peut alimenter le cache local d'analyse, ne modifie pas le journal et ne modifie aucun fichier source ou cible ;
 - modifier manuellement le fichier classé dans la cible bloque l'annulation ;
 - recréer manuellement un fichier à l'ancien chemin source bloque l'annulation ;
 - créer une collision dans la cible puis relancer la préparation bloque le plan ;

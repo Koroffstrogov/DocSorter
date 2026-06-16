@@ -148,6 +148,28 @@
         confidence: 78
       },
       {
+        id: "target-folder-renault-captur-entretien",
+        label: "Dossier Renault Captur entretien",
+        match: {
+          allOf: ["renault", "captur", "facture"]
+        },
+        output: {
+          targetFolder: "Vehicules/Renault-Captur/Entretien"
+        },
+        confidence: 86
+      },
+      {
+        id: "target-folder-scenic-entretien",
+        label: "Dossier Scenic entretien",
+        match: {
+          allOf: ["scenic", "facture"]
+        },
+        output: {
+          targetFolder: "Vehicules/Scenic/Entretien"
+        },
+        confidence: 82
+      },
+      {
         id: "subject-maison",
         label: "Sujet Maison",
         match: {

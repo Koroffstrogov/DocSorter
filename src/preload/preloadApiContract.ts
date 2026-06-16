@@ -11,6 +11,11 @@ import type { DestinationAvailabilityResult } from "../naming/destinationNameAva
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type { PreviewData } from "../preview/previewTypes";
 import type {
+  TargetFolderCreation,
+  TargetFolderList,
+  TargetFolderResult
+} from "../naming/targetFolder";
+import type {
   NamingRulesStatus,
   UserRulesLoadResult,
   UserRulesResult
@@ -28,6 +33,9 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "getVersion",
   "selectSourceDirectory",
   "selectTargetDirectory",
+  "listTargetFolders",
+  "setTargetFolder",
+  "createTargetFolder",
   "refreshSourceDocuments",
   "getPreviewData",
   "createInitialNamingDraft",
@@ -56,6 +64,20 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.directorySelectSource) as Promise<Result<DirectorySelection | null>>,
     selectTargetDirectory: (): Promise<Result<DirectorySelection | null>> =>
       ipc.invoke(IPC_CHANNELS.directorySelectTarget) as Promise<Result<DirectorySelection | null>>,
+    listTargetFolders: (): Promise<TargetFolderResult<TargetFolderList>> =>
+      ipc.invoke(IPC_CHANNELS.targetListFolders) as Promise<TargetFolderResult<TargetFolderList>>,
+    setTargetFolder: (targetFolder: string): Promise<TargetFolderResult<string>> =>
+      ipc.invoke(
+        IPC_CHANNELS.targetSetFolder,
+        targetFolder
+      ) as Promise<TargetFolderResult<string>>,
+    createTargetFolder: (
+      targetFolder: string
+    ): Promise<TargetFolderResult<TargetFolderCreation>> =>
+      ipc.invoke(
+        IPC_CHANNELS.targetCreateFolder,
+        targetFolder
+      ) as Promise<TargetFolderResult<TargetFolderCreation>>,
     refreshSourceDocuments: (): Promise<Result<DocumentDiscoveryResult>> =>
       ipc.invoke(IPC_CHANNELS.documentsRefreshSource) as Promise<Result<DocumentDiscoveryResult>>,
     getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>

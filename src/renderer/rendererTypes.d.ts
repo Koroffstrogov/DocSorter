@@ -19,6 +19,15 @@ type DestinationCheckStatus =
   | "target-not-selected"
   | "invalid"
   | "error";
+type TargetFolderStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "invalid"
+  | "missing"
+  | "creating"
+  | "created"
+  | "error";
 type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
 type DuplicateAnalysisStatus = "idle" | "analyzing" | "ready" | "error";
 
@@ -90,6 +99,9 @@ interface DestinationAvailabilityError {
     | "TARGET_NOT_DIRECTORY"
     | "TARGET_ACCESS_DENIED"
     | "TARGET_NOT_WRITABLE"
+    | "TARGET_FOLDER_INVALID"
+    | "TARGET_FOLDER_NOT_FOUND"
+    | "TARGET_FOLDER_NOT_DIRECTORY"
     | "INVALID_FILENAME"
     | "TOO_MANY_COLLISIONS"
     | "UNKNOWN_ERROR";
@@ -98,6 +110,8 @@ interface DestinationAvailabilityError {
 
 interface DestinationAvailability {
   status: "available" | "collision";
+  targetRootPath: string;
+  targetFolder: string;
   targetPath: string;
   proposedFilename: string;
   finalFilename: string;
@@ -113,6 +127,13 @@ interface DestinationCheckState {
   checkedFilename: string;
 }
 
+interface TargetFolderState {
+  selectedFolder: string;
+  folders: string[];
+  status: TargetFolderStatus;
+  message: string;
+}
+
 interface ClassificationPlanCheck {
   code: string;
   label: string;
@@ -124,6 +145,8 @@ interface ClassificationPlan {
   status: "ready" | "blocked";
   sourcePath: string;
   currentName: string;
+  targetRootPath: string;
+  targetFolder: string;
   targetPath: string;
   proposedFilename: string;
   destinationPath: string;
@@ -246,6 +269,8 @@ interface PdfTextExtraction {
   excerptCharacterCount: number;
   truncated: boolean;
   extractedAt: string;
+  fromCache?: boolean;
+  cachedSuggestions?: NamingSuggestions | null;
 }
 
 interface PdfTextExtractionError {
@@ -363,6 +388,7 @@ interface AppState {
   isLoading: boolean;
   preview: PreviewState;
   naming: NamingState;
+  targetFolder: TargetFolderState;
   destination: DestinationCheckState;
   classification: ClassificationState;
   lastUndoableAction: UndoableClassificationAction | null;

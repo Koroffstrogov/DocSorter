@@ -102,6 +102,7 @@ export interface ExecuteClassificationOptions {
   documentPath: string;
   proposedFilename: string;
   selectedTargetPath: string | null | undefined;
+  targetFolder?: string;
   queuedDocumentPaths: Iterable<string>;
   journalFilePath: string;
   now?: () => Date;
@@ -141,6 +142,7 @@ export async function executeClassification(
     documentPath: options.documentPath,
     proposedFilename: options.proposedFilename,
     selectedTargetPath: options.selectedTargetPath,
+    targetFolder: options.targetFolder,
     queuedDocumentPaths: options.queuedDocumentPaths,
     checkTargetDirectoryWritable,
     now

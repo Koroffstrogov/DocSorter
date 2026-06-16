@@ -1,6 +1,6 @@
 # Règles de suggestions de nommage
 
-DocSorter utilise un catalogue de règles locales pour proposer une date, un sujet, un type de document et des mots-clés à partir du texte PDF extrait en mémoire et du nom de fichier.
+DocSorter utilise un catalogue de règles locales pour proposer une date, un sujet, un type de document, des mots-clés et un sous-dossier cible relatif à partir du texte PDF extrait et du nom de fichier.
 
 Le catalogue par défaut est livré avec l'application et n'est jamais modifié. Le catalogue utilisateur est stocké localement dans :
 
@@ -22,8 +22,8 @@ Si ce fichier est absent, DocSorter crée un catalogue utilisateur vide.
 }
 ```
 
-- `documentTypeRules` : règles pouvant produire `documentType` et éventuellement des `keywords`.
-- `subjectRules` : règles pouvant produire `subject` et éventuellement des `keywords`.
+- `documentTypeRules` : règles pouvant produire `documentType`, `targetFolder` et éventuellement des `keywords`.
+- `subjectRules` : règles pouvant produire `subject`, `targetFolder` et éventuellement des `keywords`.
 - `keywordRules` : alias simples produisant un mot-clé normalisé.
 - `stopWords` : mots ignorés lors du fallback prudent depuis le nom de fichier.
 
@@ -39,6 +39,7 @@ Si ce fichier est absent, DocSorter crée un catalogue utilisateur vide.
   },
   "output": {
     "documentType": "facture-entretien",
+    "targetFolder": "Vehicules/Renault-Captur/Entretien",
     "keywords": ["entretien"]
   },
   "confidence": 80
@@ -56,10 +57,12 @@ Si ce fichier est absent, DocSorter crée un catalogue utilisateur vide.
 
 Les termes sont comparés sans tenir compte de la casse ni des accents. Les apostrophes, tirets et espaces multiples sont normalisés.
 
+`targetFolder` doit rester un chemin relatif sous la racine cible sélectionnée. Les chemins absolus, `..` et les dossiers de plus de trois niveaux sont refusés. Une suggestion de dossier n'est jamais appliquée automatiquement : l'utilisateur doit cliquer sur le bouton dédié, puis créer le dossier séparément si nécessaire.
+
 ## Confidentialité
 
 Les règles utilisateur sont fusionnées avec les règles par défaut après validation. Une règle utilisateur ne doit pas réutiliser un identifiant de règle par défaut.
 
 Les règles ne doivent pas contenir de texte OCR complet, de contenu documentaire sensible, de chemins locaux, de vrais noms de proches ou de données personnelles. Elles doivent rester des alias courts et génériques.
 
-Dans le Lot 6D, l'éditeur intégré reste minimal : il permet d'ajouter, modifier, désactiver ou supprimer des règles utilisateur simples. Il ne propose pas d'éditeur JSON avancé, pas de profils multiples et pas de suggestion de dossier cible.
+Dans le Lot 7B, l'éditeur intégré reste minimal : il permet d'ajouter, modifier, désactiver ou supprimer des règles utilisateur simples. Il ne propose pas d'éditeur JSON avancé ni de profils multiples.

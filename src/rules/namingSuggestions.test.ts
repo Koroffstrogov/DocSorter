@@ -98,6 +98,87 @@ describe("naming suggestions", () => {
     expect(result.subject?.value).toBe("Renault-Captur");
   });
 
+  it("suggests the default Renault Captur target folder from rules", () => {
+    const result = suggestions.buildNamingSuggestions({
+      filename: "facture-renault-captur.pdf",
+      extractedText: "Facture entretien Renault Captur"
+    });
+
+    expect(result.targetFolder?.value).toBe("Vehicules/Renault-Captur/Entretien");
+    expect(result.targetFolder?.confidence).toBeGreaterThan(0.8);
+    expect(result.reasons.some((reason) => reason.includes("Dossier Renault Captur"))).toBe(true);
+  });
+
+  it("suggests the default Scenic target folder from rules", () => {
+    const result = suggestions.buildNamingSuggestions({
+      filename: "scan.pdf",
+      extractedText: "Facture garage Scenic"
+    });
+
+    expect(result.targetFolder?.value).toBe("Vehicules/Scenic/Entretien");
+  });
+
+  it("normalizes safe relative target folder rule output", () => {
+    const result = suggestions.buildNamingSuggestions({
+      filename: "garage.pdf",
+      extractedText: "Facture garage",
+      rulesCatalog: createCatalog({
+        subjectRules: [
+          createRule({
+            id: "target-folder-garage",
+            label: "Dossier garage",
+            match: {
+              allOf: ["facture", "garage"]
+            },
+            output: {
+              targetFolder: " Vehicules\\Garage / Entretien "
+            },
+            confidence: 75
+          })
+        ]
+      })
+    });
+
+    expect(result.targetFolder?.value).toBe("Vehicules/Garage/Entretien");
+  });
+
+  it("ignores unsafe target folder rule output", () => {
+    const unsafeCatalog = createCatalog({
+      subjectRules: [
+        createRule({
+          id: "target-folder-unsafe",
+          label: "Dossier unsafe",
+          match: {
+            anyOf: ["facture"]
+          },
+          output: {
+            targetFolder: "../Outside"
+          },
+          confidence: 95
+        }),
+        createRule({
+          id: "target-folder-too-deep",
+          label: "Dossier trop profond",
+          match: {
+            anyOf: ["facture"]
+          },
+          output: {
+            targetFolder: "A/B/C/D"
+          },
+          confidence: 90
+        })
+      ]
+    });
+
+    const result = suggestions.buildNamingSuggestions({
+      filename: "facture.pdf",
+      extractedText: "Facture",
+      rulesCatalog: unsafeCatalog
+    });
+
+    expect(result.targetFolder).toBeNull();
+  });
+
   it("accepts an injected rules catalog", () => {
     const result = suggestions.buildNamingSuggestions({
       filename: "garage.pdf",
@@ -338,6 +419,7 @@ describe("naming suggestions", () => {
     expect(result.date).toBeNull();
     expect(result.subject).toBeNull();
     expect(result.documentType).toBeNull();
+    expect(result.targetFolder).toBeNull();
     expect(result.keywords).toEqual([]);
     expect(result.confidence).toBe(0);
   });
@@ -450,6 +532,7 @@ describe("naming suggestions", () => {
             source: "text"
           }
         ],
+        targetFolder: null,
         confidence: 0.8,
         reasons: []
       }

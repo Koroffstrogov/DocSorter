@@ -130,6 +130,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
       const pages = document.createElement("span");
       const characters = document.createElement("span");
       const extractedAt = document.createElement("span");
+      const cacheStatus = document.createElement("span");
 
       pages.textContent = `${extraction.pagesAnalyzed} / ${extraction.pageCount} page${
         extraction.pageCount > 1 ? "s" : ""
@@ -138,7 +139,8 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         extraction.characterCount > 1 ? "s" : ""
       }`;
       extractedAt.textContent = options.formatDate(extraction.extractedAt);
-      meta.append(pages, characters, extractedAt);
+      cacheStatus.textContent = extraction.fromCache ? "issu du cache" : "analyse locale";
+      meta.append(pages, characters, extractedAt, cacheStatus);
 
       return meta;
     }

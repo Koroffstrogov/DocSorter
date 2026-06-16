@@ -8,6 +8,7 @@ const state: AppState = {
   isLoading: false,
   preview: createIdlePreviewState(),
   naming: createIdleNamingState(),
+  targetFolder: createIdleTargetFolderState(),
   destination: createIdleDestinationCheckState(),
   classification: createIdleClassificationState(),
   lastUndoableAction: null,
@@ -25,6 +26,7 @@ let destinationRequestId = 0;
 let classificationRequestId = 0;
 let duplicateAnalysisRequestId = 0;
 let textExtractionRequestId = 0;
+let targetFolderRequestId = 0;
 let destinationCheckTimer: number | null = null;
 
 const version = document.querySelector<HTMLElement>("#app-version");
@@ -77,7 +79,8 @@ const previewPanel = DocSorterPreviewPanel.createPreviewPanel({
 const documentDetailsPanel = DocSorterDocumentDetailsPanel.createDocumentDetailsPanel({
   getState: () => ({
     activeDocument: getActiveDocument(),
-    targetPath: state.targetPath
+    targetPath: state.targetPath,
+    targetFolder: state.targetFolder.selectedFolder
   }),
   formatDate,
   statusLabel
@@ -150,14 +153,17 @@ const namingSuggestionsPanel = DocSorterNamingSuggestionsPanel.createNamingSugge
   },
   canAnalyze: (documentItem) => canAnalyzeNamingSuggestions(documentItem ?? getActiveDocument()),
   canApplyToEmptyFields: canApplyNamingSuggestionsToEmptyFields,
+  canApplyTargetFolderSuggestion: canApplyTargetFolderSuggestion,
   onAnalyze: analyzeNamingSuggestionsForActiveDocument,
-  onApplyToEmptyFields: applyNamingSuggestionsToEmptyFields
+  onApplyToEmptyFields: applyNamingSuggestionsToEmptyFields,
+  onApplyTargetFolderSuggestion: applyTargetFolderSuggestion
 });
 
 const namingPanelView = DocSorterNamingPanel.createNamingPanel({
   getState: () => ({
     activeDocument: getActiveDocument(),
     targetPath: state.targetPath,
+    targetFolder: state.targetFolder,
     naming: state.naming,
     destination: state.destination,
     effectiveFilename: getEffectiveProposedFilename()
@@ -171,7 +177,11 @@ const namingPanelView = DocSorterNamingPanel.createNamingPanel({
 
     void initializeNamingDraft(activeDocument);
   },
-  onApplyDestinationAlternative: applyDestinationAlternative
+  onApplyDestinationAlternative: applyDestinationAlternative,
+  onTargetFolderChange: updateTargetFolderFromInput,
+  onCreateTargetFolder: () => {
+    void createSelectedTargetFolder();
+  }
 });
 
 const classificationPanel = DocSorterClassificationPanel.createClassificationPanel({

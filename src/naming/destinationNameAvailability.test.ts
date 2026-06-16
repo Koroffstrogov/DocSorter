@@ -162,4 +162,54 @@ describe("checkDestinationNameAvailability", () => {
       expect(result.value.finalPath).toBe(path.join(target, "facture.pdf"));
     }
   });
+
+  it("checks availability inside an existing relative target folder", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "docsorter-target-"));
+    const target = path.join(tempRoot, "target");
+    await mkdir(path.join(target, "Vehicules", "Renault-Captur"), { recursive: true });
+
+    const result = await checkDestinationNameAvailability(target, "facture.pdf", {
+      targetFolder: "Vehicules/Renault-Captur"
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.targetRootPath).toBe(target);
+      expect(result.value.targetFolder).toBe("Vehicules/Renault-Captur");
+      expect(result.value.targetPath).toBe(path.join(target, "Vehicules", "Renault-Captur"));
+      expect(result.value.finalPath).toBe(
+        path.join(target, "Vehicules", "Renault-Captur", "facture.pdf")
+      );
+    }
+  });
+
+  it("returns TARGET_FOLDER_NOT_FOUND when the selected relative folder does not exist", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "docsorter-target-"));
+    const target = path.join(tempRoot, "target");
+    await mkdir(target);
+
+    const result = await checkDestinationNameAvailability(target, "facture.pdf", {
+      targetFolder: "Missing"
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_FOLDER_NOT_FOUND");
+    }
+  });
+
+  it("rejects traversal in the selected relative folder", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "docsorter-target-"));
+    const target = path.join(tempRoot, "target");
+    await mkdir(target);
+
+    const result = await checkDestinationNameAvailability(target, "facture.pdf", {
+      targetFolder: "../outside"
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TARGET_FOLDER_INVALID");
+    }
+  });
 });

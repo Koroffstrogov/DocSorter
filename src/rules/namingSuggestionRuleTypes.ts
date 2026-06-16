@@ -10,6 +10,7 @@ type SuggestionRuleOutput = {
   documentType?: string;
   subject?: string;
   keywords?: string[];
+  targetFolder?: string;
 };
 
 type NamingSuggestionRule = {

@@ -1,6 +1,7 @@
 interface NamingPanelState {
   activeDocument: DocumentItem | null;
   targetPath: string | null;
+  targetFolder: TargetFolderState;
   naming: NamingState;
   destination: DestinationCheckState;
   effectiveFilename: string;
@@ -12,6 +13,8 @@ interface NamingPanelOptions {
   onDraftChange: (draft: NamingDraft) => void;
   onResetDraft: () => void;
   onApplyDestinationAlternative: () => void;
+  onTargetFolderChange: (targetFolder: string) => void;
+  onCreateTargetFolder: () => void;
 }
 
 interface NamingPanelApi {
@@ -29,6 +32,10 @@ interface NamingPanelElements {
   proposedFilename: HTMLElement | null;
   messages: HTMLUListElement | null;
   destinationStatus: HTMLElement | null;
+  targetFolderInput: HTMLInputElement | null;
+  targetFolderOptions: HTMLDataListElement | null;
+  targetFolderStatus: HTMLElement | null;
+  createTargetFolderButton: HTMLButtonElement | null;
   destinationTarget: HTMLElement | null;
   destinationFinalPath: HTMLElement | null;
   destinationAlternative: HTMLElement | null;
@@ -67,6 +74,14 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
     elements.applyDestinationAlternativeButton?.addEventListener("click", () => {
       options.onApplyDestinationAlternative();
+    });
+
+    elements.targetFolderInput?.addEventListener("input", () => {
+      options.onTargetFolderChange(elements.targetFolderInput?.value ?? "");
+    });
+
+    elements.createTargetFolderButton?.addEventListener("click", () => {
+      options.onCreateTargetFolder();
     });
 
     function render(syncInputs: boolean): void {
@@ -116,10 +131,11 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return;
       }
 
-      const { activeDocument, targetPath, naming, destination } = options.getState();
+      const { activeDocument, targetPath, targetFolder, naming, destination } = options.getState();
       const targetLabel = targetPath ?? "Aucun dossier cible sélectionné";
       elements.destinationTarget.replaceChildren(targetLabel);
       elements.destinationTarget.title = targetLabel;
+      renderTargetFolderControls(elements, targetPath, targetFolder, destination);
 
       if (!activeDocument) {
         setDestinationState(elements, {
@@ -227,6 +243,10 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       proposedFilename: root.querySelector<HTMLElement>("#proposed-filename"),
       messages: root.querySelector<HTMLUListElement>("#naming-messages"),
       destinationStatus: root.querySelector<HTMLElement>("#destination-status"),
+      targetFolderInput: root.querySelector<HTMLInputElement>("#target-folder-input"),
+      targetFolderOptions: root.querySelector<HTMLDataListElement>("#target-folder-options"),
+      targetFolderStatus: root.querySelector<HTMLElement>("#target-folder-status"),
+      createTargetFolderButton: root.querySelector<HTMLButtonElement>("#create-target-folder"),
       destinationTarget: root.querySelector<HTMLElement>("#destination-target"),
       destinationFinalPath: root.querySelector<HTMLElement>("#destination-final-path"),
       destinationAlternative: root.querySelector<HTMLElement>("#destination-alternative"),
@@ -234,6 +254,112 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         "#apply-destination-alternative"
       )
     };
+  }
+
+  function renderTargetFolderControls(
+    elements: NamingPanelElements,
+    targetPath: string | null,
+    targetFolder: TargetFolderState,
+    destination: DestinationCheckState
+  ): void {
+    if (elements.targetFolderOptions) {
+      elements.targetFolderOptions.replaceChildren(
+        ...targetFolder.folders.map(createTargetFolderOption)
+      );
+    }
+
+    if (elements.targetFolderInput) {
+      if (document.activeElement !== elements.targetFolderInput) {
+        elements.targetFolderInput.value = targetFolder.selectedFolder;
+      }
+      elements.targetFolderInput.disabled = !targetPath || targetFolder.status === "creating";
+      elements.targetFolderInput.placeholder = targetPath
+        ? "Racine cible ou Sous/Dossier"
+        : "Choisir une racine cible";
+      elements.targetFolderInput.title = targetFolder.selectedFolder || "Classement à la racine cible";
+    }
+
+    if (elements.targetFolderStatus) {
+      const status = targetFolderStatus(targetPath, targetFolder, destination);
+      elements.targetFolderStatus.className = status.className;
+      elements.targetFolderStatus.replaceChildren(status.message);
+      elements.targetFolderStatus.title = status.message;
+    }
+
+    if (elements.createTargetFolderButton) {
+      const canCreate = canCreateMissingTargetFolder(targetPath, targetFolder, destination);
+      elements.createTargetFolderButton.hidden = !canCreate;
+      elements.createTargetFolderButton.disabled = targetFolder.status === "creating";
+    }
+  }
+
+  function createTargetFolderOption(folder: string): HTMLOptionElement {
+    const option = document.createElement("option");
+    option.value = folder;
+    return option;
+  }
+
+  function targetFolderStatus(
+    targetPath: string | null,
+    targetFolder: TargetFolderState,
+    destination: DestinationCheckState
+  ): { className: string; message: string } {
+    if (!targetPath) {
+      return {
+        className: "status-neutral",
+        message: "Choisir une racine cible avant de sélectionner un sous-dossier."
+      };
+    }
+
+    if (targetFolder.status === "loading") {
+      return { className: "status-neutral", message: "Lecture des sous-dossiers cible..." };
+    }
+
+    if (targetFolder.status === "creating") {
+      return { className: "status-neutral", message: "Création du sous-dossier cible..." };
+    }
+
+    if (targetFolder.status === "invalid" || targetFolder.status === "error") {
+      return { className: "status-error", message: targetFolder.message };
+    }
+
+    if (targetFolder.status === "created") {
+      return { className: "status-valid", message: targetFolder.message };
+    }
+
+    if (!targetFolder.selectedFolder) {
+      return { className: "status-neutral", message: "Classement à la racine cible." };
+    }
+
+    if (destination.error?.code === "TARGET_FOLDER_NOT_FOUND") {
+      return { className: "status-warning", message: "Dossier inexistant." };
+    }
+
+    if (
+      destination.error?.code === "TARGET_FOLDER_INVALID" ||
+      destination.error?.code === "TARGET_FOLDER_NOT_DIRECTORY"
+    ) {
+      return { className: "status-error", message: destination.error.message };
+    }
+
+    if (destination.result || targetFolder.folders.includes(targetFolder.selectedFolder)) {
+      return { className: "status-valid", message: "Dossier existant." };
+    }
+
+    return { className: "status-neutral", message: "Sous-dossier à vérifier." };
+  }
+
+  function canCreateMissingTargetFolder(
+    targetPath: string | null,
+    targetFolder: TargetFolderState,
+    destination: DestinationCheckState
+  ): boolean {
+    return Boolean(
+      targetPath &&
+        targetFolder.selectedFolder &&
+        targetFolder.status !== "creating" &&
+        destination.error?.code === "TARGET_FOLDER_NOT_FOUND"
+    );
   }
 
   function readDraft(elements: NamingPanelElements): NamingDraft {
@@ -305,6 +431,12 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return "Accès cible refusé";
       case "TARGET_NOT_WRITABLE":
         return "Écriture cible refusée";
+      case "TARGET_FOLDER_INVALID":
+        return "Sous-dossier invalide";
+      case "TARGET_FOLDER_NOT_FOUND":
+        return "Dossier inexistant";
+      case "TARGET_FOLDER_NOT_DIRECTORY":
+        return "Sous-dossier invalide";
       case "TOO_MANY_COLLISIONS":
         return "Trop de collisions";
       case "UNKNOWN_ERROR":

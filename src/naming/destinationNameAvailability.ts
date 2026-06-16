@@ -5,6 +5,10 @@ import {
   checkTargetDirectoryWritable,
   type TargetDirectoryWritableChecker
 } from "../filesystem/targetDirectoryAccess";
+import {
+  resolveTargetFolder,
+  type TargetFolderErrorCode
+} from "./targetFolder";
 
 export type DestinationAvailabilityErrorCode =
   | "TARGET_NOT_SELECTED"
@@ -12,6 +16,9 @@ export type DestinationAvailabilityErrorCode =
   | "TARGET_NOT_DIRECTORY"
   | "TARGET_ACCESS_DENIED"
   | "TARGET_NOT_WRITABLE"
+  | "TARGET_FOLDER_INVALID"
+  | "TARGET_FOLDER_NOT_FOUND"
+  | "TARGET_FOLDER_NOT_DIRECTORY"
   | "INVALID_FILENAME"
   | "TOO_MANY_COLLISIONS"
   | "UNKNOWN_ERROR";
@@ -22,6 +29,8 @@ export interface DestinationAvailabilityError {
 }
 
 export interface DestinationAvailability {
+  targetRootPath: string;
+  targetFolder: string;
   status: "available" | "collision";
   targetPath: string;
   proposedFilename: string;
@@ -45,6 +54,7 @@ type DestinationAvailabilityFailure = {
 
 export interface CheckDestinationNameAvailabilityOptions {
   checkTargetDirectoryWritable?: TargetDirectoryWritableChecker;
+  targetFolder?: string;
 }
 
 const MAX_FILENAME_LENGTH = 255;
@@ -76,47 +86,53 @@ const RESERVED_WINDOWS_NAMES = new Set([
 ]);
 
 export async function checkDestinationNameAvailability(
-  targetPath: string | null | undefined,
+  targetRootPath: string | null | undefined,
   proposedFilename: string,
   options: CheckDestinationNameAvailabilityOptions = {}
 ): Promise<DestinationAvailabilityResult> {
-  if (!targetPath) {
-    return createError(
-      "TARGET_NOT_SELECTED",
-      "Aucun dossier cible sélectionné pour contrôler le nom final."
-    );
-  }
-
   const filenameValidation = validateDestinationFilename(proposedFilename);
   if (!filenameValidation.ok) {
     return filenameValidation;
   }
 
-  const targetDirectoryWritable =
-    options.checkTargetDirectoryWritable ?? checkTargetDirectoryWritable;
-  const targetDirectory = await targetDirectoryWritable(targetPath);
-  if (!targetDirectory.ok) {
-    return createError(targetDirectory.error.code, targetDirectory.error.message);
+  const targetFolder = await resolveTargetFolder(
+    targetRootPath,
+    options.targetFolder ?? "",
+    {
+      checkTargetDirectoryWritable:
+        options.checkTargetDirectoryWritable ?? checkTargetDirectoryWritable
+    }
+  );
+  if (!targetFolder.ok) {
+    return createTargetFolderResolutionError(targetFolder.error.code, targetFolder.error.message);
   }
 
   let existingNames: string[];
   try {
-    existingNames = await readdir(targetDirectory.value);
+    existingNames = await readdir(targetFolder.value.targetPath);
   } catch (error) {
     return createErrorFromFsError(error);
   }
 
   return checkDestinationNameAvailabilityAgainstNames(
-    targetDirectory.value,
+    targetFolder.value.targetPath,
     filenameValidation.value,
-    existingNames
+    existingNames,
+    {
+      targetRootPath: targetFolder.value.targetRootPath,
+      targetFolder: targetFolder.value.targetFolder
+    }
   );
 }
 
 export function checkDestinationNameAvailabilityAgainstNames(
   targetPath: string,
   proposedFilename: string,
-  existingNames: Iterable<string>
+  existingNames: Iterable<string>,
+  options: {
+    targetRootPath?: string;
+    targetFolder?: string;
+  } = {}
 ): DestinationAvailabilityResult {
   const filenameValidation = validateDestinationFilename(proposedFilename);
   if (!filenameValidation.ok) {
@@ -136,6 +152,8 @@ export function checkDestinationNameAvailabilityAgainstNames(
     ok: true,
     value: {
       status: hasCollision ? "collision" : "available",
+      targetRootPath: options.targetRootPath ?? targetPath,
+      targetFolder: options.targetFolder ?? "",
       targetPath,
       proposedFilename: filenameValidation.value,
       finalFilename: availableFilename,
@@ -233,7 +251,7 @@ function isReservedWindowsName(fileName: string): boolean {
 }
 
 function createError(
-  code: DestinationAvailabilityErrorCode,
+  code: DestinationAvailabilityErrorCode | TargetFolderErrorCode,
   message: string
 ): DestinationAvailabilityFailure {
   return {
@@ -243,6 +261,17 @@ function createError(
       message
     }
   };
+}
+
+function createTargetFolderResolutionError(
+  code: TargetFolderErrorCode,
+  message: string
+): DestinationAvailabilityFailure {
+  if (code === "TARGET_NOT_WRITABLE") {
+    return createError("TARGET_NOT_WRITABLE", "Contrôle cible indisponible : écriture refusée.");
+  }
+
+  return createError(code, message);
 }
 
 function createErrorFromFsError(error: unknown): DestinationAvailabilityFailure {
