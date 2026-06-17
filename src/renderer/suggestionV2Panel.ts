@@ -183,7 +183,7 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     const pathLine = document.createElement("p");
     const copyButton = document.createElement("button");
     const handoff = document.createElement("p");
-    pathLine.textContent = `${diagnosticModeLabel(result.mode)} : ${result.diagnosticPath}`;
+    pathLine.textContent = `${diagnosticKindLabel(result.diagnosticKind)} - ${diagnosticModeLabel(result.mode)} : ${result.diagnosticPath}`;
     pathLine.title = result.diagnosticPath;
     copyButton.type = "button";
     copyButton.textContent = "Copier le chemin";
@@ -505,8 +505,17 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     return mode === "diagnosticComplet" ? "diagnostic complet" : "diagnostic expurgé";
   }
 
+  function diagnosticKindLabel(kind: RendererSuggestionV2DiagnosticResult["diagnosticKind"]): string {
+    return kind === "ai" ? "Diagnostic IA" : "Diagnostic suggestions";
+  }
+
   function diagnosticModeForDocument(documentItem: DocumentItem): string {
-    return /^T[0-9][0-9]-/.test(documentItem.name) ? "complet" : "expurgé";
+    return isTxxDiagnosticDocumentName(documentItem.name) ? "complet" : "expurgé";
+  }
+
+  function isTxxDiagnosticDocumentName(documentName: string): boolean {
+    const basename = documentName.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? documentName;
+    return /^T[0-9][0-9]-/.test(basename.trimStart());
   }
 
   function canCopyToClipboard(): boolean {

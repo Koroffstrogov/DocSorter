@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SuggestionV2Result } from "../suggestions/buildSuggestionV2ForDocument";
 import {
+  isTxxDiagnosticDocumentName,
   redactDiagnosticValue,
   resolveDiagnosticMode,
   writeSuggestionV2Diagnostic
@@ -33,7 +34,10 @@ describe("suggestion v2 diagnostics", () => {
     expect(result.ok && result.value.mode).toBe("diagnosticComplet");
     expect(writes).toHaveLength(1);
     const log = JSON.parse(writes[0].content);
+    expect(writes[0].filePath).toContain("diagnostic-suggestions_T01-facture-captur.json");
     expect(log.mode).toBe("diagnosticComplet");
+    expect(log.diagnosticKind).toBe("suggestions");
+    expect(log.diagnosticTitle).toBe("Diagnostic suggestions");
     expect(log.text.text).toBe("Texte complet autorisé pour test T01.");
     expect(log.document.name).toBe("T01-facture-captur.pdf");
     expect(log.dossiers.candidats[0].score).toBe(95);
@@ -83,6 +87,36 @@ describe("suggestion v2 diagnostics", () => {
     expect(serialized).toContain("[numero-expurgé]");
   });
 
+  it("marks AI diagnostics in the log file name and payload", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+
+    const result = await writeSuggestionV2Diagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "T02-facture-captur.pdf",
+      extension: ".pdf",
+      diagnosticKind: "ai",
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Texte complet autorisé pour test T02."
+      },
+      legacyDraft: null,
+      suggestionResult: createSuggestionResult(),
+      now: () => new Date("2026-06-17T10:00:00.000Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.diagnosticKind).toBe("ai");
+    expect(result.ok && result.value.message).toBe("Diagnostic IA complet exporté.");
+    expect(writes[0].filePath).toContain("diagnostic-ia_T02-facture-captur.json");
+    const log = JSON.parse(writes[0].content);
+    expect(log.diagnosticKind).toBe("ai");
+    expect(log.diagnosticTitle).toBe("Diagnostic IA");
+  });
+
   it("uses only diagnostics directory creation and log writing", async () => {
     const directories: string[] = [];
     const writes: string[] = [];
@@ -110,6 +144,7 @@ describe("suggestion v2 diagnostics", () => {
   it("resolves mode from document name only", () => {
     expect(resolveDiagnosticMode("T01-facture.pdf")).toBe("diagnosticComplet");
     expect(resolveDiagnosticMode("C:\\tmp\\T02-facture.pdf")).toBe("diagnosticComplet");
+    expect(isTxxDiagnosticDocumentName("  T03-facture.pdf")).toBe(true);
     expect(resolveDiagnosticMode("t01-facture.pdf")).toBe("diagnosticExpurge");
     expect(resolveDiagnosticMode("facture-T01.pdf")).toBe("diagnosticExpurge");
   });

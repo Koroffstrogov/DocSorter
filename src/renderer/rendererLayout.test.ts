@@ -21,6 +21,18 @@ describe("renderer right panel layout", () => {
     expect(html).toContain("Analyser le document");
   });
 
+  it("keeps document metadata folded in the right panel header", async () => {
+    const html = await readRendererHtml();
+
+    expect(indexOf(html, 'class="document-header-details"')).toBeLessThan(
+      indexOf(html, 'class="detail-scroll"')
+    );
+    expect(indexOf(html, 'id="document-details"')).toBeLessThan(
+      indexOf(html, 'class="detail-scroll"')
+    );
+    expect(html).not.toMatch(/<details class="document-header-details"[^>]*\sopen[\s>]/);
+  });
+
   it("keeps diagnostic, OCR, IA and history as collapsed or compact blocks", async () => {
     const html = await readRendererHtml();
 
@@ -37,6 +49,9 @@ describe("renderer right panel layout", () => {
     expect(html).not.toMatch(/<details id="ocr-panel"[^>]*\sopen[\s>]/);
     expect(html).not.toMatch(/<details id="ai-panel"[^>]*\sopen[\s>]/);
     expect(html).not.toMatch(/<details id="suggestion-v2-diagnostic-panel"[^>]*\sopen[\s>]/);
+    expect(indexOf(html, 'class="detail-section history-panel"')).toBeLessThan(
+      indexOf(html, 'id="suggestion-v2-diagnostic-panel"')
+    );
   });
 
   it("keeps real classification labels unchanged", async () => {

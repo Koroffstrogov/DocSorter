@@ -589,6 +589,7 @@ describe("registerIpcHandlers", () => {
       userDataPath: USER_DATA_PATH,
       documentName: "document.pdf",
       extension: ".pdf",
+      diagnosticKind: "suggestions",
       textContext,
       legacyDraft,
       suggestionResult: createSuggestionV2Result(),
@@ -627,6 +628,11 @@ describe("registerIpcHandlers", () => {
       rulesCatalog: createEmptyCatalog(),
       knownRelativeFolders: [TARGET_FOLDER]
     });
+    expect(services.writeSuggestionV2Diagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        diagnosticKind: "ai"
+      })
+    );
     expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
   });
 
@@ -957,9 +963,10 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
       ok: true,
       value: {
         mode: "diagnosticExpurge",
+        diagnosticKind: "suggestions",
         diagnosticPath: path.join(USER_DATA_PATH, "diagnostics", "diagnostic.json"),
         documentName: "document.pdf",
-        message: "Diagnostic expurgé exporté."
+        message: "Diagnostic suggestions expurgé exporté."
       }
     })),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({

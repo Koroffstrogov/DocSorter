@@ -49,9 +49,10 @@ describe("suggestionV2Panel", () => {
       state.suggestionState.diagnosticStatus = "ready";
       state.suggestionState.diagnosticResult = {
         mode: "diagnosticExpurge",
-        diagnosticPath: "C:\\user-data\\diagnostics\\diagnostic.json",
+        diagnosticKind: "suggestions",
+        diagnosticPath: "C:\\user-data\\diagnostics\\diagnostic-suggestions_document.json",
         documentName: "document.pdf",
-        message: "Diagnostic expurgé exporté."
+        message: "Diagnostic suggestions expurgé exporté."
       };
     }
     let suggestionDiagnostics = 0;
@@ -75,8 +76,9 @@ describe("suggestionV2Panel", () => {
     aiDiagnosticButton.click();
 
     expect(diagnosticMode.getText()).toContain("Mode : expurgé");
+    expect(diagnosticResult.getText()).toContain("Diagnostic suggestions");
     expect(diagnosticResult.getText()).toContain("diagnostic expurgé");
-    expect(diagnosticResult.getText()).toContain("C:\\user-data\\diagnostics\\diagnostic.json");
+    expect(diagnosticResult.getText()).toContain("C:\\user-data\\diagnostics\\diagnostic-suggestions_document.json");
     expect(diagnosticResult.getText()).toContain("À transmettre pour analyse.");
     expect(suggestionDiagnostics).toBe(1);
     expect(aiDiagnostics).toBe(1);

@@ -450,6 +450,7 @@ interface RendererSuggestionV2Error {
 
 interface RendererSuggestionV2DiagnosticResult {
   mode: "diagnosticComplet" | "diagnosticExpurge";
+  diagnosticKind: "suggestions" | "ai";
   diagnosticPath: string;
   documentName: string;
   message: string;

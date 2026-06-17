@@ -256,6 +256,7 @@ export interface IpcHandlerServices {
     userDataPath: string;
     documentName: string;
     extension: string;
+    diagnosticKind?: "suggestions" | "ai";
     textContext: SuggestionV2TextContext | null;
     legacyDraft: unknown;
     suggestionResult: SuggestionV2Result;
@@ -864,6 +865,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         userDataPath: options.app.getPath("userData"),
         documentName: getQueuedDocumentName(state, safeDocumentPath),
         extension: path.extname(safeDocumentPath).toLowerCase(),
+        diagnosticKind: includeAi === true ? "ai" : "suggestions",
         textContext: safeTextContext,
         legacyDraft,
         suggestionResult,

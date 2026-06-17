@@ -128,10 +128,15 @@
 
       <aside class="panel detail-panel" aria-label="Document actif">
         <div class="panel-header">
-          <div>
-            <h2>Document</h2>
-            <small>Lecture seule</small>
-          </div>
+          <details class="document-header-details" aria-label="Métadonnées du document actif">
+            <summary>
+              <div>
+                <h2>Document</h2>
+                <small>Lecture seule</small>
+              </div>
+            </summary>
+            <div id="document-details" class="details-empty">Aucun document actif</div>
+          </details>
         </div>
         <div class="detail-scroll">
           <section id="text-extraction-panel" class="detail-section text-extraction-panel" aria-label="Texte extrait" hidden>
@@ -153,25 +158,6 @@
               <button id="analyze-document-v2" type="button" disabled>Analyser le document</button>
             </div>
             <div id="suggestion-v2-details" class="suggestion-v2-details">Proposition en attente.</div>
-            <details id="suggestion-v2-diagnostic-panel" class="suggestion-v2-diagnostic-panel">
-              <summary>Diagnostic</summary>
-              <p>Le diagnostic ne classe rien. Il génère un fichier JSON pour comprendre les choix.</p>
-              <p id="suggestion-v2-diagnostic-mode">Mode : expurgé</p>
-              <div class="suggestion-v2-diagnostic-actions">
-                <button id="run-suggestion-v2-diagnostic" type="button" disabled>
-                  Diagnostic suggestions
-                </button>
-                <button id="run-suggestion-v2-ai-diagnostic" type="button" disabled>
-                  Diagnostic IA
-                </button>
-              </div>
-              <div id="suggestion-v2-diagnostic-result" class="suggestion-v2-diagnostic-result"></div>
-            </details>
-          </section>
-
-          <section class="detail-section" aria-label="Document actif">
-            <h3>Document actif</h3>
-            <div id="document-details" class="details-empty">Aucun document actif</div>
           </section>
 
           <section id="duplicate-panel" class="detail-section duplicate-panel" aria-label="Doublons exacts" hidden>
@@ -487,6 +473,21 @@
             </div>
             <div id="history-state" class="history-state">Lecture du journal...</div>
             <ol id="history-list" class="history-list"></ol>
+          </details>
+
+          <details id="suggestion-v2-diagnostic-panel" class="detail-section suggestion-v2-diagnostic-panel">
+            <summary>Diagnostic</summary>
+            <p>Le diagnostic ne classe rien. Il génère un fichier JSON pour comprendre les choix.</p>
+            <p id="suggestion-v2-diagnostic-mode">Mode : expurgé</p>
+            <div class="suggestion-v2-diagnostic-actions">
+              <button id="run-suggestion-v2-diagnostic" type="button" disabled>
+                Diagnostic suggestions
+              </button>
+              <button id="run-suggestion-v2-ai-diagnostic" type="button" disabled>
+                Diagnostic IA
+              </button>
+            </div>
+            <div id="suggestion-v2-diagnostic-result" class="suggestion-v2-diagnostic-result"></div>
           </details>
         </div>
       </aside>

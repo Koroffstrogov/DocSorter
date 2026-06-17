@@ -10,11 +10,13 @@ import type {
 } from "../suggestions/buildSuggestionV2ForDocument";
 
 export type SuggestionDiagnosticMode = "diagnosticComplet" | "diagnosticExpurge";
+export type SuggestionDiagnosticKind = "suggestions" | "ai";
 
 export interface SuggestionV2DiagnosticWriteOptions {
   userDataPath: string;
   documentName: string;
   extension: string;
+  diagnosticKind?: SuggestionDiagnosticKind;
   textContext: SuggestionV2TextContext | null;
   legacyDraft: unknown;
   suggestionResult: SuggestionV2Result;
@@ -29,6 +31,7 @@ export type SuggestionV2DiagnosticResult =
       ok: true;
       value: {
         mode: SuggestionDiagnosticMode;
+        diagnosticKind: SuggestionDiagnosticKind;
         diagnosticPath: string;
         documentName: string;
         message: string;
@@ -53,13 +56,14 @@ export async function writeSuggestionV2Diagnostic(
   options: SuggestionV2DiagnosticWriteOptions
 ): Promise<SuggestionV2DiagnosticResult> {
   const mode = resolveDiagnosticMode(options.documentName);
+  const diagnosticKind = options.diagnosticKind ?? "suggestions";
   const createdAt = (options.now ?? (() => new Date()))().toISOString();
   const diagnosticsDirectory = path.join(options.userDataPath, "diagnostics");
   const diagnosticPath = path.join(
     diagnosticsDirectory,
-    `${createdAt.replace(/[:.]/g, "-")}_${safeDiagnosticFileStem(options.documentName)}.json`
+    `${createdAt.replace(/[:.]/g, "-")}_${diagnosticKindFileToken(diagnosticKind)}_${safeDiagnosticFileStem(options.documentName)}.json`
   );
-  const log = createDiagnosticLog(options, mode, createdAt);
+  const log = createDiagnosticLog(options, mode, diagnosticKind, createdAt);
   const content = `${JSON.stringify(log, null, 2)}\n`;
 
   try {
@@ -88,18 +92,21 @@ export async function writeSuggestionV2Diagnostic(
     ok: true,
     value: {
       mode,
+      diagnosticKind,
       diagnosticPath,
       documentName: options.documentName,
-      message: mode === "diagnosticComplet"
-        ? "Diagnostic complet exporté."
-        : "Diagnostic expurgé exporté."
+      message: `${diagnosticKindLabel(diagnosticKind)} ${mode === "diagnosticComplet" ? "complet" : "expurgé"} exporté.`
     }
   };
 }
 
 export function resolveDiagnosticMode(documentName: string): SuggestionDiagnosticMode {
-  const basename = getPortableBasename(documentName);
-  return /^T[0-9][0-9]-/.test(basename) ? "diagnosticComplet" : "diagnosticExpurge";
+  return isTxxDiagnosticDocumentName(documentName) ? "diagnosticComplet" : "diagnosticExpurge";
+}
+
+export function isTxxDiagnosticDocumentName(documentName: string): boolean {
+  const basename = getPortableBasename(documentName).trimStart();
+  return /^T[0-9][0-9]-/.test(basename);
 }
 
 export function redactDiagnosticValue(value: unknown): unknown {
@@ -130,6 +137,7 @@ export function redactDiagnosticValue(value: unknown): unknown {
 function createDiagnosticLog(
   options: SuggestionV2DiagnosticWriteOptions,
   mode: SuggestionDiagnosticMode,
+  diagnosticKind: SuggestionDiagnosticKind,
   createdAt: string
 ): unknown {
   const suggestion = options.suggestionResult.ok ? options.suggestionResult.value : null;
@@ -137,6 +145,8 @@ function createDiagnosticLog(
     version: 1,
     createdAt,
     mode,
+    diagnosticKind,
+    diagnosticTitle: diagnosticKindLabel(diagnosticKind),
     document: {
       name: options.documentName,
       extension: options.extension
@@ -222,6 +232,14 @@ function safeDiagnosticFileStem(documentName: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 80) || "document";
+}
+
+function diagnosticKindFileToken(kind: SuggestionDiagnosticKind): string {
+  return kind === "ai" ? "diagnostic-ia" : "diagnostic-suggestions";
+}
+
+function diagnosticKindLabel(kind: SuggestionDiagnosticKind): string {
+  return kind === "ai" ? "Diagnostic IA" : "Diagnostic suggestions";
 }
 
 function getPortableBasename(value: string): string {

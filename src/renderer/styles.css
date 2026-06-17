@@ -261,6 +261,47 @@ h2 {
   border-bottom: 1px solid var(--border);
 }
 
+.detail-panel .panel-header {
+  display: block;
+}
+
+.document-header-details {
+  min-width: 0;
+}
+
+.document-header-details > summary {
+  cursor: pointer;
+  color: var(--ink);
+  list-style: none;
+}
+
+.document-header-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.document-header-details > summary::after {
+  content: "Afficher les métadonnées";
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.document-header-details[open] > summary {
+  margin-bottom: 12px;
+}
+
+.document-header-details[open] > summary::after {
+  content: "Masquer les métadonnées";
+}
+
+.document-header-details .details-empty,
+.document-header-details .details-list {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
 .panel-header button {
   min-height: 32px;
   border: 1px solid var(--border);
