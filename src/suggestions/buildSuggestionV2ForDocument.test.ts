@@ -132,6 +132,50 @@ describe("buildSuggestionV2ForDocument", () => {
     );
   });
 
+  it("prefers accented existing Captur folder over historical theoretical folder", async () => {
+    const workspace = await createWorkspace();
+    const targetRootPath = path.join(workspace.root, "target");
+    await mkdir(path.join(targetRootPath, "Véhicules", "Captur"), { recursive: true });
+    const documentPath = path.join(workspace.sourcePath, "T01-facture-captur.pdf");
+    await writeFile(documentPath, "source", "utf8");
+
+    const result = await buildSuggestionV2ForDocument({
+      documentPath,
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Facture Renault Captur vidange du 05/03/2024"
+      },
+      legacyDraft: {
+        documentDate: "2024-03-05",
+        subject: "Renault Captur",
+        documentType: "facture entretien",
+        keywords: "entretien vidange"
+      },
+      queuedDocuments: [{ filePath: documentPath, name: "T01-facture-captur.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      userDataPath: workspace.userDataPath,
+      targetRootPath,
+      knownRelativeFolders: ["Vehicules/Renault-Captur/Entretien"],
+      competingRelativePaths: ["Vehicules/Renault-Captur/Entretien"]
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.folderPlacement?.relativePath).toBe("Véhicules/Captur");
+    expect(result.value.targetFolderSuggestion.recommended?.relativePath).toBe("Véhicules/Captur");
+    expect(result.value.folderPlacement?.reasons.join(" ")).toContain(
+      "Dossier existant correspondant à Captur"
+    );
+    expect(result.value.targetFolderSuggestion.warnings.join(" ")).toContain(
+      "dossier existant préféré"
+    );
+    expect(result.value.draft.detail).toBe("vidange");
+    expect(result.value.draft.proposedName).not.toContain("entretien-vidange");
+  });
+
   it("exposes a monthly naming profile from the recommended folder", async () => {
     const workspace = await createWorkspace();
     const targetRootPath = path.join(workspace.root, "target");

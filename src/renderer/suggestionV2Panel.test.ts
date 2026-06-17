@@ -13,11 +13,13 @@ describe("suggestionV2Panel", () => {
     api.render();
 
     const text = details.getText();
+    expect(text).toContain("État : prêt");
     expect(text).toContain("2024-03-05_captur_facture-entretien_renault_vidange.pdf");
     expect(text).not.toContain("entretien-vidange");
     expect(text).toContain("Vehicules/Captur");
     expect(text).toContain("Source : dossier existant");
     expect(text).toContain("Dossier existant retenu");
+    expect(text).toContain("Voir détails");
     expect(text).toContain("Domaine du dossier cohérent");
     expect(text).toContain("Convention du dossier : AAAA-MM_compte-joint_releve-bancaire_bnp.pdf");
     expect(text).toContain("Divergence avec le profil du dossier");
@@ -32,12 +34,81 @@ describe("suggestionV2Panel", () => {
     const text = details.getText();
     expect(text).toContain("Nom v2");
     expect(text).toContain("non généré");
+    expect(text).toContain("État : incomplet");
     expect(text).toContain("Divers/A-traiter-manuellement");
     expect(text).toContain("fallback manuel");
     expect(text).toContain("Champs manquants");
     expect(text).toContain("Cible");
     expect(text).toContain("Type documentaire");
     expect(text).toContain("Aucun profil fiable détecté");
+  });
+
+  it("renders diagnostic mode and wires explicit diagnostic buttons", async () => {
+    const state = createReadyState();
+    if (state.suggestionState) {
+      state.suggestionState.diagnosticStatus = "ready";
+      state.suggestionState.diagnosticResult = {
+        mode: "diagnosticExpurge",
+        diagnosticPath: "C:\\user-data\\diagnostics\\diagnostic.json",
+        documentName: "document.pdf",
+        message: "Diagnostic expurgé exporté."
+      };
+    }
+    let suggestionDiagnostics = 0;
+    let aiDiagnostics = 0;
+    let analyses = 0;
+    const { api, diagnosticResult, diagnosticMode, diagnosticButton, aiDiagnosticButton } = await createPanelHarness(state, {
+      onAnalyzeDocument: () => {
+        analyses += 1;
+      },
+      onRunDiagnostic: () => {
+        suggestionDiagnostics += 1;
+      },
+      onRunAiDiagnostic: () => {
+        aiDiagnostics += 1;
+      },
+      isAiDiagnosticAvailable: () => true
+    });
+
+    api.render();
+    diagnosticButton.click();
+    aiDiagnosticButton.click();
+
+    expect(diagnosticMode.getText()).toContain("Mode : expurgé");
+    expect(diagnosticResult.getText()).toContain("diagnostic expurgé");
+    expect(diagnosticResult.getText()).toContain("C:\\user-data\\diagnostics\\diagnostic.json");
+    expect(diagnosticResult.getText()).toContain("À transmettre pour analyse.");
+    expect(suggestionDiagnostics).toBe(1);
+    expect(aiDiagnostics).toBe(1);
+    expect(analyses).toBe(0);
+  });
+
+  it("shows complete diagnostic mode only for TXX documents", async () => {
+    const state = createReadyState();
+    state.activeDocument = {
+      ...createDocumentItem(),
+      name: "T01-facture-captur.pdf"
+    };
+    const { api, diagnosticMode } = await createPanelHarness(state);
+
+    api.render();
+
+    expect(diagnosticMode.getText()).toContain("Mode : complet");
+  });
+
+  it("wires the main analyze action without mutating classification fields", async () => {
+    let analyzeCount = 0;
+    const { api, analyzeButton } = await createPanelHarness(createReadyState(), {
+      onAnalyzeDocument: () => {
+        analyzeCount += 1;
+      }
+    });
+
+    api.render();
+    analyzeButton.click();
+
+    expect(analyzeButton.textContent).toBe("Analyser le document");
+    expect(analyzeCount).toBe(1);
   });
 
   it("does not reference classification, OCR or AI commands", async () => {
@@ -51,16 +122,43 @@ describe("suggestionV2Panel", () => {
   });
 });
 
-async function createPanelHarness(state: SuggestionV2PanelState) {
+async function createPanelHarness(
+  state: SuggestionV2PanelState,
+  callbacks: Partial<
+    Pick<
+      SuggestionV2PanelOptions,
+      "onRunDiagnostic" | "onRunAiDiagnostic" | "isAiDiagnosticAvailable"
+      | "onAnalyzeDocument" | "isAnalyzeDisabled"
+    >
+  > = {}
+) {
   const details = new FakeElement("div", "suggestion-v2-details");
   const panel = new FakeElement("section", "suggestion-v2-panel");
-  const document = new FakeDocument([panel, details]);
+  const analyzeButton = new FakeElement("button", "analyze-document-v2");
+  const diagnosticPanel = new FakeElement("details", "suggestion-v2-diagnostic-panel");
+  const diagnosticMode = new FakeElement("p", "suggestion-v2-diagnostic-mode");
+  const diagnosticResult = new FakeElement("div", "suggestion-v2-diagnostic-result");
+  const diagnosticButton = new FakeElement("button", "run-suggestion-v2-diagnostic");
+  const aiDiagnosticButton = new FakeElement("button", "run-suggestion-v2-ai-diagnostic");
+  const document = new FakeDocument([
+    panel,
+    analyzeButton,
+    diagnosticPanel,
+    diagnosticMode,
+    diagnosticResult,
+    diagnosticButton,
+    aiDiagnosticButton,
+    details
+  ]);
   const context: Record<string, unknown> = {
     document,
     createIdleSuggestionV2DocumentState: () => ({
       status: "idle",
       result: null,
-      error: null
+      error: null,
+      diagnosticStatus: "idle",
+      diagnosticResult: null,
+      diagnosticError: null
     })
   };
   context.globalThis = context;
@@ -78,9 +176,16 @@ async function createPanelHarness(state: SuggestionV2PanelState) {
   return {
     api: factory.createSuggestionV2Panel({
       root: document as unknown as ParentNode,
-      getState: () => state
+      getState: () => state,
+      ...callbacks
     }),
-    details
+    details,
+    analyzeButton,
+    diagnosticPanel,
+    diagnosticMode,
+    diagnosticResult,
+    diagnosticButton,
+    aiDiagnosticButton
   };
 }
 
@@ -94,6 +199,9 @@ function createReadyState(): SuggestionV2PanelState {
     suggestionState: {
       status: "ready",
       error: null,
+      diagnosticStatus: "idle",
+      diagnosticResult: null,
+      diagnosticError: null,
       result: {
         status: "ready",
         documentName: "scan_renault_captur.pdf",
@@ -149,6 +257,7 @@ function createReadyState(): SuggestionV2PanelState {
         },
         folderPlacement: {
           relativePath: "Vehicules/Captur",
+          score: 95,
           confidence: 95,
           exists: true,
           source: "inventory",
@@ -158,6 +267,7 @@ function createReadyState(): SuggestionV2PanelState {
           ],
           warnings: []
         },
+        folderPlacementCandidates: [],
         folderNamingProfile: {
           status: "detected",
           conventionExample: "AAAA-MM_compte-joint_releve-bancaire_bnp.pdf",
@@ -186,6 +296,9 @@ function createIncompleteState(): SuggestionV2PanelState {
     suggestionState: {
       status: "ready",
       error: null,
+      diagnosticStatus: "idle",
+      diagnosticResult: null,
+      diagnosticError: null,
       result: {
         status: "ready",
         documentName: "document.pdf",
@@ -215,12 +328,14 @@ function createIncompleteState(): SuggestionV2PanelState {
         },
         folderPlacement: {
           relativePath: "Divers/A-traiter-manuellement",
+          score: 15,
           confidence: 15,
           exists: false,
           source: "fallback",
           reasons: ["Fallback manuel proposé sans création automatique."],
           warnings: []
         },
+        folderPlacementCandidates: [],
         folderNamingProfile: null,
         missingFields: ["dateToken", "target", "documentType"],
         referenceDataWarnings: [],
@@ -273,8 +388,10 @@ class FakeElement {
   public className = "";
   public title = "";
   public hidden = false;
+  public disabled = false;
   public textContent = "";
   private readonly children: Array<FakeElement | string> = [];
+  private readonly listeners = new Map<string, Array<() => void>>();
 
   constructor(public readonly tagName: string, public readonly id = "") {}
 
@@ -286,6 +403,20 @@ class FakeElement {
     this.children.splice(0, this.children.length);
     this.textContent = "";
     this.append(...nodes);
+  }
+
+  addEventListener(eventName: string, listener: () => void): void {
+    this.listeners.set(eventName, [...(this.listeners.get(eventName) ?? []), listener]);
+  }
+
+  click(): void {
+    if (this.disabled) {
+      return;
+    }
+
+    (this.listeners.get("click") ?? []).forEach((listener) => {
+      listener();
+    });
   }
 
   getText(): string {

@@ -34,6 +34,7 @@ export interface SuggestionV2DocumentSuggestion {
   draft: SuggestionDraftV2;
   targetFolderSuggestion: TargetFolderSuggestionV2;
   folderPlacement: SuggestionV2FolderPlacementSummary | null;
+  folderPlacementCandidates: SuggestionV2FolderPlacementSummary[];
   folderNamingProfile: SuggestionV2FolderNamingProfileSummary | null;
   missingFields: SuggestionV2MissingField[];
   referenceDataWarnings: string[];
@@ -43,6 +44,7 @@ export interface SuggestionV2DocumentSuggestion {
 
 export interface SuggestionV2FolderPlacementSummary {
   relativePath: string;
+  score: number;
   confidence: number;
   exists: boolean;
   source: "inventory" | "fallback";
@@ -94,6 +96,7 @@ export interface BuildSuggestionV2ForDocumentOptions {
   userDataPath: string;
   targetRootPath?: string | null;
   knownRelativeFolders?: string[];
+  competingRelativePaths?: string[];
   now?: () => Date;
 }
 
@@ -155,7 +158,8 @@ export async function buildSuggestionV2ForDocument(
           draft,
           inventory,
           evidenceText: [documentItem.name, text?.excerpt].filter(Boolean).join("\n"),
-          folderAliases: getFolderAliasesForDraft(draft, referenceData.catalog)
+          folderAliases: getFolderAliasesForDraft(draft, referenceData.catalog),
+          competingRelativePaths: options.competingRelativePaths ?? []
         })
       : null;
     const documentExtension = path.extname(documentItem.name).toLowerCase();
@@ -177,6 +181,9 @@ export async function buildSuggestionV2ForDocument(
         draft,
         targetFolderSuggestion,
         folderPlacement: placementRanking ? createFolderPlacementSummary(placementRanking) : null,
+        folderPlacementCandidates: placementRanking
+          ? placementRanking.candidates.map(createFolderPlacementCandidateSummary)
+          : [],
         folderNamingProfile,
         missingFields: getMissingFields(draft),
         referenceDataWarnings: referenceData.warnings,
@@ -309,11 +316,26 @@ function createFolderPlacementSummary(
   const recommended = placement.recommended;
   return {
     relativePath: recommended.relativePath,
+    score: recommended.score,
     confidence: recommended.confidence,
     exists: recommended.exists,
     source: recommended.source,
     reasons: uniqueStrings([...placement.reasons, ...recommended.reasons]),
     warnings: uniqueStrings([...placement.warnings, ...recommended.warnings])
+  };
+}
+
+function createFolderPlacementCandidateSummary(
+  candidate: FolderPlacementRanking["candidates"][number]
+): SuggestionV2FolderPlacementSummary {
+  return {
+    relativePath: candidate.relativePath,
+    score: candidate.score,
+    confidence: candidate.confidence,
+    exists: candidate.exists,
+    source: candidate.source,
+    reasons: candidate.reasons,
+    warnings: candidate.warnings
   };
 }
 

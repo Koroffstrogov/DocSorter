@@ -6,6 +6,11 @@ interface SuggestionV2PanelState {
 interface SuggestionV2PanelOptions {
   root?: ParentNode;
   getState: () => SuggestionV2PanelState;
+  onAnalyzeDocument?: () => void;
+  onRunDiagnostic?: () => void;
+  onRunAiDiagnostic?: () => void;
+  isAiDiagnosticAvailable?: () => boolean;
+  isAnalyzeDisabled?: () => boolean;
 }
 
 interface SuggestionV2PanelApi {
@@ -15,6 +20,12 @@ interface SuggestionV2PanelApi {
 interface SuggestionV2PanelElements {
   panel: HTMLElement | null;
   details: HTMLElement | null;
+  analyzeButton: HTMLButtonElement | null;
+  diagnosticPanel: HTMLDetailsElement | null;
+  diagnosticMode: HTMLElement | null;
+  diagnosticResult: HTMLElement | null;
+  diagnosticButton: HTMLButtonElement | null;
+  aiDiagnosticButton: HTMLButtonElement | null;
 }
 
 interface SuggestionV2PanelFactoryApi {
@@ -31,6 +42,18 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
   function createSuggestionV2Panel(options: SuggestionV2PanelOptions): SuggestionV2PanelApi {
     const elements = getSuggestionV2PanelElements(options.root ?? document);
 
+    elements.analyzeButton?.addEventListener("click", () => {
+      options.onAnalyzeDocument?.();
+    });
+
+    elements.diagnosticButton?.addEventListener("click", () => {
+      options.onRunDiagnostic?.();
+    });
+
+    elements.aiDiagnosticButton?.addEventListener("click", () => {
+      options.onRunAiDiagnostic?.();
+    });
+
     function render(): void {
       if (!elements.panel || !elements.details) {
         return;
@@ -38,24 +61,52 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
 
       const { activeDocument, suggestionState } = options.getState();
       elements.panel.hidden = !activeDocument;
+      const state = suggestionState ?? createIdleSuggestionV2DocumentState();
+      const busy = state.status === "loading" || state.diagnosticStatus === "running";
+      const diagnosticBusy = state.diagnosticStatus === "running";
+      if (elements.analyzeButton) {
+        elements.analyzeButton.disabled = !activeDocument || busy || Boolean(options.isAnalyzeDisabled?.());
+        elements.analyzeButton.textContent = state.status === "loading"
+          ? "Analyse..."
+          : "Analyser le document";
+      }
+      if (elements.diagnosticButton) {
+        elements.diagnosticButton.disabled = !activeDocument || diagnosticBusy;
+        elements.diagnosticButton.textContent = diagnosticBusy
+          ? "Diagnostic..."
+          : "Diagnostic suggestions";
+      }
+      if (elements.aiDiagnosticButton) {
+        const aiAvailable = options.isAiDiagnosticAvailable?.() ?? false;
+        elements.aiDiagnosticButton.disabled = !activeDocument || diagnosticBusy || !aiAvailable;
+        elements.aiDiagnosticButton.textContent = diagnosticBusy
+          ? "Diagnostic IA..."
+          : "Diagnostic IA";
+      }
+      renderDiagnosticBlock(elements, activeDocument, state);
       if (!activeDocument) {
         elements.details.replaceChildren();
         return;
       }
 
-      const state = suggestionState ?? createIdleSuggestionV2DocumentState();
       if (state.status === "loading") {
-        elements.details.replaceChildren("Préparation de la suggestion v2...");
+        elements.details.replaceChildren(
+          createProposalPlaceholder("analyse", "Analyse locale du document en cours.")
+        );
         return;
       }
 
       if (state.status === "error") {
-        elements.details.replaceChildren(state.error?.message ?? "Suggestion v2 indisponible.");
+        elements.details.replaceChildren(
+          createProposalPlaceholder("erreur", state.error?.message ?? "Proposition de tri indisponible.")
+        );
         return;
       }
 
       if (state.status === "idle" || !state.result) {
-        elements.details.replaceChildren("Suggestion v2 en attente.");
+        elements.details.replaceChildren(
+          createProposalPlaceholder("en attente", "Cliquez sur Analyser le document.")
+        );
         return;
       }
 
@@ -68,7 +119,13 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
   function getSuggestionV2PanelElements(root: ParentNode): SuggestionV2PanelElements {
     return {
       panel: root.querySelector<HTMLElement>("#suggestion-v2-panel"),
-      details: root.querySelector<HTMLElement>("#suggestion-v2-details")
+      details: root.querySelector<HTMLElement>("#suggestion-v2-details"),
+      analyzeButton: root.querySelector<HTMLButtonElement>("#analyze-document-v2"),
+      diagnosticPanel: root.querySelector<HTMLDetailsElement>("#suggestion-v2-diagnostic-panel"),
+      diagnosticMode: root.querySelector<HTMLElement>("#suggestion-v2-diagnostic-mode"),
+      diagnosticResult: root.querySelector<HTMLElement>("#suggestion-v2-diagnostic-result"),
+      diagnosticButton: root.querySelector<HTMLButtonElement>("#run-suggestion-v2-diagnostic"),
+      aiDiagnosticButton: root.querySelector<HTMLButtonElement>("#run-suggestion-v2-ai-diagnostic")
     };
   }
 
@@ -81,36 +138,61 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     container.append(
       createHeader(suggestion),
       createRecommendedFolder(suggestion),
-      createFieldGrid(suggestion),
-      createFolderReasons(suggestion),
-      createDepthOptions(suggestion)
+      createShortReasons(suggestion),
+      createShortAlerts(suggestion),
+      createLongDetails(suggestion)
     );
-    container.append(createNamingProfile(suggestion));
-
-    if (suggestion.missingFields.length > 0) {
-      container.append(createList("Champs manquants", suggestion.missingFields.map(missingFieldLabel)));
-    }
-
-    const warnings = uniqueStrings([
-      ...suggestion.draft.warnings,
-      ...suggestion.targetFolderSuggestion.warnings,
-      ...(suggestion.folderPlacement?.warnings ?? []),
-      ...(suggestion.folderNamingProfile?.warnings ?? []),
-      ...suggestion.referenceDataWarnings
-    ]);
-    if (warnings.length > 0) {
-      container.append(createList("Alertes", warnings));
-    }
-
-    const reasons = uniqueStrings([
-      ...suggestion.draft.reasons,
-      ...suggestion.targetFolderSuggestion.reasons
-    ]);
-    if (reasons.length > 0) {
-      container.append(createList("Raisons", reasons));
-    }
 
     return container;
+  }
+
+  function renderDiagnosticBlock(
+    elements: SuggestionV2PanelElements,
+    activeDocument: DocumentItem | null,
+    state: SuggestionV2DocumentState
+  ): void {
+    if (elements.diagnosticMode) {
+      elements.diagnosticMode.textContent = `Mode : ${activeDocument ? diagnosticModeForDocument(activeDocument) : "expurgé"}`;
+    }
+
+    if (!elements.diagnosticResult) {
+      return;
+    }
+
+    if (!activeDocument || state.diagnosticStatus === "idle") {
+      elements.diagnosticResult.replaceChildren();
+      return;
+    }
+
+    if (state.diagnosticStatus === "running") {
+      elements.diagnosticResult.replaceChildren("Diagnostic en cours...");
+      return;
+    } else if (state.diagnosticStatus === "error") {
+      elements.diagnosticResult.replaceChildren(
+        state.diagnosticError?.message ?? "Diagnostic indisponible."
+      );
+      return;
+    }
+
+    const result = state.diagnosticResult;
+    if (!result) {
+      elements.diagnosticResult.replaceChildren("Diagnostic exporté.");
+      return;
+    }
+
+    const pathLine = document.createElement("p");
+    const copyButton = document.createElement("button");
+    const handoff = document.createElement("p");
+    pathLine.textContent = `${diagnosticModeLabel(result.mode)} : ${result.diagnosticPath}`;
+    pathLine.title = result.diagnosticPath;
+    copyButton.type = "button";
+    copyButton.textContent = "Copier le chemin";
+    copyButton.disabled = !canCopyToClipboard();
+    copyButton.addEventListener("click", () => {
+      void navigator.clipboard.writeText(result.diagnosticPath);
+    });
+    handoff.textContent = "À transmettre pour analyse.";
+    elements.diagnosticResult.replaceChildren(pathLine, copyButton, handoff);
   }
 
   function createHeader(suggestion: RendererSuggestionV2DocumentSuggestion): HTMLDivElement {
@@ -118,14 +200,29 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     const nameLabel = document.createElement("span");
     const name = document.createElement("strong");
     const confidence = document.createElement("small");
+    const status = document.createElement("small");
 
     header.className = "suggestion-v2-header";
     nameLabel.textContent = "Nom v2";
     name.textContent = suggestion.draft.proposedName ?? "non généré";
     name.title = suggestion.draft.proposedName ?? suggestion.message;
     confidence.textContent = `Confiance : ${suggestion.draft.confidence} %`;
-    header.append(nameLabel, name, confidence);
+    status.textContent = `État : ${suggestion.missingFields.length > 0 ? "incomplet" : "prêt"}`;
+    header.append(nameLabel, name, status, confidence);
     return header;
+  }
+
+  function createProposalPlaceholder(status: string, messageText: string): HTMLDivElement {
+    const container = document.createElement("div");
+    const statusLine = document.createElement("span");
+    const name = document.createElement("strong");
+    const message = document.createElement("p");
+    container.className = "suggestion-v2-placeholder";
+    statusLine.textContent = `État : ${status}`;
+    name.textContent = "Nom proposé : non généré";
+    message.textContent = messageText;
+    container.append(statusLine, name, message);
+    return container;
   }
 
   function createFieldGrid(suggestion: RendererSuggestionV2DocumentSuggestion): HTMLDListElement {
@@ -192,6 +289,75 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     }
 
     return createList("Raisons dossier", reasons);
+  }
+
+  function createShortReasons(
+    suggestion: RendererSuggestionV2DocumentSuggestion
+  ): HTMLDivElement | DocumentFragment {
+    const reasons = uniqueStrings([
+      ...(suggestion.folderPlacement?.reasons ?? []),
+      ...(suggestion.targetFolderSuggestion.recommended?.reasons ?? []),
+      ...suggestion.targetFolderSuggestion.reasons,
+      ...suggestion.draft.reasons
+    ]).slice(0, 3);
+
+    return reasons.length > 0 ? createList("Raisons courtes", reasons) : document.createDocumentFragment();
+  }
+
+  function createShortAlerts(
+    suggestion: RendererSuggestionV2DocumentSuggestion
+  ): HTMLDivElement | DocumentFragment {
+    const alerts = uniqueStrings([
+      ...suggestion.draft.warnings,
+      ...suggestion.targetFolderSuggestion.warnings,
+      ...(suggestion.folderPlacement?.warnings ?? []),
+      ...(suggestion.folderNamingProfile?.warnings ?? []),
+      ...suggestion.referenceDataWarnings,
+      ...suggestion.missingFields.map(missingFieldLabel)
+    ]).slice(0, 4);
+
+    return alerts.length > 0 ? createList("Alertes importantes", alerts) : document.createDocumentFragment();
+  }
+
+  function createLongDetails(suggestion: RendererSuggestionV2DocumentSuggestion): HTMLDetailsElement {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    const content = document.createElement("div");
+    details.className = "suggestion-v2-long-details";
+    summary.textContent = "Voir détails";
+    content.className = "suggestion-v2-long-details-content";
+    content.append(
+      createFieldGrid(suggestion),
+      createFolderReasons(suggestion),
+      createDepthOptions(suggestion),
+      createNamingProfile(suggestion)
+    );
+
+    if (suggestion.missingFields.length > 0) {
+      content.append(createList("Champs manquants", suggestion.missingFields.map(missingFieldLabel)));
+    }
+
+    const warnings = uniqueStrings([
+      ...suggestion.draft.warnings,
+      ...suggestion.targetFolderSuggestion.warnings,
+      ...(suggestion.folderPlacement?.warnings ?? []),
+      ...(suggestion.folderNamingProfile?.warnings ?? []),
+      ...suggestion.referenceDataWarnings
+    ]);
+    if (warnings.length > 0) {
+      content.append(createList("Toutes les alertes", warnings));
+    }
+
+    const reasons = uniqueStrings([
+      ...suggestion.draft.reasons,
+      ...suggestion.targetFolderSuggestion.reasons
+    ]);
+    if (reasons.length > 0) {
+      content.append(createList("Toutes les raisons", reasons));
+    }
+
+    details.append(summary, content);
+    return details;
   }
 
   function createDepthOptions(
@@ -333,6 +499,18 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
       folderOptionSourceLabel(option.source),
       option.requiresCreation ? "création non automatique" : ""
     ].filter(Boolean).join(" - ");
+  }
+
+  function diagnosticModeLabel(mode: RendererSuggestionV2DiagnosticResult["mode"]): string {
+    return mode === "diagnosticComplet" ? "diagnostic complet" : "diagnostic expurgé";
+  }
+
+  function diagnosticModeForDocument(documentItem: DocumentItem): string {
+    return /^T[0-9][0-9]-/.test(documentItem.name) ? "complet" : "expurgé";
+  }
+
+  function canCopyToClipboard(): boolean {
+    return typeof navigator !== "undefined" && Boolean(navigator.clipboard?.writeText);
   }
 
   function missingFieldLabel(field: SuggestionV2MissingField): string {

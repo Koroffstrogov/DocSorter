@@ -666,6 +666,27 @@ h2 {
   gap: 12px;
 }
 
+details.detail-section {
+  display: block;
+}
+
+details.detail-section > summary,
+.suggestion-v2-long-details > summary,
+.suggestion-v2-diagnostic-panel > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+details.detail-section > summary {
+  margin-bottom: 0;
+}
+
+details.detail-section[open] > summary {
+  margin-bottom: 12px;
+}
+
 .detail-section .details-empty {
   margin: 0;
 }
@@ -813,7 +834,16 @@ h2 {
   font-weight: 720;
 }
 
+.text-extraction-help {
+  margin: 0;
+  color: var(--muted);
+}
+
 .text-extraction-excerpt {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 180px;
   max-height: 220px;
   overflow: auto;
   border: 1px solid var(--border);
@@ -824,7 +854,7 @@ h2 {
   font-family: inherit;
   font-size: 12px;
   line-height: 1.45;
-  white-space: pre-wrap;
+  resize: vertical;
 }
 
 .suggestions-panel[hidden] {
@@ -915,6 +945,27 @@ h2 {
   gap: 11px;
 }
 
+.suggestion-v2-placeholder {
+  display: grid;
+  gap: 7px;
+}
+
+.suggestion-v2-placeholder span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.suggestion-v2-placeholder strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.suggestion-v2-placeholder p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .suggestion-v2-header,
 .suggestion-v2-folder {
   display: grid;
@@ -974,9 +1025,61 @@ h2 {
 
 .suggestion-v2-depth-options,
 .suggestion-v2-list,
-.suggestion-v2-profile {
+.suggestion-v2-profile,
+.suggestion-v2-diagnostic-result,
+.suggestion-v2-long-details-content {
   display: grid;
   gap: 5px;
+}
+
+.suggestion-v2-diagnostic-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f9fbfd;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.suggestion-v2-diagnostic-panel p {
+  margin: 0;
+}
+
+.suggestion-v2-diagnostic-panel[open] {
+  gap: 10px;
+}
+
+.suggestion-v2-diagnostic-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.suggestion-v2-diagnostic-result p {
+  overflow-wrap: anywhere;
+}
+
+.suggestion-v2-diagnostic-result button {
+  justify-self: start;
+  min-height: 28px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0 9px;
+  color: var(--accent);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.suggestion-v2-long-details {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.suggestion-v2-long-details[open] > summary {
+  margin-bottom: 8px;
 }
 
 .suggestion-v2-depth-options ul,
@@ -1050,6 +1153,15 @@ h2 {
 
 .ocr-panel,
 .ai-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.advanced-settings-panel {
+  display: block;
+}
+
+.advanced-settings-panel[open] {
   display: grid;
   gap: 10px;
 }

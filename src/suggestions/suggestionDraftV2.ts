@@ -23,6 +23,19 @@ export interface SuggestionDraftV2 {
   detail?: string;
   proposedName?: string;
   dateSelection?: SelectedDateToken;
+  semanticDeduplication?: {
+    changed: boolean;
+    removedTerms: string[];
+    before: {
+      issuer?: string;
+      detail?: string;
+    };
+    after: {
+      issuer?: string;
+      detail?: string;
+    };
+    reasons: string[];
+  };
   confidence: number;
   reasons: string[];
   warnings: string[];

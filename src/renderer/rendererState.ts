@@ -124,7 +124,10 @@ function createIdleSuggestionV2DocumentState(): SuggestionV2DocumentState {
   return {
     status: "idle",
     result: null,
-    error: null
+    error: null,
+    diagnosticStatus: "idle",
+    diagnosticResult: null,
+    diagnosticError: null
   };
 }
 

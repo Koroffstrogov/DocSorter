@@ -15,6 +15,7 @@ const REVIEWED_IPC_CHANNELS = [
   "naming:buildProposal",
   "naming:checkDestinationAvailability",
   "suggestion-v2:build",
+  "suggestion-v2:diagnose",
   "classification:preparePlan",
   "classification:execute",
   "classification:undoLast",

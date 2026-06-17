@@ -36,6 +36,9 @@ import type {
   SuggestionV2TextContext
 } from "../suggestions/buildSuggestionV2ForDocument";
 import type {
+  SuggestionV2DiagnosticResult
+} from "../diagnostics/suggestionV2Diagnostic";
+import type {
   TargetFolderCreation,
   TargetFolderList,
   TargetFolderResult
@@ -67,6 +70,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "buildNamingProposal",
   "checkDestinationAvailability",
   "buildSuggestionV2",
+  "runSuggestionV2Diagnostic",
   "prepareClassificationPlan",
   "executeClassification",
   "undoLastClassification",
@@ -150,6 +154,19 @@ export function createPreloadApi(ipc: IpcInvoker) {
         textContext,
         legacyDraft
       ) as Promise<SuggestionV2Result>,
+    runSuggestionV2Diagnostic: (
+      documentPath: string,
+      textContext: SuggestionV2TextContext | null,
+      legacyDraft: NamingDraft,
+      includeAi: boolean
+    ): Promise<SuggestionV2DiagnosticResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.suggestionV2Diagnose,
+        documentPath,
+        textContext,
+        legacyDraft,
+        includeAi
+      ) as Promise<SuggestionV2DiagnosticResult>,
     prepareClassificationPlan: (
       documentPath: string,
       proposedFilename: string

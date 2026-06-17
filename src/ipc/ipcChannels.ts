@@ -11,6 +11,7 @@ export const IPC_CHANNELS = {
   namingBuildProposal: "naming:buildProposal",
   namingCheckDestinationAvailability: "naming:checkDestinationAvailability",
   suggestionV2Build: "suggestion-v2:build",
+  suggestionV2Diagnose: "suggestion-v2:diagnose",
   classificationPreparePlan: "classification:preparePlan",
   classificationExecute: "classification:execute",
   classificationUndoLast: "classification:undoLast",

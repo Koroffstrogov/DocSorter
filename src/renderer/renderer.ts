@@ -134,7 +134,8 @@ const historyPanel = DocSorterHistoryPanel.createHistoryPanel({
   getState: () => ({
     history: state.history
   }),
-  formatDate
+  formatDate,
+  maxEntries: 3
 });
 
 const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPanel({
@@ -146,6 +147,7 @@ const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPan
   onExtract: () => {
     void extractTextFromActiveDocument();
   },
+  onTextChange: updateExtractedTextForDocument,
   formatDate
 });
 
@@ -173,7 +175,18 @@ const suggestionV2Panel = DocSorterSuggestionV2Panel.createSuggestionV2Panel({
       activeDocument,
       suggestionState: activeDocument ? getSuggestionV2State(activeDocument.filePath) : null
     };
-  }
+  },
+  onAnalyzeDocument: () => {
+    runSuggestionV2AnalysisForActiveDocument();
+  },
+  onRunDiagnostic: () => {
+    runSuggestionV2DiagnosticForActiveDocument(false);
+  },
+  onRunAiDiagnostic: () => {
+    runSuggestionV2DiagnosticForActiveDocument(true);
+  },
+  isAiDiagnosticAvailable: () => canRunAiSuggestion(),
+  isAnalyzeDisabled: () => isClassificationBusy()
 });
 
 const namingPanelView = DocSorterNamingPanel.createNamingPanel({

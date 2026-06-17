@@ -11,6 +11,7 @@ import { normalizeInventoryRelativePath } from "./folderInventorySafety";
 
 const DEFAULT_FALLBACK_PATH = "Divers/A-traiter-manuellement";
 const RECOMMENDATION_THRESHOLD = 35;
+const STRONG_EXISTING_FOLDER_MATCH = 80;
 
 export function rankFolderPlacementCandidates(
   input: RankFolderPlacementInput
@@ -26,6 +27,7 @@ export function rankFolderPlacementCandidates(
   const best = candidates[0];
   if (best && best.score >= RECOMMENDATION_THRESHOLD) {
     reasons.push(`Dossier existant retenu : ${best.relativePath}.`);
+    warnings.push(...createCompetingPathWarnings(best.relativePath, input.competingRelativePaths ?? []));
     return {
       recommended: best,
       candidates,
@@ -59,6 +61,8 @@ function scoreInventoryItem(
   const evidenceTokens = tokenize(normalizeNameBlock(input.evidenceText));
   const sampleText = normalizeNameBlock(item.sampleFileNames.join(" "));
   const sampleTokens = tokenize(sampleText);
+  const terminalSegment = getTerminalSegment(item.relativePath);
+  const terminalTokens = tokenize(terminalSegment);
   const targetTokens = tokenize(input.draft.target);
   const documentTypeTokens = tokenize(input.draft.documentType);
   const issuerTokens = tokenize(input.draft.issuer);
@@ -71,6 +75,12 @@ function scoreInventoryItem(
   if (domainTokens.length > 0 && startsWithTokens(pathTokens, domainTokens)) {
     score += 40;
     reasons.push("Domaine du dossier cohérent avec le type documentaire.");
+  }
+
+  const terminalTargetOverlap = countOverlap(terminalTokens, targetTokens);
+  if (terminalTargetOverlap > 0) {
+    score += STRONG_EXISTING_FOLDER_MATCH + terminalTargetOverlap * 8;
+    reasons.push(`Dossier existant correspondant à ${terminalSegment}.`);
   }
 
   const targetOverlap = countOverlap(pathTokens, targetTokens);
@@ -86,12 +96,25 @@ function scoreInventoryItem(
       reasons.push("Alias de dossier référentiel retrouvé dans l'arborescence.");
       break;
     }
+
+    const aliasOverlap = countOverlap(terminalTokens, tokenize(alias));
+    if (aliasOverlap > 0) {
+      score += 55 + aliasOverlap * 5;
+      reasons.push(`Dossier existant correspondant à ${terminalSegment}.`);
+      break;
+    }
   }
 
   const evidenceOverlap = countOverlap(pathTokens, evidenceTokens);
   if (evidenceOverlap > 0) {
     score += Math.min(25, evidenceOverlap * 10);
     reasons.push("Dossier existant retrouvé dans le nom ou le texte disponible.");
+  }
+
+  const terminalEvidenceOverlap = countOverlap(terminalTokens, evidenceTokens);
+  if (terminalEvidenceOverlap > 0) {
+    score += 60 + terminalEvidenceOverlap * 5;
+    reasons.push(`Dossier existant correspondant à ${terminalSegment}.`);
   }
 
   if (countOverlap(sampleTokens, documentTypeTokens) > 0) {
@@ -152,6 +175,26 @@ function createFallbackCandidate(
     ...(fallbackItem ? { item: fallbackItem } : {}),
     source: fallbackItem ? "inventory" : "fallback"
   };
+}
+
+function createCompetingPathWarnings(
+  recommendedPath: string,
+  competingPaths: string[]
+): string[] {
+  const normalizedRecommended = normalizeNameBlock(recommendedPath);
+  return uniqueStrings(
+    competingPaths
+      .filter((candidate) => {
+        const normalizedCandidate = normalizeNameBlock(candidate);
+        return normalizedCandidate && normalizedCandidate !== normalizedRecommended;
+      })
+      .map(() => "Chemin historique ou théorique différent : dossier existant préféré.")
+  );
+}
+
+function getTerminalSegment(relativePath: string): string {
+  const segments = relativePath.split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? relativePath;
 }
 
 function tokenize(value: string | undefined): string[] {

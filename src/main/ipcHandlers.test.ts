@@ -95,6 +95,7 @@ describe("sensitive IPC handler contract", () => {
       IPC_CHANNELS.ocrRunImage,
       IPC_CHANNELS.aiRunSuggestion,
       IPC_CHANNELS.suggestionV2Build,
+      IPC_CHANNELS.suggestionV2Diagnose,
       IPC_CHANNELS.classificationPreparePlan,
       IPC_CHANNELS.classificationExecute
     ]);
@@ -114,6 +115,12 @@ describe("sensitive IPC handler contract", () => {
     expect(contractFor(IPC_CHANNELS.extractionExtractPdfText)).toMatchObject({
       acceptsRendererPath: true,
       usesMainSource: true,
+      usesUserDataPath: true
+    });
+    expect(contractFor(IPC_CHANNELS.suggestionV2Diagnose)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesMainTarget: true,
       usesUserDataPath: true
     });
     expect(contractFor(IPC_CHANNELS.classificationExecute)).toMatchObject({
@@ -533,13 +540,94 @@ describe("registerIpcHandlers", () => {
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
       targetRootPath: TARGET_PATH,
-      knownRelativeFolders: [TARGET_FOLDER]
+      knownRelativeFolders: [TARGET_FOLDER],
+      competingRelativePaths: [TARGET_FOLDER]
     });
     expect(services.extractTextFromPdfDocument).not.toHaveBeenCalled();
     expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
     expect(services.runAiSuggestionForDocument).not.toHaveBeenCalled();
     expect(services.createTargetSubdirectory).not.toHaveBeenCalled();
     expect(services.executeClassification).not.toHaveBeenCalled();
+  });
+
+  it("writes v2 diagnostics from main-state context without OCR or classification", async () => {
+    const appState = createStateWithQueue({ selectedTargetFolder: TARGET_FOLDER });
+    const services = createServices();
+    const harness = createHarness({ appState, services });
+    const textContext = {
+      source: "pdf-native" as const,
+      excerpt: "Facture Renault Captur"
+    };
+    const legacyDraft: NamingDraft = {
+      documentDate: "",
+      subject: "",
+      documentType: "",
+      keywords: ""
+    };
+
+    await harness.invoke(
+      IPC_CHANNELS.suggestionV2Diagnose,
+      DOCUMENT_PATH,
+      textContext,
+      legacyDraft,
+      false,
+      "C:\\renderer-target"
+    );
+
+    expect(services.buildSuggestionV2ForDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      textContext,
+      legacyDraft,
+      queuedDocuments: appState.queuedDocuments,
+      queuedDocumentPaths: appState.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      targetRootPath: TARGET_PATH,
+      knownRelativeFolders: [TARGET_FOLDER],
+      competingRelativePaths: [TARGET_FOLDER]
+    });
+    expect(services.writeSuggestionV2Diagnostic).toHaveBeenCalledWith({
+      userDataPath: USER_DATA_PATH,
+      documentName: "document.pdf",
+      extension: ".pdf",
+      textContext,
+      legacyDraft,
+      suggestionResult: createSuggestionV2Result(),
+      aiResult: null
+    });
+    expect(services.extractTextFromPdfDocument).not.toHaveBeenCalled();
+    expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
+    expect(services.runAiSuggestionForDocument).not.toHaveBeenCalled();
+    expect(services.createTargetSubdirectory).not.toHaveBeenCalled();
+    expect(services.executeClassification).not.toHaveBeenCalled();
+  });
+
+  it("runs AI diagnostic only on explicit diagnostic request", async () => {
+    const appState = createStateWithQueue();
+    const services = createServices();
+    const harness = createHarness({ appState, services });
+    const textContext = {
+      source: "pdf-native" as const,
+      excerpt: "Facture Renault Captur"
+    };
+
+    await harness.invoke(
+      IPC_CHANNELS.suggestionV2Diagnose,
+      DOCUMENT_PATH,
+      textContext,
+      null,
+      true
+    );
+
+    expect(services.runAiSuggestionForDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      textContext,
+      queuedDocuments: appState.queuedDocuments,
+      queuedDocumentPaths: appState.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      rulesCatalog: createEmptyCatalog(),
+      knownRelativeFolders: [TARGET_FOLDER]
+    });
+    expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
   });
 
   it("selects OCR paths through reviewed dialogs only", async () => {
@@ -865,6 +953,15 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
       value: createAiDocumentSuggestion()
     } as AiSettingsResult<AiDocumentSuggestion>)),
     buildSuggestionV2ForDocument: vi.fn(async () => createSuggestionV2Result()),
+    writeSuggestionV2Diagnostic: vi.fn(async () => ({
+      ok: true,
+      value: {
+        mode: "diagnosticExpurge",
+        diagnosticPath: path.join(USER_DATA_PATH, "diagnostics", "diagnostic.json"),
+        documentName: "document.pdf",
+        message: "Diagnostic expurgé exporté."
+      }
+    })),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()
@@ -1038,12 +1135,14 @@ function createSuggestionV2Result(): SuggestionV2Result {
       },
       folderPlacement: {
         relativePath: TARGET_FOLDER,
+        score: 90,
         confidence: 90,
         exists: true,
         source: "inventory",
         reasons: ["Dossier existant retenu."],
         warnings: []
       },
+      folderPlacementCandidates: [],
       folderNamingProfile: null,
       missingFields: [],
       referenceDataWarnings: [],

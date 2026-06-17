@@ -41,6 +41,10 @@ import {
   type ExactDuplicateAnalysisResult
 } from "../duplicates/exactDuplicates";
 import {
+  writeSuggestionV2Diagnostic as writeSuggestionV2DiagnosticService,
+  type SuggestionV2DiagnosticResult
+} from "../diagnostics/suggestionV2Diagnostic";
+import {
   type PdfTextExtractionResult
 } from "../extraction/pdfTextExtraction";
 import {
@@ -246,7 +250,17 @@ export interface IpcHandlerServices {
     userDataPath: string;
     targetRootPath: string | null | undefined;
     knownRelativeFolders: string[];
+    competingRelativePaths?: string[];
   }) => Promise<SuggestionV2Result>;
+  writeSuggestionV2Diagnostic: (options: {
+    userDataPath: string;
+    documentName: string;
+    extension: string;
+    textContext: SuggestionV2TextContext | null;
+    legacyDraft: unknown;
+    suggestionResult: SuggestionV2Result;
+    aiResult?: AiSettingsResult<AiDocumentSuggestion> | null;
+  }) => Promise<SuggestionV2DiagnosticResult>;
   loadMergedNamingRulesCatalog: (
     userDataPath: string
   ) => Promise<UserRulesResult<NamingRulesStatus>>;
@@ -454,6 +468,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "buildSuggestionV2ForDocument"
   },
   {
+    channel: IPC_CHANNELS.suggestionV2Diagnose,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: true,
+    usesUserDataPath: true,
+    serviceName: "writeSuggestionV2Diagnostic"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -574,6 +596,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   unloadAiModel: unloadConfiguredOllamaModelService,
   runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
   buildSuggestionV2ForDocument: buildSuggestionV2ForDocumentService,
+  writeSuggestionV2Diagnostic: writeSuggestionV2DiagnosticService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
   saveUserRulesCatalog: saveUserRulesCatalogService
@@ -798,8 +821,55 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         queuedDocumentPaths: state.queuedDocumentPaths,
         userDataPath: options.app.getPath("userData"),
         targetRootPath: state.selectedTargetPath,
-        knownRelativeFolders: await getKnownTargetFoldersForSuggestionV2(state, services)
+        knownRelativeFolders: await getKnownTargetFoldersForSuggestionV2(state, services),
+        competingRelativePaths: getSelectedTargetFolderCandidates(state)
       })
+  );
+  options.ipcMain.handle(
+    IPC_CHANNELS.suggestionV2Diagnose,
+    async (
+      _event,
+      documentPath: unknown,
+      textContext: unknown,
+      legacyDraft: unknown,
+      includeAi: unknown
+    ) => {
+      const safeDocumentPath = typeof documentPath === "string" ? documentPath : "";
+      const safeTextContext = readSuggestionV2TextContext(textContext);
+      const knownRelativeFolders = await getKnownTargetFoldersForSuggestionV2(state, services);
+      const suggestionResult = await services.buildSuggestionV2ForDocument({
+        documentPath: safeDocumentPath,
+        textContext: safeTextContext,
+        legacyDraft,
+        queuedDocuments: state.queuedDocuments,
+        queuedDocumentPaths: state.queuedDocumentPaths,
+        userDataPath: options.app.getPath("userData"),
+        targetRootPath: state.selectedTargetPath,
+        knownRelativeFolders,
+        competingRelativePaths: getSelectedTargetFolderCandidates(state)
+      });
+      const aiResult = includeAi === true
+        ? await services.runAiSuggestionForDocument({
+            documentPath: safeDocumentPath,
+            textContext: safeTextContext,
+            queuedDocuments: state.queuedDocuments,
+            queuedDocumentPaths: state.queuedDocumentPaths,
+            userDataPath: options.app.getPath("userData"),
+            rulesCatalog: await getRulesCatalogForAnalysis(options.app, services),
+            knownRelativeFolders
+          })
+        : null;
+
+      return services.writeSuggestionV2Diagnostic({
+        userDataPath: options.app.getPath("userData"),
+        documentName: getQueuedDocumentName(state, safeDocumentPath),
+        extension: path.extname(safeDocumentPath).toLowerCase(),
+        textContext: safeTextContext,
+        legacyDraft,
+        suggestionResult,
+        aiResult
+      });
+    }
   );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(
@@ -998,6 +1068,19 @@ async function getKnownTargetFoldersForSuggestionV2(
   return Array.from(folders).sort((left, right) =>
     left.localeCompare(right, "fr", { sensitivity: "base" })
   );
+}
+
+function getQueuedDocumentName(state: MainProcessAppState, documentPath: string): string {
+  const resolvedPath = path.resolve(documentPath);
+  const queuedDocument = state.queuedDocuments.find(
+    (documentItem) => path.resolve(documentItem.filePath) === resolvedPath
+  );
+
+  return queuedDocument?.name ?? path.basename(documentPath);
+}
+
+function getSelectedTargetFolderCandidates(state: MainProcessAppState): string[] {
+  return state.selectedTargetFolder ? [state.selectedTargetFolder] : [];
 }
 
 function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null {

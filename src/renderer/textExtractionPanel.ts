@@ -8,6 +8,7 @@ interface TextExtractionPanelOptions {
   getState: () => TextExtractionPanelState;
   canExtract: (documentItem?: DocumentItem | null) => boolean;
   onExtract: () => void;
+  onTextChange: (documentItem: DocumentItem, text: string) => void;
   formatDate: (value: string) => string;
 }
 
@@ -99,7 +100,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         createTextExtractionMeta(extractionState.result),
         ...createTextExtractionLimitNoticeNodes(extractionState.result),
         ...createTextExtractionWarningNodes(extractionState.result),
-        createTextExtractionExcerpt(extractionState.result)
+        createTextExtractionEditor(activeDocument, extractionState.result, options)
       );
     }
 
@@ -183,15 +184,28 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     };
   }
 
-  function createTextExtractionExcerpt(extraction: PdfTextExtraction): HTMLDivElement {
+  function createTextExtractionEditor(
+    documentItem: DocumentItem,
+    extraction: PdfTextExtraction,
+    options: TextExtractionPanelOptions
+  ): HTMLDivElement {
     const container = document.createElement("div");
     const heading = document.createElement("strong");
-    const excerpt = document.createElement("pre");
+    const helper = document.createElement("p");
+    const excerpt = document.createElement("textarea");
 
-    heading.textContent = extraction.truncated ? "Extrait limité" : "Extrait";
+    heading.textContent = extraction.truncated ? "Extrait limité modifiable" : "Texte exploitable modifiable";
+    helper.className = "text-extraction-help";
+    helper.textContent =
+      "Les corrections restent en mémoire pour ce document et seront utilisées par les prochaines analyses.";
     excerpt.className = "text-extraction-excerpt";
-    excerpt.textContent = extraction.excerpt;
-    container.append(heading, excerpt);
+    excerpt.value = extraction.text ?? extraction.excerpt;
+    excerpt.spellcheck = false;
+    excerpt.setAttribute("aria-label", "Texte extrait modifiable");
+    excerpt.addEventListener("input", () => {
+      options.onTextChange(documentItem, excerpt.value);
+    });
+    container.append(heading, helper, excerpt);
 
     return container;
   }

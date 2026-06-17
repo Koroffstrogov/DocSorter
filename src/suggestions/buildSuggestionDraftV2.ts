@@ -286,6 +286,10 @@ function applyLegacyField(
 }
 
 function applySemanticNameDeduplication(draft: SuggestionDraftV2): void {
+  const before = {
+    ...(draft.issuer ? { issuer: draft.issuer } : {}),
+    ...(draft.detail ? { detail: draft.detail } : {})
+  };
   const result = dedupeNamingInputV2Semantic({
     dateToken: draft.dateToken ?? "",
     target: draft.target ?? "",
@@ -294,6 +298,17 @@ function applySemanticNameDeduplication(draft: SuggestionDraftV2): void {
     ...(draft.detail ? { detail: draft.detail } : {}),
     extension: ""
   });
+
+  draft.semanticDeduplication = {
+    changed: result.changed,
+    removedTerms: result.removedTerms,
+    before,
+    after: {
+      ...(result.input.issuer ? { issuer: result.input.issuer } : {}),
+      ...(result.input.detail ? { detail: result.input.detail } : {})
+    },
+    reasons: result.reasons
+  };
 
   if (!result.changed) {
     return;

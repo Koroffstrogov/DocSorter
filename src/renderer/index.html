@@ -134,6 +134,41 @@
           </div>
         </div>
         <div class="detail-scroll">
+          <section id="text-extraction-panel" class="detail-section text-extraction-panel" aria-label="Texte extrait" hidden>
+            <div class="section-heading">
+              <h3>Texte extrait</h3>
+              <button id="extract-pdf-text" type="button" disabled>Extraire le texte PDF</button>
+            </div>
+            <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
+          </section>
+
+          <section
+            id="suggestion-v2-panel"
+            class="detail-section suggestion-v2-panel"
+            aria-label="Proposition de tri"
+            hidden
+          >
+            <div class="section-heading">
+              <h3>Proposition de tri</h3>
+              <button id="analyze-document-v2" type="button" disabled>Analyser le document</button>
+            </div>
+            <div id="suggestion-v2-details" class="suggestion-v2-details">Proposition en attente.</div>
+            <details id="suggestion-v2-diagnostic-panel" class="suggestion-v2-diagnostic-panel">
+              <summary>Diagnostic</summary>
+              <p>Le diagnostic ne classe rien. Il génère un fichier JSON pour comprendre les choix.</p>
+              <p id="suggestion-v2-diagnostic-mode">Mode : expurgé</p>
+              <div class="suggestion-v2-diagnostic-actions">
+                <button id="run-suggestion-v2-diagnostic" type="button" disabled>
+                  Diagnostic suggestions
+                </button>
+                <button id="run-suggestion-v2-ai-diagnostic" type="button" disabled>
+                  Diagnostic IA
+                </button>
+              </div>
+              <div id="suggestion-v2-diagnostic-result" class="suggestion-v2-diagnostic-result"></div>
+            </details>
+          </section>
+
           <section class="detail-section" aria-label="Document actif">
             <h3>Document actif</h3>
             <div id="document-details" class="details-empty">Aucun document actif</div>
@@ -148,14 +183,6 @@
             </div>
           </section>
 
-          <section id="text-extraction-panel" class="detail-section text-extraction-panel" aria-label="Texte extrait" hidden>
-            <div class="section-heading">
-              <h3>Texte extrait</h3>
-              <button id="extract-pdf-text" type="button" disabled>Extraire le texte PDF</button>
-            </div>
-            <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
-          </section>
-
           <section id="suggestions-panel" class="detail-section suggestions-panel" aria-label="Suggestions locales" hidden>
             <div class="section-heading">
               <h3>Suggestions locales</h3>
@@ -168,16 +195,6 @@
               Appliquer le dossier suggéré
             </button>
             <button id="apply-suggestions-empty" type="button" disabled>Appliquer aux champs vides</button>
-          </section>
-
-          <section
-            id="suggestion-v2-panel"
-            class="detail-section suggestion-v2-panel"
-            aria-label="Suggestion v2 expérimentale"
-            hidden
-          >
-            <h3>Suggestion v2 expérimentale</h3>
-            <div id="suggestion-v2-details" class="suggestion-v2-details">Suggestion v2 en attente.</div>
           </section>
 
           <section id="rules-panel" class="detail-section rules-panel" aria-label="Règles de suggestion">
@@ -284,7 +301,8 @@
             </div>
           </section>
 
-          <section id="ocr-panel" class="detail-section ocr-panel" aria-label="OCR local">
+          <details id="ocr-panel" class="detail-section ocr-panel advanced-settings-panel" aria-label="Réglages OCR avancés">
+            <summary>Réglages OCR avancés</summary>
             <div class="section-heading">
               <h3>OCR local</h3>
               <button id="refresh-ocr-status" type="button">Rafraîchir</button>
@@ -329,9 +347,10 @@
               </div>
               <button id="future-document-ocr" type="button" disabled>OCR document prévu au lot suivant</button>
             </form>
-          </section>
+          </details>
 
-          <section id="ai-panel" class="detail-section ai-panel" aria-label="IA locale">
+          <details id="ai-panel" class="detail-section ai-panel advanced-settings-panel" aria-label="Réglages IA avancés">
+            <summary>Réglages IA avancés</summary>
             <div class="section-heading">
               <h3>IA locale</h3>
               <button id="refresh-ai-status" type="button">Rafraîchir</button>
@@ -385,7 +404,7 @@
               </button>
               <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer</button>
             </div>
-          </section>
+          </details>
 
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
             <div class="section-heading">
@@ -457,7 +476,8 @@
             <section id="classification-summary" class="classification-summary" aria-live="polite" hidden></section>
           </section>
 
-          <section class="detail-section history-panel" aria-label="Historique récent">
+          <details class="detail-section history-panel" aria-label="Historique récent">
+            <summary>Historique récent</summary>
             <div class="section-heading">
               <h3>Historique récent</h3>
               <div class="history-actions">
@@ -467,7 +487,7 @@
             </div>
             <div id="history-state" class="history-state">Lecture du journal...</div>
             <ol id="history-list" class="history-list"></ol>
-          </section>
+          </details>
         </div>
       </aside>
     </main>

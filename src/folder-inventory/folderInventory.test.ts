@@ -102,6 +102,34 @@ describe("folder placement ranking", () => {
     expect(ranking.recommended.reasons.join(" ")).toContain("Domaine");
   });
 
+  it("prefers the real accented Captur folder over a theoretical deeper path", () => {
+    const ranking = rankFolderPlacementCandidates({
+      draft: createDraft({
+        target: "renault-captur",
+        documentType: "facture-entretien",
+        detail: "entretien"
+      }),
+      evidenceText: "T01-Facture Renault Captur vidange",
+      competingRelativePaths: ["Vehicules/Renault-Captur/Entretien"],
+      inventory: {
+        warnings: [],
+        items: [
+          {
+            relativePath: "Véhicules/Captur",
+            depth: 2,
+            childFolderCount: 0,
+            fileCount: 3,
+            sampleFileNames: ["2024-03-05_captur_facture-entretien_renault_vidange.pdf"]
+          }
+        ]
+      }
+    });
+
+    expect(ranking.recommended.relativePath).toBe("Véhicules/Captur");
+    expect(ranking.recommended.reasons.join(" ")).toContain("Dossier existant correspondant à Captur");
+    expect(ranking.warnings.join(" ")).toContain("dossier existant préféré");
+  });
+
   it("falls back to Divers/A-traiter-manuellement when no folder is relevant", () => {
     const ranking = rankFolderPlacementCandidates({
       draft: createDraft({ documentType: "facture-entretien" }),

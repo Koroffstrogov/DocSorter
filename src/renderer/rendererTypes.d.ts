@@ -343,6 +343,7 @@ interface NamingSuggestionsState {
 }
 
 type SuggestionV2Status = "idle" | "loading" | "ready" | "error";
+type SuggestionV2DiagnosticStatus = "idle" | "running" | "ready" | "error";
 type SuggestionV2MissingField = "dateToken" | "target" | "documentType";
 type SuggestionV2TextSource = "pdf-native" | "tesseract-cli";
 
@@ -359,6 +360,19 @@ interface RendererSuggestionDraftV2 {
   detail?: string;
   proposedName?: string;
   dateSelection?: unknown;
+  semanticDeduplication?: {
+    changed: boolean;
+    removedTerms: string[];
+    before: {
+      issuer?: string;
+      detail?: string;
+    };
+    after: {
+      issuer?: string;
+      detail?: string;
+    };
+    reasons: string[];
+  };
   confidence: number;
   reasons: string[];
   warnings: string[];
@@ -392,6 +406,7 @@ interface RendererTargetFolderSuggestionV2 {
 
 interface RendererSuggestionV2FolderPlacement {
   relativePath: string;
+  score: number;
   confidence: number;
   exists: boolean;
   source: "inventory" | "fallback";
@@ -420,6 +435,7 @@ interface RendererSuggestionV2DocumentSuggestion {
   draft: RendererSuggestionDraftV2;
   targetFolderSuggestion: RendererTargetFolderSuggestionV2;
   folderPlacement: RendererSuggestionV2FolderPlacement | null;
+  folderPlacementCandidates: RendererSuggestionV2FolderPlacement[];
   folderNamingProfile: RendererSuggestionV2FolderNamingProfile | null;
   missingFields: SuggestionV2MissingField[];
   referenceDataWarnings: string[];
@@ -432,10 +448,20 @@ interface RendererSuggestionV2Error {
   message: string;
 }
 
+interface RendererSuggestionV2DiagnosticResult {
+  mode: "diagnosticComplet" | "diagnosticExpurge";
+  diagnosticPath: string;
+  documentName: string;
+  message: string;
+}
+
 interface SuggestionV2DocumentState {
   status: SuggestionV2Status;
   result: RendererSuggestionV2DocumentSuggestion | null;
   error: RendererSuggestionV2Error | null;
+  diagnosticStatus: SuggestionV2DiagnosticStatus;
+  diagnosticResult: RendererSuggestionV2DiagnosticResult | null;
+  diagnosticError: RendererSuggestionV2Error | null;
 }
 
 interface SuggestionV2State {

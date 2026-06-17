@@ -55,6 +55,7 @@ export interface RankFolderPlacementInput {
   inventory: FolderInventory;
   evidenceText?: string;
   folderAliases?: string[];
+  competingRelativePaths?: string[];
   fallbackPath?: string;
 }
 

@@ -282,6 +282,36 @@ function setTextExtractionState(filePath: string, value: TextExtractionDocumentS
   };
 }
 
+function updateExtractedTextForDocument(documentItem: DocumentItem, text: string): void {
+  const extractionState = getTextExtractionState(documentItem.filePath);
+  if (extractionState.status !== "text-found" || !extractionState.result) {
+    return;
+  }
+
+  const editedText = text;
+  setTextExtractionState(documentItem.filePath, {
+    status: "text-found",
+    result: {
+      ...extractionState.result,
+      text: editedText,
+      excerpt: editedText,
+      characterCount: editedText.length,
+      excerptCharacterCount: editedText.length,
+      truncated: false,
+      fromCache: false,
+      cachedSuggestions: null
+    },
+    error: null
+  });
+
+  clearNamingSuggestionStateForDocument(documentItem.filePath);
+  clearSuggestionV2StateForDocument(documentItem.filePath);
+  resetAiSuggestionState();
+  renderNamingSuggestionsPanel();
+  renderSuggestionV2Panel();
+  renderAiPanel();
+}
+
 function textExtractionQueueLabel(documentItem: DocumentItem): string | null {
   return textExtractionPanel.getQueueLabel(documentItem);
 }

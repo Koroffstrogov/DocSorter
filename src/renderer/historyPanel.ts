@@ -6,6 +6,7 @@ interface HistoryPanelOptions {
   root?: ParentNode;
   getState: () => HistoryPanelState;
   formatDate: (value: string) => string;
+  maxEntries?: number;
 }
 
 interface HistoryPanelApi {
@@ -58,9 +59,13 @@ var DocSorterHistoryPanel: HistoryPanelFactoryApi;
         return;
       }
 
-      elements.state.hidden = true;
+      const visibleEntries = history.entries.slice(0, options.maxEntries ?? history.entries.length);
+      elements.state.hidden = history.entries.length <= visibleEntries.length;
       elements.state.replaceChildren();
-      elements.list.replaceChildren(...history.entries.map(createHistoryItem));
+      if (history.entries.length > visibleEntries.length) {
+        elements.state.replaceChildren(`${visibleEntries.length} dernières actions affichées.`);
+      }
+      elements.list.replaceChildren(...visibleEntries.map(createHistoryItem));
     }
 
     function createHistoryItem(entry: ActionJournalEntry): HTMLLIElement {
