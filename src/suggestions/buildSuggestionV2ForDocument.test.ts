@@ -54,6 +54,7 @@ describe("buildSuggestionV2ForDocument", () => {
       issuer: "renault"
     });
     expect(result.value.targetFolderSuggestion.recommended?.relativePath).toBe("Vehicules/Captur");
+    expect(result.value.folderPlacement).toBeNull();
     expect(result.value.missingFields).toEqual([]);
     expect(result.value.builtAt).toBe("2026-06-17T10:00:00.000Z");
   });
@@ -88,6 +89,95 @@ describe("buildSuggestionV2ForDocument", () => {
     expect(result.value.draft.proposedName).toBeUndefined();
     expect(result.value.missingFields).toContain("target");
     expect(result.value.referenceDataWarnings.length).toBeGreaterThan(0);
+  });
+
+  it("uses the existing target tree as a read-only placement signal", async () => {
+    const workspace = await createWorkspace();
+    const targetRootPath = path.join(workspace.root, "target");
+    await mkdir(path.join(targetRootPath, "Vehicules", "Captur"), { recursive: true });
+    await writeFile(
+      path.join(targetRootPath, "Vehicules", "Captur", "2024-03_captur_facture-entretien_renault.pdf"),
+      "classe",
+      "utf8"
+    );
+    const documentPath = path.join(workspace.sourcePath, "scan_renault_captur.pdf");
+
+    const result = await buildSuggestionV2ForDocument({
+      documentPath,
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Facture Renault Captur vidange du 05/03/2024"
+      },
+      legacyDraft: null,
+      queuedDocuments: [{ filePath: documentPath, name: "scan_renault_captur.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      userDataPath: workspace.userDataPath,
+      targetRootPath
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.draft.documentType).toBe("facture-entretien");
+    expect(result.value.targetFolderSuggestion.recommended?.relativePath).toBe("Vehicules/Captur");
+    expect(result.value.folderPlacement).toMatchObject({
+      relativePath: "Vehicules/Captur",
+      exists: true,
+      source: "inventory"
+    });
+    expect(result.value.targetFolderSuggestion.reasons.join(" ")).toContain(
+      "Dossier existant retenu"
+    );
+  });
+
+  it("exposes a monthly naming profile from the recommended folder", async () => {
+    const workspace = await createWorkspace();
+    const targetRootPath = path.join(workspace.root, "target");
+    await mkdir(path.join(targetRootPath, "Finances", "Banque", "2026"), { recursive: true });
+    await writeFile(
+      path.join(targetRootPath, "Finances", "Banque", "2026", "2026-03_compte-joint_releve-bancaire_bnp.pdf"),
+      "classe",
+      "utf8"
+    );
+    await writeFile(
+      path.join(targetRootPath, "Finances", "Banque", "2026", "2026-04_compte-joint_releve-bancaire_bnp.pdf"),
+      "classe",
+      "utf8"
+    );
+    const documentPath = path.join(workspace.sourcePath, "document.pdf");
+
+    const result = await buildSuggestionV2ForDocument({
+      documentPath,
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Relevé bancaire BNP Paribas juin 2026"
+      },
+      legacyDraft: {
+        documentDate: "2026-06-15",
+        subject: "compte-joint",
+        documentType: "releve-bancaire",
+        keywords: "bnp"
+      },
+      queuedDocuments: [{ filePath: documentPath, name: "document.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      userDataPath: workspace.userDataPath,
+      targetRootPath
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.targetFolderSuggestion.recommended?.relativePath).toBe("Finances/Banque/2026");
+    expect(result.value.folderNamingProfile).toMatchObject({
+      status: "detected",
+      conventionExample: "AAAA-MM_compte-joint_releve-bancaire_bnp.pdf",
+      dominantDatePrecision: "month"
+    });
+    expect(result.value.draft.proposedName).toBe("2026-06_compte-joint_releve-bancaire_bnp.pdf");
   });
 
   it("refuses a document outside the last scanned queue", async () => {

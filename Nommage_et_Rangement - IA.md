@@ -15,9 +15,9 @@ Point important : l'application ne classe jamais automatiquement un document. Le
 DocSorter contient aujourd'hui deux niveaux de logique :
 
 - le flux applicatif actuel, branché à l'interface, qui utilise encore les champs historiques `Date documentaire`, `Sujet`, `Type` et `Mots-clés` ;
-- les briques pures de nommage v2, préparées pour un futur branchement UI, qui utilisent `dateToken`, `target`, `documentType`, `issuer` et `detail`.
+- les briques de nommage v2, affichées dans l'interface en lecture seule, qui utilisent `dateToken`, `target`, `documentType`, `issuer` et `detail`.
 
-Les briques v2 sont testées localement mais ne déclenchent encore aucun classement réel dans l'interface.
+Les briques v2 sont testées localement et visibles dans le bloc `Suggestion v2 expérimentale`. Elles ne remplacent pas le flux historique et ne déclenchent aucun classement réel.
 
 ## Résumé Du Flux
 
@@ -184,25 +184,68 @@ Ces référentiels sont distincts :
 - du cache d'analyse ;
 - du classement réel.
 
-Emplacement prévu :
+## Stockage Des Référentiels
+
+Les référentiels sont stockés localement hors du dépôt Git et hors du NAS.
+
+La racine utilisée par l'application est le dossier `userData` d'Electron :
 
 ```text
 app.getPath("userData")/config/reference-data/
 ```
 
-Fichiers prévus :
+Sur Windows, ce dossier dépend de l'utilisateur et du nom de l'application. Il se trouve généralement sous `%APPDATA%`. Le chemin exact n'est pas codé en dur : il est demandé à Electron au moment de l'exécution.
+
+Arborescence attendue :
 
 ```text
-entities/people.json
-entities/vehicles.json
-entities/properties.json
-entities/providers.json
-document-types.json
+config/
+  reference-data/
+    entities/
+      people.json
+      vehicles.json
+      properties.json
+      providers.json
+    document-types.json
 ```
 
-Le loader ne crée pas automatiquement ces fichiers. Les entités absentes donnent des listes vides. Les types documentaires disposent de valeurs par défaut embarquées.
+Ces fichiers sont des tableaux JSON simples, pas un gros fichier global.
 
-Exemple véhicule :
+Exemple :
+
+```json
+[
+  {
+    "id": "captur",
+    "label": "Renault Captur",
+    "fileAlias": "captur",
+    "folderAlias": "Vehicules/Captur",
+    "aliases": ["renault captur", "captur"]
+  }
+]
+```
+
+Le loader est en lecture seule :
+
+- il ne crée pas automatiquement le dossier `reference-data` ;
+- il ne crée pas automatiquement les fichiers JSON ;
+- il ne modifie jamais les référentiels ;
+- il ne synchronise rien vers un serveur ;
+- il ne lit pas ces données depuis le NAS.
+
+Comportement si un fichier est absent :
+
+- `people.json`, `vehicles.json`, `properties.json`, `providers.json` absents : listes vides ;
+- `document-types.json` absent : types documentaires par défaut embarqués dans `src/reference-data/defaultDocumentTypes.ts` ;
+- fichier JSON invalide, structure invalide ou erreur de lecture : chargement bloqué avec erreur sobre.
+
+Le fichier `document-types.json` utilisateur complète ou remplace les types par défaut par `id`. Si un type utilisateur possède le même `id` qu'un type embarqué, l'entrée utilisateur prend la priorité après validation.
+
+## Format Des Entités
+
+Les fichiers `people.json`, `vehicles.json`, `properties.json` et `providers.json` contiennent chacun un tableau d'entrées.
+
+Champs communs pour personnes, véhicules et biens :
 
 ```json
 {
@@ -210,8 +253,128 @@ Exemple véhicule :
   "label": "Renault Captur",
   "fileAlias": "captur",
   "folderAlias": "Vehicules/Captur",
-  "aliases": ["renault captur", "captur"]
+  "aliases": ["renault captur", "captur"],
+  "enabled": true
 }
+```
+
+Rôle des champs :
+
+- `id` : identifiant stable en kebab-case ;
+- `label` : libellé lisible pour l'utilisateur ;
+- `fileAlias` : valeur contrôlée pouvant alimenter le nom v2 ;
+- `folderAlias` : segment ou chemin relatif utilisable pour un dossier, si pertinent ;
+- `aliases` : mots ou expressions recherchés dans le nom du fichier et le texte extrait ;
+- `enabled` : optionnel, `false` désactive l'entrée sans la supprimer.
+
+Les fournisseurs et organismes n'ont pas de `folderAlias`. Ils peuvent avoir des domaines :
+
+```json
+{
+  "id": "bnp",
+  "label": "BNP Paribas",
+  "fileAlias": "bnp",
+  "aliases": ["bnp", "bnp paribas"],
+  "domains": ["bnpparibas.net"],
+  "enabled": true
+}
+```
+
+Les domaines servent uniquement d'indice de détection quand ils apparaissent dans le texte. Ils doivent être stockés sans protocole et sans chemin.
+
+## Format Des Personnes
+
+Les personnes peuvent ajouter une date de naissance :
+
+```json
+{
+  "id": "lea",
+  "label": "Léa",
+  "fileAlias": "lea",
+  "folderAlias": "Scolarite/Lea",
+  "aliases": ["léa", "lea"],
+  "birthDate": "2012-06-16",
+  "useBirthDateForDetectionOnly": true
+}
+```
+
+Règle stricte : `birthDate` sert uniquement d'indice de détection. Elle ne doit jamais être injectée dans :
+
+- `fileAlias` ;
+- `folderAlias` ;
+- `target` ;
+- `issuer` ;
+- `documentType` ;
+- `detail` ;
+- un nom de fichier ;
+- un sous-dossier.
+
+Même si `16/06/2012` est détecté, le nom peut utiliser `lea`, jamais la date de naissance.
+
+## Format Des Types Documentaires
+
+Le fichier `document-types.json` contient un tableau de types documentaires.
+
+Exemple :
+
+```json
+[
+  {
+    "id": "avis-imposition",
+    "label": "Avis d'imposition",
+    "fileAlias": "avis-imposition",
+    "aliases": ["avis d'imposition", "avis imposition", "impots"],
+    "domain": "fiscal",
+    "defaultTargetKind": "foyer",
+    "defaultDateRule": "period-year",
+    "enabled": true
+  }
+]
+```
+
+Rôle des champs :
+
+- `id` : identifiant stable en kebab-case ;
+- `label` : libellé lisible ;
+- `fileAlias` : valeur contrôlée injectée dans le bloc `documentType` du nom v2 ;
+- `aliases` : expressions recherchées dans le nom et le texte ;
+- `domain` : domaine métier indicatif ;
+- `defaultTargetKind` : cible attendue par défaut, par exemple `person`, `vehicle`, `property` ou `foyer` ;
+- `defaultDateRule` : aide le moteur de dates, par exemple `document-date`, `period-year` ou `unknown-ok` ;
+- `enabled` : optionnel, `false` désactive le type.
+
+## Validation Des Référentiels
+
+Avant usage, chaque fichier est validé.
+
+DocSorter refuse notamment :
+
+- un JSON invalide ;
+- une structure qui n'est pas un tableau ;
+- un `id` absent ou mal formé ;
+- un doublon d'`id` dans une même famille ;
+- un `fileAlias` inutilisable pour le nommage v2 ;
+- un `folderAlias` qui ne respecte pas les règles de sous-dossier relatif ;
+- une entrée active sans alias ;
+- une date de naissance hors format `AAAA-MM-JJ` ;
+- un domaine avec protocole, chemin ou casse non normalisée.
+
+Les erreurs restent sobres : elles mentionnent le fichier, la catégorie, l'index ou l'identifiant et le champ concerné. Elles ne recopient pas le contenu complet d'un document personnel.
+
+## Exemples De Référentiels
+
+Exemple véhicule dans `entities/vehicles.json` :
+
+```json
+[
+  {
+    "id": "captur",
+    "label": "Renault Captur",
+    "fileAlias": "captur",
+    "folderAlias": "Vehicules/Captur",
+    "aliases": ["renault captur", "captur"]
+  }
+]
 ```
 
 Si le texte contient `Renault Captur`, le référentiel peut proposer :
@@ -220,20 +383,21 @@ Si le texte contient `Renault Captur`, le référentiel peut proposer :
 target = captur
 ```
 
-Exemple personne :
+Exemple personne dans `entities/people.json` :
 
 ```json
-{
-  "id": "lea",
-  "label": "Léa",
-  "fileAlias": "lea",
-  "aliases": ["Léa"],
-  "birthDate": "2012-06-16",
-  "useBirthDateForDetectionOnly": true
-}
+[
+  {
+    "id": "lea",
+    "label": "Léa",
+    "fileAlias": "lea",
+    "folderAlias": "Scolarite/Lea",
+    "aliases": ["léa", "lea"],
+    "birthDate": "2012-06-16",
+    "useBirthDateForDetectionOnly": true
+  }
+]
 ```
-
-Même si `16/06/2012` est détecté, le nom peut utiliser `lea`, jamais la date de naissance.
 
 ## Brouillon De Suggestion V2
 

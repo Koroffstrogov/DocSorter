@@ -6,6 +6,7 @@ import {
   type GenerateDocumentNameV2Options,
   type NamingInputV2
 } from "../naming/documentNameV2";
+import { dedupeNamingInputV2Semantic } from "../naming/semanticNameDeduper";
 import { buildSelectedDateToken } from "../dates/dateCandidateSelector";
 import { isNamingDraft, type NamingDraft } from "../naming/namingDraft";
 import { detectReferenceCandidates } from "../reference-data/referenceDataMatcher";
@@ -72,6 +73,7 @@ export function buildSuggestionDraftV2(input: BuildSuggestionDraftV2Input): Sugg
   applyReferenceFields(draft, referenceData, confidenceParts);
   applyLegacyFallbackFields(draft, legacyDraft, confidenceParts);
   applyDateToken(draft, input, legacyDraft, confidenceParts);
+  applySemanticNameDeduplication(draft);
 
   const generation = generateProposedNameFromSuggestionDraft(draft, resolveExtension(input), {
     targetDirectoryPath: input.targetDirectoryPath
@@ -281,6 +283,35 @@ function applyLegacyField(
   draft.source[field] = "legacy";
   confidenceParts.push(50);
   draft.reasons.push("Champ repris du brouillon existant.");
+}
+
+function applySemanticNameDeduplication(draft: SuggestionDraftV2): void {
+  const result = dedupeNamingInputV2Semantic({
+    dateToken: draft.dateToken ?? "",
+    target: draft.target ?? "",
+    documentType: draft.documentType ?? "",
+    ...(draft.issuer ? { issuer: draft.issuer } : {}),
+    ...(draft.detail ? { detail: draft.detail } : {}),
+    extension: ""
+  });
+
+  if (!result.changed) {
+    return;
+  }
+
+  if (result.input.issuer) {
+    draft.issuer = result.input.issuer;
+  } else {
+    delete draft.issuer;
+  }
+
+  if (result.input.detail) {
+    draft.detail = result.input.detail;
+  } else {
+    delete draft.detail;
+  }
+
+  draft.reasons.push(...result.reasons);
 }
 
 function resolveReferenceData(

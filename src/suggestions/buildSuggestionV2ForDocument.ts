@@ -1,10 +1,23 @@
 import path from "node:path";
 
+import { buildFolderInventory } from "../folder-inventory/folderInventory";
+import { analyzeFolderNamingProfile, alignNamingInputWithFolderProfile } from "../folder-inventory/namingProfile";
+import { rankFolderPlacementCandidates } from "../folder-inventory/placementRanker";
+import type {
+  FolderInventory,
+  FolderNamingProfile,
+  FolderPlacementRanking
+} from "../folder-inventory/folderInventoryTypes";
 import { buildTargetFolderSuggestionsV2 } from "../folders/buildTargetFolderSuggestionsV2";
-import type { TargetFolderSuggestionV2 } from "../folders/folderSuggestionTypes";
+import type { TargetFolderSuggestionV2, UserFolderPreference } from "../folders/folderSuggestionTypes";
+import { generateDocumentNameV2 } from "../naming/documentNameV2";
 import type { DuplicateSourceDocument } from "../duplicates/exactDuplicates";
 import { loadReferenceDataCatalog } from "../reference-data/referenceDataLoader";
-import { buildSuggestionDraftV2 } from "./buildSuggestionDraftV2";
+import type { ReferenceDataCatalog } from "../reference-data/referenceDataTypes";
+import {
+  buildNamingInputV2FromSuggestionDraft,
+  buildSuggestionDraftV2
+} from "./buildSuggestionDraftV2";
 import type { SuggestionDraftV2 } from "./suggestionDraftV2";
 
 export type SuggestionV2TextSource = "pdf-native" | "tesseract-cli";
@@ -20,10 +33,35 @@ export interface SuggestionV2DocumentSuggestion {
   extension: string;
   draft: SuggestionDraftV2;
   targetFolderSuggestion: TargetFolderSuggestionV2;
+  folderPlacement: SuggestionV2FolderPlacementSummary | null;
+  folderNamingProfile: SuggestionV2FolderNamingProfileSummary | null;
   missingFields: SuggestionV2MissingField[];
   referenceDataWarnings: string[];
   builtAt: string;
   message: string;
+}
+
+export interface SuggestionV2FolderPlacementSummary {
+  relativePath: string;
+  confidence: number;
+  exists: boolean;
+  source: "inventory" | "fallback";
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface SuggestionV2FolderNamingProfileSummary {
+  status: "detected" | "not-detected";
+  conventionExample?: string;
+  confidence: number;
+  analyzedFileCount: number;
+  v2FileCount: number;
+  reasons: string[];
+  warnings: string[];
+  dominantDatePrecision?: "day" | "month" | "year" | "unknown";
+  dominantTarget?: string;
+  dominantDocumentType?: string;
+  dominantIssuer?: string;
 }
 
 export type SuggestionV2MissingField = "dateToken" | "target" | "documentType";
@@ -54,6 +92,7 @@ export interface BuildSuggestionV2ForDocumentOptions {
   queuedDocuments: Iterable<DuplicateSourceDocument>;
   queuedDocumentPaths: Iterable<string>;
   userDataPath: string;
+  targetRootPath?: string | null;
   knownRelativeFolders?: string[];
   now?: () => Date;
 }
@@ -102,6 +141,7 @@ export async function buildSuggestionV2ForDocument(
     }
 
     const text = limitTextContext(options.textContext);
+    const inventory = await loadTargetInventory(options.targetRootPath);
     const draft = buildSuggestionDraftV2({
       fileName: documentItem.name,
       extension: path.extname(documentItem.name).toLowerCase(),
@@ -110,19 +150,34 @@ export async function buildSuggestionV2ForDocument(
       legacyDraft: options.legacyDraft,
       referenceData: referenceData.catalog
     });
+    const placementRanking = inventory
+      ? rankFolderPlacementCandidates({
+          draft,
+          inventory,
+          evidenceText: [documentItem.name, text?.excerpt].filter(Boolean).join("\n"),
+          folderAliases: getFolderAliasesForDraft(draft, referenceData.catalog)
+        })
+      : null;
+    const documentExtension = path.extname(documentItem.name).toLowerCase();
+    const folderNamingProfile = applyNamingProfile(draft, documentExtension, placementRanking);
+
     const targetFolderSuggestion = buildTargetFolderSuggestionsV2({
       draft,
-      knownRelativeFolders: options.knownRelativeFolders ?? []
+      knownRelativeFolders: getKnownRelativeFolders(options.knownRelativeFolders ?? [], inventory),
+      userFolderPreferences: createPlacementPreferences(draft, placementRanking)
     });
+    mergeFolderPlacementContext(targetFolderSuggestion, placementRanking, inventory);
 
     return {
       ok: true,
       value: {
         status: "ready",
         documentName: documentItem.name,
-        extension: path.extname(documentItem.name).toLowerCase(),
+        extension: documentExtension,
         draft,
         targetFolderSuggestion,
+        folderPlacement: placementRanking ? createFolderPlacementSummary(placementRanking) : null,
+        folderNamingProfile,
         missingFields: getMissingFields(draft),
         referenceDataWarnings: referenceData.warnings,
         builtAt: (options.now ?? (() => new Date()))().toISOString(),
@@ -140,6 +195,196 @@ export async function buildSuggestionV2ForDocument(
       }
     };
   }
+}
+
+async function loadTargetInventory(
+  targetRootPath: string | null | undefined
+): Promise<FolderInventory | null> {
+  if (!targetRootPath) {
+    return null;
+  }
+
+  const result = await buildFolderInventory({
+    rootPath: targetRootPath,
+    maxDepth: 3,
+    sampleFileLimit: 30
+  });
+
+  if (!result.ok) {
+    return {
+      items: [],
+      warnings: [result.error.message]
+    };
+  }
+
+  return result.inventory;
+}
+
+function getKnownRelativeFolders(
+  knownRelativeFolders: string[],
+  inventory: FolderInventory | null
+): string[] {
+  return uniqueStrings([
+    ...knownRelativeFolders,
+    ...(inventory?.items.map((item) => item.relativePath) ?? [])
+  ]).sort((left, right) => left.localeCompare(right, "fr", { sensitivity: "base" }));
+}
+
+function createPlacementPreferences(
+  draft: SuggestionDraftV2,
+  placement: FolderPlacementRanking | null
+): UserFolderPreference[] {
+  if (!placement?.recommended.relativePath) {
+    return [];
+  }
+
+  const keys = [
+    draft.documentType ? `documentType:${draft.documentType}` : "",
+    draft.target ? `target:${draft.target}` : "",
+    draft.documentType && draft.target ? `documentType:${draft.documentType}|target:${draft.target}` : ""
+  ].filter(Boolean);
+
+  return keys.map((matchKey) => ({
+    matchKey,
+    preferredRelativePath: placement.recommended.relativePath
+  }));
+}
+
+function mergeFolderPlacementContext(
+  targetFolderSuggestion: TargetFolderSuggestionV2,
+  placement: FolderPlacementRanking | null,
+  inventory: FolderInventory | null
+): void {
+  targetFolderSuggestion.warnings = uniqueStrings([
+    ...targetFolderSuggestion.warnings,
+    ...(inventory?.warnings ?? []),
+    ...(placement?.warnings ?? []),
+    ...(placement?.recommended.warnings ?? [])
+  ]);
+  targetFolderSuggestion.reasons = uniqueStrings([
+    ...targetFolderSuggestion.reasons,
+    ...(placement?.reasons ?? []),
+    ...(placement?.recommended.reasons ?? [])
+  ]);
+}
+
+function applyNamingProfile(
+  draft: SuggestionDraftV2,
+  extension: string,
+  placement: FolderPlacementRanking | null
+): SuggestionV2FolderNamingProfileSummary | null {
+  const item = placement?.recommended.item;
+  if (!item) {
+    return null;
+  }
+
+  const profile = analyzeFolderNamingProfile(item);
+  draft.reasons.push(...profile.reasons);
+  draft.warnings.push(...profile.warnings);
+
+  const namingInput = buildNamingInputV2FromSuggestionDraft(draft, extension);
+  if (!namingInput) {
+    return createFolderNamingProfileSummary(profile, extension, []);
+  }
+
+  const alignment = alignNamingInputWithFolderProfile(namingInput, profile);
+  draft.reasons.push(...alignment.reasons);
+  draft.warnings.push(...alignment.warnings);
+
+  if (alignment.changed) {
+    draft.dateToken = alignment.input.dateToken;
+    const generation = generateDocumentNameV2(alignment.input);
+    draft.namingMessages = generation.messages;
+    if (generation.isValid) {
+      draft.proposedName = generation.filename;
+    }
+  }
+
+  return createFolderNamingProfileSummary(profile, extension, alignment.warnings);
+}
+
+function createFolderPlacementSummary(
+  placement: FolderPlacementRanking
+): SuggestionV2FolderPlacementSummary {
+  const recommended = placement.recommended;
+  return {
+    relativePath: recommended.relativePath,
+    confidence: recommended.confidence,
+    exists: recommended.exists,
+    source: recommended.source,
+    reasons: uniqueStrings([...placement.reasons, ...recommended.reasons]),
+    warnings: uniqueStrings([...placement.warnings, ...recommended.warnings])
+  };
+}
+
+function createFolderNamingProfileSummary(
+  profile: FolderNamingProfile,
+  extension: string,
+  alignmentWarnings: string[]
+): SuggestionV2FolderNamingProfileSummary {
+  const detected = profile.v2FileCount > 0 && Boolean(
+    profile.dominantDatePrecision ||
+      profile.dominantTarget ||
+      profile.dominantDocumentType ||
+      profile.dominantIssuer
+  );
+
+  return {
+    status: detected ? "detected" : "not-detected",
+    ...(detected ? { conventionExample: createConventionExample(profile, extension) } : {}),
+    confidence: profile.confidence,
+    analyzedFileCount: profile.analyzedFileCount,
+    v2FileCount: profile.v2FileCount,
+    reasons: profile.reasons,
+    warnings: uniqueStrings([...profile.warnings, ...alignmentWarnings]),
+    ...(profile.dominantDatePrecision ? { dominantDatePrecision: profile.dominantDatePrecision } : {}),
+    ...(profile.dominantTarget ? { dominantTarget: profile.dominantTarget } : {}),
+    ...(profile.dominantDocumentType ? { dominantDocumentType: profile.dominantDocumentType } : {}),
+    ...(profile.dominantIssuer ? { dominantIssuer: profile.dominantIssuer } : {})
+  };
+}
+
+function createConventionExample(profile: FolderNamingProfile, extension: string): string {
+  const blocks = [
+    datePrecisionExample(profile.dominantDatePrecision),
+    profile.dominantTarget ?? "cible",
+    profile.dominantDocumentType ?? "type-document",
+    profile.dominantIssuer
+  ].filter(Boolean);
+
+  return `${blocks.join("_")}${extension || ".pdf"}`;
+}
+
+function datePrecisionExample(precision: FolderNamingProfile["dominantDatePrecision"]): string {
+  switch (precision) {
+    case "day":
+      return "AAAA-MM-JJ";
+    case "month":
+      return "AAAA-MM";
+    case "year":
+      return "AAAA";
+    case "unknown":
+    default:
+      return "DATE";
+  }
+}
+
+function getFolderAliasesForDraft(
+  draft: SuggestionDraftV2,
+  catalog: ReferenceDataCatalog
+): string[] {
+  const target = draft.target?.trim().toLowerCase();
+  if (!target) {
+    return [];
+  }
+
+  return [
+    ...catalog.people,
+    ...catalog.vehicles,
+    ...catalog.properties
+  ]
+    .filter((entry) => entry.fileAlias.trim().toLowerCase() === target && entry.folderAlias)
+    .map((entry) => entry.folderAlias as string);
 }
 
 function findQueuedDocument(
@@ -198,4 +443,8 @@ function getMissingFields(draft: SuggestionDraftV2): SuggestionV2MissingField[] 
   }
 
   return missing;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
 }

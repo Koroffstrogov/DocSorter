@@ -941,6 +941,12 @@ h2 {
   font-size: 11px;
 }
 
+.suggestion-v2-folder small,
+.suggestion-v2-profile small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .suggestion-v2-grid {
   display: grid;
   gap: 7px;
@@ -967,13 +973,15 @@ h2 {
 }
 
 .suggestion-v2-depth-options,
-.suggestion-v2-list {
+.suggestion-v2-list,
+.suggestion-v2-profile {
   display: grid;
   gap: 5px;
 }
 
 .suggestion-v2-depth-options ul,
-.suggestion-v2-list ul {
+.suggestion-v2-list ul,
+.suggestion-v2-profile ul {
   display: grid;
   gap: 5px;
   margin: 0;
@@ -1003,7 +1011,18 @@ h2 {
   color: var(--ink);
 }
 
-.suggestion-v2-list li {
+.suggestion-v2-profile strong {
+  color: var(--ink);
+}
+
+.suggestion-v2-profile p {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.suggestion-v2-list li,
+.suggestion-v2-profile li {
   color: var(--muted);
 }
 

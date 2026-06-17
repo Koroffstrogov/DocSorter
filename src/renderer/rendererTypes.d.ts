@@ -390,12 +390,37 @@ interface RendererTargetFolderSuggestionV2 {
   reasons: string[];
 }
 
+interface RendererSuggestionV2FolderPlacement {
+  relativePath: string;
+  confidence: number;
+  exists: boolean;
+  source: "inventory" | "fallback";
+  reasons: string[];
+  warnings: string[];
+}
+
+interface RendererSuggestionV2FolderNamingProfile {
+  status: "detected" | "not-detected";
+  conventionExample?: string;
+  confidence: number;
+  analyzedFileCount: number;
+  v2FileCount: number;
+  reasons: string[];
+  warnings: string[];
+  dominantDatePrecision?: "day" | "month" | "year" | "unknown";
+  dominantTarget?: string;
+  dominantDocumentType?: string;
+  dominantIssuer?: string;
+}
+
 interface RendererSuggestionV2DocumentSuggestion {
   status: "ready";
   documentName: string;
   extension: string;
   draft: RendererSuggestionDraftV2;
   targetFolderSuggestion: RendererTargetFolderSuggestionV2;
+  folderPlacement: RendererSuggestionV2FolderPlacement | null;
+  folderNamingProfile: RendererSuggestionV2FolderNamingProfile | null;
   missingFields: SuggestionV2MissingField[];
   referenceDataWarnings: string[];
   builtAt: string;

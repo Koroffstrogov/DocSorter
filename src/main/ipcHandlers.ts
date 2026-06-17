@@ -244,6 +244,7 @@ export interface IpcHandlerServices {
     queuedDocuments: Iterable<DuplicateSourceDocument>;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
+    targetRootPath: string | null | undefined;
     knownRelativeFolders: string[];
   }) => Promise<SuggestionV2Result>;
   loadMergedNamingRulesCatalog: (
@@ -796,6 +797,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         queuedDocuments: state.queuedDocuments,
         queuedDocumentPaths: state.queuedDocumentPaths,
         userDataPath: options.app.getPath("userData"),
+        targetRootPath: state.selectedTargetPath,
         knownRelativeFolders: await getKnownTargetFoldersForSuggestionV2(state, services)
       })
   );

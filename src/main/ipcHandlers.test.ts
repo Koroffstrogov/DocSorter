@@ -532,6 +532,7 @@ describe("registerIpcHandlers", () => {
       queuedDocuments: appState.queuedDocuments,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
+      targetRootPath: TARGET_PATH,
       knownRelativeFolders: [TARGET_FOLDER]
     });
     expect(services.extractTextFromPdfDocument).not.toHaveBeenCalled();
@@ -1035,6 +1036,15 @@ function createSuggestionV2Result(): SuggestionV2Result {
         warnings: [],
         reasons: ["Profondeur équilibrée recommandée."]
       },
+      folderPlacement: {
+        relativePath: TARGET_FOLDER,
+        confidence: 90,
+        exists: true,
+        source: "inventory",
+        reasons: ["Dossier existant retenu."],
+        warnings: []
+      },
+      folderNamingProfile: null,
       missingFields: [],
       referenceDataWarnings: [],
       builtAt: "2026-06-16T10:00:00.000Z",
