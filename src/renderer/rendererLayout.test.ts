@@ -54,6 +54,30 @@ describe("renderer right panel layout", () => {
     );
   });
 
+  it("exposes reference-data editing in a separate dialog", async () => {
+    const html = await readRendererHtml();
+
+    expect(html).toContain('id="open-reference-data"');
+    expect(html).toContain('id="reference-data-dialog"');
+    expect(html).toContain("Référentiels locaux");
+    expect(html).toContain("Créer les fichiers manquants");
+    expect(html).toContain("JSON direct");
+    expect(html).toContain('<script src="./referenceDataPanel.js"></script>');
+    expect(html).toContain('<script src="./rendererReferenceDataFlow.js"></script>');
+  });
+
+  it("keeps reference-data UI isolated from classification, OCR and AI actions", async () => {
+    const flow = await readFile(path.join(process.cwd(), "src", "renderer", "rendererReferenceDataFlow.ts"), "utf8");
+    const panel = await readFile(path.join(process.cwd(), "src", "renderer", "referenceDataPanel.ts"), "utf8");
+    const combined = `${flow}\n${panel}`;
+
+    expect(combined).not.toContain("executeClassification");
+    expect(combined).not.toContain("prepareClassificationPlan");
+    expect(combined).not.toContain("runOcr");
+    expect(combined).not.toContain("runAi");
+    expect(combined).not.toContain("extractTextFromActivePdf");
+  });
+
   it("keeps real classification labels unchanged", async () => {
     const html = await readRendererHtml();
 

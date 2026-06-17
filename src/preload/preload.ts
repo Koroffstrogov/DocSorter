@@ -48,7 +48,15 @@ const api: DocSorterApi = {
   getRulesStatus: () => ipcRenderer.invoke("rules:getStatus"),
   getUserRulesCatalog: () => ipcRenderer.invoke("rules:getUserCatalog"),
   saveUserRulesCatalog: (catalog) => ipcRenderer.invoke("rules:saveUserCatalog", catalog),
-  reloadNamingRules: () => ipcRenderer.invoke("rules:reload")
+  reloadNamingRules: () => ipcRenderer.invoke("rules:reload"),
+  getReferenceDataStatus: () => ipcRenderer.invoke("reference-data:getStatus"),
+  openReferenceDataFolder: () => ipcRenderer.invoke("reference-data:openFolder"),
+  createMissingReferenceDataFiles: () => ipcRenderer.invoke("reference-data:createMissing"),
+  validateReferenceDataFile: (fileKey, content) =>
+    ipcRenderer.invoke("reference-data:validateFile", fileKey, content),
+  saveReferenceDataFile: (fileKey, content) =>
+    ipcRenderer.invoke("reference-data:saveFile", fileKey, content),
+  reloadReferenceData: () => ipcRenderer.invoke("reference-data:reload")
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

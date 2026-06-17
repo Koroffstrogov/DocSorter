@@ -35,7 +35,13 @@ export const IPC_CHANNELS = {
   rulesGetStatus: "rules:getStatus",
   rulesGetUserCatalog: "rules:getUserCatalog",
   rulesSaveUserCatalog: "rules:saveUserCatalog",
-  rulesReload: "rules:reload"
+  rulesReload: "rules:reload",
+  referenceDataGetStatus: "reference-data:getStatus",
+  referenceDataOpenFolder: "reference-data:openFolder",
+  referenceDataCreateMissing: "reference-data:createMissing",
+  referenceDataValidateFile: "reference-data:validateFile",
+  referenceDataSaveFile: "reference-data:saveFile",
+  referenceDataReload: "reference-data:reload"
 } as const;
 
 export const ALLOWED_IPC_CHANNELS = Object.values(IPC_CHANNELS);

@@ -20,6 +20,7 @@ const state: AppState = {
   namingRules: createIdleNamingRulesState(),
   ocr: createIdleOcrState(),
   ai: createIdleAiState(),
+  referenceData: createIdleReferenceDataState(),
   shortcutsHelpVisible: false
 };
 
@@ -41,6 +42,7 @@ const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-so
 const refreshSourceButton = document.querySelector<HTMLButtonElement>("#refresh-source");
 const selectTargetButton = document.querySelector<HTMLButtonElement>("#select-target");
 const shortcutHelpToggleButton = document.querySelector<HTMLButtonElement>("#shortcut-help-toggle");
+const openReferenceDataButton = document.querySelector<HTMLButtonElement>("#open-reference-data");
 const shortcutHelpPanel = document.querySelector<HTMLElement>("#shortcut-help");
 const analyzeDuplicatesButton = document.querySelector<HTMLButtonElement>("#analyze-duplicates");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
@@ -136,6 +138,34 @@ const historyPanel = DocSorterHistoryPanel.createHistoryPanel({
   }),
   formatDate,
   maxEntries: 3
+});
+
+const referenceDataPanel = DocSorterReferenceDataPanel.createReferenceDataPanel({
+  getState: () => state.referenceData,
+  onClose: closeReferenceDataPanel,
+  onOpenFolder: () => {
+    void openReferenceDataFolderFromPanel();
+  },
+  onCreateMissing: () => {
+    void createMissingReferenceDataFilesFromPanel();
+  },
+  onReload: () => {
+    void reloadReferenceDataFromPanel();
+  },
+  onSelectFile: selectReferenceDataFile,
+  onModeChange: setReferenceDataPanelMode,
+  onJsonDraftChange: updateReferenceDataJsonDraft,
+  onValidateJson: (fileKey) => {
+    void validateReferenceDataFileFromPanel(fileKey);
+  },
+  onSaveJson: (fileKey) => {
+    void saveReferenceDataFileFromPanel(fileKey);
+  },
+  onSimpleFieldChange: updateReferenceDataSimpleField,
+  onSimpleNew: resetReferenceDataSimpleDraft,
+  onSimpleEdit: editReferenceDataSimpleEntry,
+  onSimpleDisable: toggleReferenceDataSimpleEntry,
+  onSimpleApply: applyReferenceDataSimpleDraft
 });
 
 const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPanel({
@@ -322,6 +352,10 @@ shortcutHelpToggleButton?.addEventListener("click", () => {
   toggleShortcutHelp();
 });
 
+openReferenceDataButton?.addEventListener("click", () => {
+  openReferenceDataPanel();
+});
+
 analyzeDuplicatesButton?.addEventListener("click", () => {
   void analyzeExactDuplicates();
 });
@@ -365,6 +399,7 @@ function render(): void {
   renderOcrPanel();
   renderAiPanel();
   renderHistory();
+  renderReferenceDataPanel();
   renderShortcutHelp();
 }
 

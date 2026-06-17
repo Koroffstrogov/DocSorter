@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "node:path";
 
 import { unloadConfiguredOllamaModel } from "../ai/ollamaModelManager";
@@ -26,7 +26,8 @@ function createMainWindow(): void {
 registerIpcHandlers({
   app,
   dialog,
-  ipcMain
+  ipcMain,
+  shell
 });
 
 void app.whenReady().then(() => {

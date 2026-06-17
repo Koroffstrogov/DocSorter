@@ -40,6 +40,11 @@ import type {
   UserRulesLoadResult,
   UserRulesResult
 } from "../rules/userNamingRulesStore";
+import type {
+  ReferenceDataFileInfo,
+  ReferenceDataOverview,
+  ReferenceDataStoreResult
+} from "../reference-data/referenceDataStore";
 import type { SuggestionV2Result } from "../suggestions/buildSuggestionV2ForDocument";
 import {
   createMainProcessAppState,
@@ -135,6 +140,16 @@ describe("sensitive IPC handler contract", () => {
     expect(contractFor(IPC_CHANNELS.rulesSaveUserCatalog)).toMatchObject({
       acceptsRendererPath: false,
       usesUserDataPath: true
+    });
+    expect(contractFor(IPC_CHANNELS.referenceDataSaveFile)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "saveReferenceDataFile"
+    });
+    expect(contractFor(IPC_CHANNELS.referenceDataOpenFolder)).toMatchObject({
+      acceptsRendererPath: false,
+      usesUserDataPath: true,
+      serviceName: "openReferenceDataDirectory"
     });
     expect(contractFor(IPC_CHANNELS.ocrGetStatus)).toMatchObject({
       acceptsRendererPath: false,
@@ -636,6 +651,51 @@ describe("registerIpcHandlers", () => {
     expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
   });
 
+  it("manages reference-data files from userData only", async () => {
+    const services = createServices();
+    const harness = createHarness({ services });
+
+    await harness.invoke(IPC_CHANNELS.referenceDataGetStatus);
+    await harness.invoke(IPC_CHANNELS.referenceDataCreateMissing);
+    await harness.invoke(IPC_CHANNELS.referenceDataValidateFile, "people", "[]");
+    await harness.invoke(IPC_CHANNELS.referenceDataSaveFile, "people", "[]");
+    await harness.invoke(IPC_CHANNELS.referenceDataReload);
+
+    expect(services.getReferenceDataOverview).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.createMissingReferenceDataFiles).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.validateReferenceDataFileContent).toHaveBeenCalledWith("people", "[]");
+    expect(services.saveReferenceDataFile).toHaveBeenCalledWith(USER_DATA_PATH, "people", "[]");
+    expect(services.reloadReferenceDataOverview).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.executeClassification).not.toHaveBeenCalled();
+    expect(services.prepareClassificationPlan).not.toHaveBeenCalled();
+    expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
+    expect(services.runAiSuggestionForDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects reference-data file keys outside the allowlist through the service", async () => {
+    const services = createServices({
+      validateReferenceDataFileContent: vi.fn(async () => ({
+        ok: false,
+        error: {
+          code: "REFERENCE_DATA_FILE_NOT_ALLOWED",
+          message: "Fichier de référentiel non autorisé."
+        }
+      } as ReferenceDataStoreResult<ReferenceDataFileInfo>))
+    });
+    const harness = createHarness({ services });
+
+    const result = await harness.invoke(IPC_CHANNELS.referenceDataValidateFile, "../people", "[]");
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "REFERENCE_DATA_FILE_NOT_ALLOWED",
+        message: "Fichier de référentiel non autorisé."
+      }
+    });
+    expect(services.validateReferenceDataFileContent).toHaveBeenCalledWith("../people", "[]");
+  });
+
   it("selects OCR paths through reviewed dialogs only", async () => {
     const harness = createHarness({
       dialogResponses: [
@@ -969,6 +1029,32 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
         message: "Diagnostic suggestions expurgé exporté."
       }
     })),
+    getReferenceDataOverview: vi.fn(async () => ({
+      ok: true,
+      value: createReferenceDataOverview()
+    } as ReferenceDataStoreResult<ReferenceDataOverview>)),
+    openReferenceDataDirectory: vi.fn(async () => ({
+      ok: true,
+      value: {
+        path: path.join(USER_DATA_PATH, "config", "reference-data")
+      }
+    } as ReferenceDataStoreResult<{ path: string }>)),
+    createMissingReferenceDataFiles: vi.fn(async () => ({
+      ok: true,
+      value: createReferenceDataOverview()
+    } as ReferenceDataStoreResult<ReferenceDataOverview>)),
+    validateReferenceDataFileContent: vi.fn(async () => ({
+      ok: true,
+      value: createReferenceDataFileInfo("people")
+    } as ReferenceDataStoreResult<ReferenceDataFileInfo>)),
+    saveReferenceDataFile: vi.fn(async () => ({
+      ok: true,
+      value: createReferenceDataFileInfo("people")
+    } as ReferenceDataStoreResult<ReferenceDataFileInfo>)),
+    reloadReferenceDataOverview: vi.fn(async () => ({
+      ok: true,
+      value: createReferenceDataOverview()
+    } as ReferenceDataStoreResult<ReferenceDataOverview>)),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()
@@ -986,6 +1072,28 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
       value: undefined
     } as UserRulesResult<void>)),
     ...overrides
+  };
+}
+
+function createReferenceDataOverview(): ReferenceDataOverview {
+  return {
+    basePath: path.join(USER_DATA_PATH, "config", "reference-data"),
+    files: [createReferenceDataFileInfo("people")],
+    catalogStatus: "ready",
+    catalogWarnings: []
+  };
+}
+
+function createReferenceDataFileInfo(key: ReferenceDataFileInfo["key"]): ReferenceDataFileInfo {
+  return {
+    key,
+    label: "Personnes",
+    relativePath: "entities/people.json",
+    status: "valid",
+    content: "[]\n",
+    entryCount: 0,
+    errors: [],
+    warnings: []
   };
 }
 

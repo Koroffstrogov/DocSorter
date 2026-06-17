@@ -109,6 +109,17 @@ import {
   type UserRulesResult
 } from "../rules/userNamingRulesStore";
 import {
+  createMissingReferenceDataFiles as createMissingReferenceDataFilesService,
+  getReferenceDataOverview as getReferenceDataOverviewService,
+  openReferenceDataDirectory as openReferenceDataDirectoryService,
+  reloadReferenceDataOverview as reloadReferenceDataOverviewService,
+  saveReferenceDataFile as saveReferenceDataFileService,
+  validateReferenceDataFileContent as validateReferenceDataFileContentService,
+  type ReferenceDataFileInfo,
+  type ReferenceDataOverview,
+  type ReferenceDataStoreResult
+} from "../reference-data/referenceDataStore";
+import {
   buildSuggestionV2ForDocument as buildSuggestionV2ForDocumentService,
   type SuggestionV2Result,
   type SuggestionV2TextContext
@@ -138,6 +149,10 @@ export interface DialogLike {
     canceled: boolean;
     filePaths: string[];
   }>;
+}
+
+export interface ShellLike {
+  openPath: (path: string) => Promise<string>;
 }
 
 export interface MainProcessAppState {
@@ -272,11 +287,34 @@ export interface IpcHandlerServices {
     userDataPath: string,
     catalog: NamingSuggestionRulesCatalog
   ) => Promise<UserRulesResult<void>>;
+  getReferenceDataOverview: (
+    userDataPath: string
+  ) => Promise<ReferenceDataStoreResult<ReferenceDataOverview>>;
+  openReferenceDataDirectory: (
+    userDataPath: string,
+    openPath: (directoryPath: string) => Promise<string>
+  ) => Promise<ReferenceDataStoreResult<{ path: string }>>;
+  createMissingReferenceDataFiles: (
+    userDataPath: string
+  ) => Promise<ReferenceDataStoreResult<ReferenceDataOverview>>;
+  validateReferenceDataFileContent: (
+    fileKey: unknown,
+    content: unknown
+  ) => Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>;
+  saveReferenceDataFile: (
+    userDataPath: string,
+    fileKey: unknown,
+    content: unknown
+  ) => Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>;
+  reloadReferenceDataOverview: (
+    userDataPath: string
+  ) => Promise<ReferenceDataStoreResult<ReferenceDataOverview>>;
 }
 
 export interface RegisterIpcHandlersOptions {
   ipcMain: IpcMainLike;
   dialog: DialogLike;
+  shell?: ShellLike;
   app: AppLike;
   appState?: MainProcessAppState;
   services?: IpcHandlerServices;
@@ -563,6 +601,54 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     usesMainTarget: false,
     usesUserDataPath: true,
     serviceName: "loadMergedNamingRulesCatalog"
+  },
+  {
+    channel: IPC_CHANNELS.referenceDataGetStatus,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "getReferenceDataOverview"
+  },
+  {
+    channel: IPC_CHANNELS.referenceDataOpenFolder,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "openReferenceDataDirectory"
+  },
+  {
+    channel: IPC_CHANNELS.referenceDataCreateMissing,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "createMissingReferenceDataFiles"
+  },
+  {
+    channel: IPC_CHANNELS.referenceDataValidateFile,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "validateReferenceDataFileContent"
+  },
+  {
+    channel: IPC_CHANNELS.referenceDataSaveFile,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "saveReferenceDataFile"
+  },
+  {
+    channel: IPC_CHANNELS.referenceDataReload,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "reloadReferenceDataOverview"
   }
 ];
 
@@ -600,7 +686,13 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   writeSuggestionV2Diagnostic: writeSuggestionV2DiagnosticService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
-  saveUserRulesCatalog: saveUserRulesCatalogService
+  saveUserRulesCatalog: saveUserRulesCatalogService,
+  getReferenceDataOverview: getReferenceDataOverviewService,
+  openReferenceDataDirectory: openReferenceDataDirectoryService,
+  createMissingReferenceDataFiles: createMissingReferenceDataFilesService,
+  validateReferenceDataFileContent: validateReferenceDataFileContentService,
+  saveReferenceDataFile: saveReferenceDataFileService,
+  reloadReferenceDataOverview: reloadReferenceDataOverviewService
 };
 
 export function createMainProcessAppState(): MainProcessAppState {
@@ -618,6 +710,7 @@ export function createMainProcessAppState(): MainProcessAppState {
 export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainProcessAppState {
   const state = options.appState ?? createMainProcessAppState();
   const services = options.services ?? defaultIpcHandlerServices;
+  const shell = options.shell ?? { openPath: async () => "" };
 
   options.ipcMain.handle(IPC_CHANNELS.appGetVersion, () => options.app.getVersion());
 
@@ -900,6 +993,31 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
 
     return services.loadMergedNamingRulesCatalog(options.app.getPath("userData"));
   });
+  options.ipcMain.handle(IPC_CHANNELS.referenceDataGetStatus, () =>
+    services.getReferenceDataOverview(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.referenceDataOpenFolder, () =>
+    services.openReferenceDataDirectory(
+      options.app.getPath("userData"),
+      shell.openPath
+    )
+  );
+  options.ipcMain.handle(IPC_CHANNELS.referenceDataCreateMissing, () =>
+    services.createMissingReferenceDataFiles(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(
+    IPC_CHANNELS.referenceDataValidateFile,
+    (_event, fileKey: unknown, content: unknown) =>
+      services.validateReferenceDataFileContent(fileKey, content)
+  );
+  options.ipcMain.handle(
+    IPC_CHANNELS.referenceDataSaveFile,
+    (_event, fileKey: unknown, content: unknown) =>
+      services.saveReferenceDataFile(options.app.getPath("userData"), fileKey, content)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.referenceDataReload, () =>
+    services.reloadReferenceDataOverview(options.app.getPath("userData"))
+  );
 
   options.ipcMain.handle(IPC_CHANNELS.previewGetData, (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {

@@ -225,13 +225,33 @@ Exemple :
 ]
 ```
 
-Le loader est en lecture seule :
+Au démarrage et pendant les analyses, le loader reste en lecture seule :
 
 - il ne crée pas automatiquement le dossier `reference-data` ;
 - il ne crée pas automatiquement les fichiers JSON ;
 - il ne modifie jamais les référentiels ;
 - il ne synchronise rien vers un serveur ;
 - il ne lit pas ces données depuis le NAS.
+
+Depuis le Lot K, l'application propose aussi une UI locale `Référentiels`.
+
+Cette UI est séparée du workflow de classement et permet uniquement, après action explicite :
+
+- d'ouvrir le dossier local des référentiels ;
+- de créer les fichiers JSON manquants avec des tableaux vides ;
+- de recharger les référentiels ;
+- d'ajouter ou modifier personnes, véhicules, biens et fournisseurs en mode assistant ;
+- de désactiver une entrée avec `enabled: false` plutôt que la supprimer réellement dans le workflow simple ;
+- d'éditer chaque fichier en JSON direct ;
+- de valider puis sauvegarder un fichier.
+
+Elle n'écrit jamais dans la source, la cible, le NAS, le journal de classement ou le cache d'analyse. Les seules mutations disque autorisées sont la création et l'écriture des fichiers JSON sous :
+
+```text
+app.getPath("userData")/config/reference-data/
+```
+
+Pour `document-types.json`, l'UI privilégie le mode JSON direct afin d'éviter un éditeur complexe dans ce lot.
 
 Comportement si un fichier est absent :
 

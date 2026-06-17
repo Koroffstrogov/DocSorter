@@ -39,7 +39,13 @@ const REVIEWED_IPC_CHANNELS = [
   "rules:getStatus",
   "rules:getUserCatalog",
   "rules:saveUserCatalog",
-  "rules:reload"
+  "rules:reload",
+  "reference-data:getStatus",
+  "reference-data:openFolder",
+  "reference-data:createMissing",
+  "reference-data:validateFile",
+  "reference-data:saveFile",
+  "reference-data:reload"
 ] as const;
 
 describe("IPC channel contract", () => {

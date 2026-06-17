@@ -27,6 +27,9 @@
         <button id="shortcut-help-toggle" class="shortcut-help-toggle" type="button" aria-pressed="false">
           Raccourcis (?)
         </button>
+        <button id="open-reference-data" class="shortcut-help-toggle" type="button">
+          Référentiels
+        </button>
       </div>
     </header>
 
@@ -493,6 +496,37 @@
       </aside>
     </main>
 
+    <section
+      id="reference-data-dialog"
+      class="reference-data-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Référentiels locaux"
+      hidden
+    >
+      <div class="reference-data-modal">
+        <div class="reference-data-header">
+          <div>
+            <h2>Référentiels locaux</h2>
+            <small id="reference-data-base-path">Configuration locale</small>
+          </div>
+          <button id="close-reference-data" type="button">Fermer</button>
+        </div>
+        <div class="reference-data-actions">
+          <button id="reference-data-open-folder" type="button">Ouvrir le dossier</button>
+          <button id="reference-data-create-missing" type="button">Créer les fichiers manquants</button>
+          <button id="reference-data-reload" type="button">Recharger</button>
+        </div>
+        <div id="reference-data-status" class="reference-data-status">Référentiels non chargés.</div>
+        <div id="reference-data-files" class="reference-data-files"></div>
+        <div class="reference-data-mode-switch" role="group" aria-label="Mode d'édition">
+          <button id="reference-data-mode-simple" type="button" aria-pressed="true">Assistant</button>
+          <button id="reference-data-mode-json" type="button" aria-pressed="false">JSON direct</button>
+        </div>
+        <div id="reference-data-content" class="reference-data-content"></div>
+      </div>
+    </section>
+
     <script src="./imagePreview.js"></script>
     <script src="./pdfPreview.js"></script>
     <script src="./previewPanel.js"></script>
@@ -509,6 +543,7 @@
     <script src="./rulesPanel.js"></script>
     <script src="./ocrPanel.js"></script>
     <script src="./aiPanel.js"></script>
+    <script src="./referenceDataPanel.js"></script>
     <script src="../rules/defaultNamingSuggestionRules.js"></script>
     <script src="../rules/namingSuggestionRulesCatalog.js"></script>
     <script src="../rules/namingSuggestions.js"></script>
@@ -523,6 +558,7 @@
     <script src="./rendererRulesFlow.js"></script>
     <script src="./rendererOcrFlow.js"></script>
     <script src="./rendererAiFlow.js"></script>
+    <script src="./rendererReferenceDataFlow.js"></script>
     <script src="./rendererNamingDestinationFlow.js"></script>
     <script src="./rendererClassificationFlow.js"></script>
     <script src="./rendererShortcutFlow.js"></script>

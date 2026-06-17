@@ -245,7 +245,16 @@ Ces règles restent prudentes : elles n'écrivent pas dans le journal, ne modifi
 
 ## Référentiels locaux
 
-Lot B ajoute une brique technique de référentiels locaux contrôlés pour alimenter plus tard le nommage v2. Elle est séparée des règles de suggestion existantes et n'est pas encore branchée à l'interface.
+Les référentiels locaux contrôlés alimentent le nommage v2 : personnes, véhicules, biens, fournisseurs et types documentaires. Ils sont séparés des règles de suggestion historiques et de l'IA.
+
+Lot K ajoute une UI locale `Référentiels` accessible depuis l'en-tête de l'application. Elle permet de :
+
+- ouvrir le dossier des référentiels ;
+- créer explicitement les fichiers JSON manquants ;
+- recharger les référentiels ;
+- éditer personnes, véhicules, biens et fournisseurs en mode assistant ;
+- éditer chaque fichier en JSON direct ;
+- valider avant sauvegarde.
 
 Emplacement prévu sous le dossier utilisateur Electron :
 
@@ -253,7 +262,7 @@ Emplacement prévu sous le dossier utilisateur Electron :
 app.getPath("userData")/config/reference-data/
 ```
 
-Fichiers lus en lecture seule si présents :
+Fichiers gérés :
 
 ```text
 entities/people.json
@@ -263,11 +272,13 @@ entities/providers.json
 document-types.json
 ```
 
-Le loader ne crée pas ces fichiers automatiquement. Si les fichiers d'entités sont absents, les listes restent vides. Si `document-types.json` est absent, DocSorter utilise des types documentaires par défaut embarqués comme `facture-entretien`, `avis-imposition`, `certificat-scolarite` et `carnet-vaccination`.
+Le loader ne crée pas ces fichiers automatiquement au démarrage. L'UI peut les créer uniquement après action explicite `Créer les fichiers manquants`, avec des tableaux JSON vides. Si les fichiers d'entités sont absents, les listes restent vides. Si `document-types.json` est absent ou vide, DocSorter utilise des types documentaires par défaut embarqués comme `facture-entretien`, `avis-imposition`, `certificat-scolarite` et `carnet-vaccination`.
 
 La détection est locale et déterministe : elle cherche des alias normalisés dans le nom du fichier et dans un texte déjà extrait. Elle retourne des candidats avec score et raisons sobres pour `target`, `documentType` et `issuer`. Elle ne fait pas de fuzzy matching, n'apprend rien, n'appelle pas l'IA, ne lit aucun document et ne modifie aucun fichier.
 
 Pour les personnes, une date de naissance configurée peut servir uniquement d'indice de détection. Elle n'est jamais injectée dans un alias de nommage, un dossier, un détail ou un nom de fichier.
+
+Les seules mutations disque autorisées par cette UI sont la création et l'écriture des JSON de référentiels sous `app.getPath("userData")/config/reference-data/`. Aucun document source ou cible n'est renommé, déplacé ou supprimé par cette UI.
 
 ## Cache local d'analyse
 

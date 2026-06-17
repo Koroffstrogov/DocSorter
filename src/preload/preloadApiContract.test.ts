@@ -137,6 +137,12 @@ describe("preload API surface", () => {
       stopWords: []
     });
     await api.reloadNamingRules();
+    await api.getReferenceDataStatus();
+    await api.openReferenceDataFolder();
+    await api.createMissingReferenceDataFiles();
+    await api.validateReferenceDataFile("people", "[]");
+    await api.saveReferenceDataFile("people", "[]");
+    await api.reloadReferenceData();
 
     expect(recorder.calls.map((call) => call.channel)).toEqual([
       IPC_CHANNELS.appGetVersion,
@@ -175,7 +181,13 @@ describe("preload API surface", () => {
       IPC_CHANNELS.rulesGetStatus,
       IPC_CHANNELS.rulesGetUserCatalog,
       IPC_CHANNELS.rulesSaveUserCatalog,
-      IPC_CHANNELS.rulesReload
+      IPC_CHANNELS.rulesReload,
+      IPC_CHANNELS.referenceDataGetStatus,
+      IPC_CHANNELS.referenceDataOpenFolder,
+      IPC_CHANNELS.referenceDataCreateMissing,
+      IPC_CHANNELS.referenceDataValidateFile,
+      IPC_CHANNELS.referenceDataSaveFile,
+      IPC_CHANNELS.referenceDataReload
     ]);
   });
 });

@@ -703,6 +703,87 @@ interface QueueUiState {
   sortDirection: QueueViewSortDirection;
 }
 
+type ReferenceDataFileKey =
+  | "people"
+  | "vehicles"
+  | "properties"
+  | "providers"
+  | "documentTypes";
+type ReferenceDataFileStatus = "absent" | "valid" | "invalid" | "read-error";
+type ReferenceDataCatalogStatus = "ready" | "blocked";
+type ReferenceDataPanelStatus = "idle" | "loading" | "ready" | "saving" | "validating" | "error";
+type ReferenceDataPanelMode = "simple" | "json";
+
+interface ReferenceDataValidationError {
+  category: string;
+  field: string;
+  message: string;
+  id?: string;
+  index?: number;
+}
+
+interface ReferenceDataFileInfo {
+  key: ReferenceDataFileKey;
+  label: string;
+  relativePath: string;
+  status: ReferenceDataFileStatus;
+  content: string;
+  entryCount: number;
+  errors: ReferenceDataValidationError[];
+  warnings: string[];
+}
+
+interface ReferenceDataOverview {
+  basePath: string;
+  files: ReferenceDataFileInfo[];
+  catalogStatus: ReferenceDataCatalogStatus;
+  catalogWarnings: string[];
+}
+
+interface ReferenceDataStoreError {
+  code: string;
+  message: string;
+  fileKey?: ReferenceDataFileKey;
+  details?: ReferenceDataValidationError[];
+}
+
+type ReferenceDataStoreResult<T> =
+  | {
+      ok: true;
+      value: T;
+    }
+  | {
+      ok: false;
+      error: ReferenceDataStoreError;
+    };
+
+interface ReferenceDataSimpleDraft {
+  editingIndex: number | null;
+  label: string;
+  fileAlias: string;
+  folderAlias: string;
+  aliases: string;
+  birthDate: string;
+  useBirthDateForDetectionOnly: boolean;
+  domains: string;
+  enabled: boolean;
+}
+
+interface ReferenceDataState {
+  isOpen: boolean;
+  status: ReferenceDataPanelStatus;
+  mode: ReferenceDataPanelMode;
+  selectedFileKey: ReferenceDataFileKey;
+  overview: ReferenceDataOverview | null;
+  jsonDrafts: Partial<Record<ReferenceDataFileKey, string>>;
+  simpleDraft: ReferenceDataSimpleDraft;
+  lastValidatedFileKey: ReferenceDataFileKey | null;
+  lastValidatedContent: string;
+  validation: ReferenceDataStoreResult<ReferenceDataFileInfo> | null;
+  message: string;
+  error: ReferenceDataStoreError | null;
+}
+
 interface AppState {
   sourcePath: string | null;
   targetPath: string | null;
@@ -725,6 +806,7 @@ interface AppState {
   namingRules: NamingRulesState;
   ocr: OcrState;
   ai: AiState;
+  referenceData: ReferenceDataState;
   shortcutsHelpVisible: boolean;
 }
 

@@ -48,6 +48,12 @@ import type {
   UserRulesLoadResult,
   UserRulesResult
 } from "../rules/userNamingRulesStore";
+import type {
+  ReferenceDataFileInfo,
+  ReferenceDataFileKey,
+  ReferenceDataOverview,
+  ReferenceDataStoreResult
+} from "../reference-data/referenceDataStore";
 
 interface DirectorySelection {
   path: string;
@@ -94,7 +100,13 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "getRulesStatus",
   "getUserRulesCatalog",
   "saveUserRulesCatalog",
-  "reloadNamingRules"
+  "reloadNamingRules",
+  "getReferenceDataStatus",
+  "openReferenceDataFolder",
+  "createMissingReferenceDataFiles",
+  "validateReferenceDataFile",
+  "saveReferenceDataFile",
+  "reloadReferenceData"
 ] as const;
 
 export type PreloadApiMethod = (typeof ALLOWED_PRELOAD_API_METHODS)[number];
@@ -255,7 +267,41 @@ export function createPreloadApi(ipc: IpcInvoker) {
         catalog
       ) as Promise<UserRulesResult<NamingRulesStatus>>,
     reloadNamingRules: (): Promise<UserRulesResult<NamingRulesStatus>> =>
-      ipc.invoke(IPC_CHANNELS.rulesReload) as Promise<UserRulesResult<NamingRulesStatus>>
+      ipc.invoke(IPC_CHANNELS.rulesReload) as Promise<UserRulesResult<NamingRulesStatus>>,
+    getReferenceDataStatus: (): Promise<ReferenceDataStoreResult<ReferenceDataOverview>> =>
+      ipc.invoke(IPC_CHANNELS.referenceDataGetStatus) as Promise<
+        ReferenceDataStoreResult<ReferenceDataOverview>
+      >,
+    openReferenceDataFolder: (): Promise<ReferenceDataStoreResult<{ path: string }>> =>
+      ipc.invoke(IPC_CHANNELS.referenceDataOpenFolder) as Promise<
+        ReferenceDataStoreResult<{ path: string }>
+      >,
+    createMissingReferenceDataFiles: (): Promise<ReferenceDataStoreResult<ReferenceDataOverview>> =>
+      ipc.invoke(IPC_CHANNELS.referenceDataCreateMissing) as Promise<
+        ReferenceDataStoreResult<ReferenceDataOverview>
+      >,
+    validateReferenceDataFile: (
+      fileKey: ReferenceDataFileKey,
+      content: string
+    ): Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>> =>
+      ipc.invoke(
+        IPC_CHANNELS.referenceDataValidateFile,
+        fileKey,
+        content
+      ) as Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>,
+    saveReferenceDataFile: (
+      fileKey: ReferenceDataFileKey,
+      content: string
+    ): Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>> =>
+      ipc.invoke(
+        IPC_CHANNELS.referenceDataSaveFile,
+        fileKey,
+        content
+      ) as Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>,
+    reloadReferenceData: (): Promise<ReferenceDataStoreResult<ReferenceDataOverview>> =>
+      ipc.invoke(IPC_CHANNELS.referenceDataReload) as Promise<
+        ReferenceDataStoreResult<ReferenceDataOverview>
+      >
   };
 }
 

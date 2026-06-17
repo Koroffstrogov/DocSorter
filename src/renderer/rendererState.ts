@@ -166,6 +166,37 @@ function createIdleAiState(): AiState {
   };
 }
 
+function createIdleReferenceDataState(): ReferenceDataState {
+  return {
+    isOpen: false,
+    status: "idle",
+    mode: "simple",
+    selectedFileKey: "people",
+    overview: null,
+    jsonDrafts: {},
+    simpleDraft: createEmptyReferenceDataSimpleDraft(),
+    lastValidatedFileKey: null,
+    lastValidatedContent: "",
+    validation: null,
+    message: "Référentiels non chargés.",
+    error: null
+  };
+}
+
+function createEmptyReferenceDataSimpleDraft(): ReferenceDataSimpleDraft {
+  return {
+    editingIndex: null,
+    label: "",
+    fileAlias: "",
+    folderAlias: "",
+    aliases: "",
+    birthDate: "",
+    useBirthDateForDetectionOnly: true,
+    domains: "",
+    enabled: true
+  };
+}
+
 function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
   return {
     status: "idle",
