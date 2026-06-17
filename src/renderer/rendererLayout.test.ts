@@ -19,6 +19,16 @@ describe("renderer right panel layout", () => {
     expect(html).toContain("<h3>Texte extrait</h3>");
     expect(html).toContain("<h3>Proposition de tri</h3>");
     expect(html).toContain("Analyser le document");
+    expect(html).toContain('id="apply-suggestion-v2-empty"');
+  });
+
+  it("removes the old local suggestions panel from the renderer UI", async () => {
+    const html = await readRendererHtml();
+
+    expect(html).not.toContain('id="suggestions-panel"');
+    expect(html).not.toContain("Suggestions locales");
+    expect(html).not.toContain("namingSuggestionsPanel.js");
+    expect(html).toContain("../rules/namingSuggestions.js");
   });
 
   it("keeps document metadata folded in the right panel header", async () => {
@@ -41,6 +51,8 @@ describe("renderer right panel layout", () => {
     expect(html).toContain("Mode : expurgé");
     expect(html).toContain("Diagnostic suggestions");
     expect(html).toContain("Diagnostic IA");
+    expect(html).toContain('id="ai-suggestion-panel"');
+    expect(html).toContain('id="run-ai-suggestion"');
     expect(html).toContain('<details id="ocr-panel"');
     expect(html).toContain("Réglages OCR avancés");
     expect(html).toContain('<details id="ai-panel"');
@@ -49,6 +61,11 @@ describe("renderer right panel layout", () => {
     expect(html).not.toMatch(/<details id="ocr-panel"[^>]*\sopen[\s>]/);
     expect(html).not.toMatch(/<details id="ai-panel"[^>]*\sopen[\s>]/);
     expect(html).not.toMatch(/<details id="suggestion-v2-diagnostic-panel"[^>]*\sopen[\s>]/);
+    expect(indexOf(html, 'id="run-ai-suggestion"')).toBeLessThan(indexOf(html, '<details id="ai-panel"'));
+    const advancedAiPanel = extractElementBlock(html, '<details id="ai-panel"', "</details>");
+    expect(advancedAiPanel).not.toContain('id="run-ai-suggestion"');
+    expect(advancedAiPanel).toContain("Tester Ollama");
+    expect(advancedAiPanel).toContain("Libérer le modèle IA");
     expect(indexOf(html, 'class="detail-section history-panel"')).toBeLessThan(
       indexOf(html, 'id="suggestion-v2-diagnostic-panel"')
     );
@@ -110,4 +127,11 @@ function indexOf(value: string, needle: string): number {
   const index = value.indexOf(needle);
   expect(index).toBeGreaterThanOrEqual(0);
   return index;
+}
+
+function extractElementBlock(value: string, startNeedle: string, endNeedle: string): string {
+  const start = indexOf(value, startNeedle);
+  const end = value.indexOf(endNeedle, start);
+  expect(end).toBeGreaterThan(start);
+  return value.slice(start, end);
 }

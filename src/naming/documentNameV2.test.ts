@@ -258,6 +258,17 @@ describe("sensitive data guard", () => {
 
     expect(messages.map((message) => message.code)).toContain("SENSITIVE_IDENTIFIER");
   });
+
+  it("does not warn for controlled long alphabetic document labels", () => {
+    const messages = detectSensitiveNameParts({
+      dateToken: "2026",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      extension: ".pdf"
+    });
+
+    expect(messages.map((message) => message.code)).not.toContain("SENSITIVE_IDENTIFIER");
+  });
 });
 
 describe("applyCollisionSuffix", () => {

@@ -5,6 +5,7 @@ import type { AiSettingsResult } from "../ai/ollamaSettings";
 import type { AiDocumentSuggestion } from "../ai/ollamaDocumentSuggestion";
 import type { NamingDraft } from "../naming/namingDraft";
 import type {
+  SuggestionV2DocumentSuggestion,
   SuggestionV2Result,
   SuggestionV2TextContext
 } from "../suggestions/buildSuggestionV2ForDocument";
@@ -164,6 +165,9 @@ function createDiagnosticLog(
     dossiers: {
       candidats: suggestion?.folderPlacementCandidates ?? [],
       recommande: suggestion?.folderPlacement ?? null,
+      dossierExistantRecommande: suggestion ? getRecommendedExistingFolder(suggestion) : null,
+      nouveauxDossiersProposes: suggestion ? getProposedNewFolders(suggestion) : [],
+      fallback: suggestion ? getFallbackFolder(suggestion) : null,
       options: suggestion?.targetFolderSuggestion.options ?? [],
       optionsRejetees: suggestion?.targetFolderSuggestion.warnings ?? []
     },
@@ -211,6 +215,47 @@ function collectWarnings(result: SuggestionV2Result): string[] {
     ...(result.value.folderNamingProfile?.warnings ?? []),
     ...result.value.referenceDataWarnings
   ]);
+}
+
+function getRecommendedExistingFolder(
+  suggestion: SuggestionV2DocumentSuggestion
+): unknown {
+  if (suggestion.folderPlacement?.exists && suggestion.folderPlacement.source === "inventory") {
+    return suggestion.folderPlacement;
+  }
+
+  const recommended = suggestion.targetFolderSuggestion.recommended;
+  if (
+    recommended &&
+    !recommended.requiresCreation &&
+    (recommended.source === "inventory" || recommended.source === "existing-folder")
+  ) {
+    return recommended;
+  }
+
+  return null;
+}
+
+function getProposedNewFolders(
+  suggestion: SuggestionV2DocumentSuggestion
+): unknown[] {
+  return suggestion.targetFolderSuggestion.options.filter((option) => option.requiresCreation === true);
+}
+
+function getFallbackFolder(
+  suggestion: SuggestionV2DocumentSuggestion
+): unknown {
+  const fallbackPath = "Divers/A-traiter-manuellement";
+  if (
+    suggestion.folderPlacement?.source === "fallback" ||
+    suggestion.folderPlacement?.relativePath === fallbackPath
+  ) {
+    return suggestion.folderPlacement;
+  }
+
+  return suggestion.targetFolderSuggestion.options.find(
+    (option) => option.source === "fallback" || option.relativePath === fallbackPath
+  ) ?? null;
 }
 
 function redactSensitiveText(value: string): string {

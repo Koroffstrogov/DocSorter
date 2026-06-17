@@ -134,7 +134,6 @@ async function extractTextFromActivePdf(): Promise<void> {
   }
 
   const requestId = ++textExtractionRequestId;
-  clearNamingSuggestionStateForDocument(activeDocument.filePath);
   setTextExtractionState(activeDocument.filePath, {
     status: "extracting",
     result: null,
@@ -162,7 +161,6 @@ async function extractTextFromActivePdf(): Promise<void> {
   }
 
   const extraction = result.value as PdfTextExtraction;
-  clearNamingSuggestionStateForDocument(activeDocument.filePath);
   setTextExtractionState(activeDocument.filePath, {
     status: extraction.status,
     result: extraction,
@@ -179,7 +177,6 @@ async function runOcrForActiveImage(): Promise<void> {
   }
 
   const requestId = ++textExtractionRequestId;
-  clearNamingSuggestionStateForDocument(activeDocument.filePath);
   resetAiSuggestionState();
   setTextExtractionState(activeDocument.filePath, {
     status: "extracting",
@@ -208,7 +205,6 @@ async function runOcrForActiveImage(): Promise<void> {
   }
 
   const extraction = result.value as PdfTextExtraction;
-  clearNamingSuggestionStateForDocument(activeDocument.filePath);
   resetAiSuggestionState();
   setTextExtractionState(activeDocument.filePath, {
     status: extraction.status,
@@ -304,10 +300,8 @@ function updateExtractedTextForDocument(documentItem: DocumentItem, text: string
     error: null
   });
 
-  clearNamingSuggestionStateForDocument(documentItem.filePath);
   clearSuggestionV2StateForDocument(documentItem.filePath);
   resetAiSuggestionState();
-  renderNamingSuggestionsPanel();
   renderSuggestionV2Panel();
   renderAiPanel();
 }
@@ -316,179 +310,11 @@ function textExtractionQueueLabel(documentItem: DocumentItem): string | null {
   return textExtractionPanel.getQueueLabel(documentItem);
 }
 
-function renderNamingSuggestionsPanel(): void {
-  namingSuggestionsPanel.render();
-}
-
-function analyzeNamingSuggestionsForActiveDocument(): void {
-  const activeDocument = getActiveDocument();
-  if (!activeDocument || !canAnalyzeNamingSuggestions(activeDocument)) {
-    return;
-  }
-
-  const extraction = getTextExtractionState(activeDocument.filePath).result;
-  if (!extraction) {
-    return;
-  }
-
-  const suggestions =
-    extraction.cachedSuggestions ??
-    DocSorterNamingSuggestions.buildNamingSuggestions({
-      filename: activeDocument.name,
-      extractedText: extraction.excerpt,
-      rulesCatalog: state.namingRules.mergedCatalog
-    });
-  const hasSuggestions = namingSuggestionsHaveContent(suggestions);
-
-  setNamingSuggestionState(activeDocument.filePath, {
-    status: hasSuggestions ? "ready" : "empty",
-    suggestions: hasSuggestions ? suggestions : null,
-    message: hasSuggestions
-      ? extraction.fromCache && extraction.cachedSuggestions
-        ? "Suggestions issues du cache local."
-        : "Suggestions générées localement depuis le texte extrait et le nom de fichier."
-      : "Aucune suggestion locale exploitable détectée."
-  });
-  render();
-}
-
-function applyNamingSuggestionsToEmptyFields(): void {
-  const activeDocument = getActiveDocument();
-  if (!activeDocument || !canApplyNamingSuggestionsToEmptyFields()) {
-    return;
-  }
-
-  const suggestionState = getNamingSuggestionState(activeDocument.filePath);
-  if (!suggestionState.suggestions) {
-    return;
-  }
-
-  const result = DocSorterNamingSuggestions.applySuggestionsToEmptyFields(
-    state.naming.draft,
-    suggestionState.suggestions
-  );
-  setNamingSuggestionState(activeDocument.filePath, {
-    ...suggestionState,
-    message:
-      result.appliedFields.length > 0
-        ? "Suggestions appliquées aux champs vides. Les champs déjà remplis n'ont pas été modifiés."
-        : "Aucun champ vide à compléter."
-  });
-
-  if (result.appliedFields.length === 0) {
-    render();
-    return;
-  }
-
-  state.naming.draft = result.draft;
-  state.naming.overrideFilename = null;
-  state.naming.isLoading = true;
-  resetClassificationState();
-  resetDestinationCheck();
-  render();
-  void updateNamingProposal(activeDocument.extension, ++namingRequestId);
-}
-
-function applyTargetFolderSuggestion(): void {
-  if (!canApplyTargetFolderSuggestion()) {
-    return;
-  }
-
-  const activeDocument = getActiveDocument();
-  if (!activeDocument) {
-    return;
-  }
-
-  const targetFolder = getNamingSuggestionState(activeDocument.filePath).suggestions?.targetFolder?.value;
-  if (!targetFolder) {
-    return;
-  }
-
-  void updateTargetFolderFromInput(targetFolder);
-}
-
-function canAnalyzeNamingSuggestions(documentItem = getActiveDocument()): boolean {
-  if (!documentItem) {
-    return false;
-  }
-
-  const extractionState = getTextExtractionState(documentItem.filePath);
-  return Boolean(
-    (documentItem.extension === ".pdf" || isImageDocument(documentItem)) &&
-      documentItem.status !== "missing" &&
-      extractionState.status === "text-found" &&
-      extractionState.result?.excerpt.trim() &&
-      !isClassificationBusy()
-  );
-}
-
 function isImageDocument(documentItem: DocumentItem): boolean {
   return (
     documentItem.extension === ".jpg" ||
     documentItem.extension === ".jpeg" ||
     documentItem.extension === ".png"
   );
-}
-
-function canApplyNamingSuggestionsToEmptyFields(): boolean {
-  const activeDocument = getActiveDocument();
-  if (!activeDocument || state.naming.isLoading || isClassificationBusy()) {
-    return false;
-  }
-
-  const suggestions = getNamingSuggestionState(activeDocument.filePath).suggestions;
-  return Boolean(suggestions && hasEmptyFieldForSuggestion(state.naming.draft, suggestions));
-}
-
-function canApplyTargetFolderSuggestion(): boolean {
-  const activeDocument = getActiveDocument();
-  if (!activeDocument || !state.targetPath || isClassificationBusy()) {
-    return false;
-  }
-
-  return Boolean(getNamingSuggestionState(activeDocument.filePath).suggestions?.targetFolder?.value);
-}
-
-function hasEmptyFieldForSuggestion(draft: NamingDraft, suggestions: NamingSuggestions): boolean {
-  return (
-    (!draft.documentDate.trim() && Boolean(suggestions.date?.value)) ||
-    (!draft.subject.trim() && Boolean(suggestions.subject?.value)) ||
-    (!draft.documentType.trim() && Boolean(suggestions.documentType?.value)) ||
-    (!draft.keywords.trim() && suggestions.keywords.length > 0)
-  );
-}
-
-function namingSuggestionsHaveContent(suggestions: NamingSuggestions): boolean {
-  return Boolean(
-    suggestions.date ||
-      suggestions.subject ||
-      suggestions.documentType ||
-      suggestions.targetFolder ||
-      suggestions.keywords.length > 0
-  );
-}
-
-function getNamingSuggestionState(filePath: string): NamingSuggestionDocumentState {
-  return state.namingSuggestions.byDocumentPath[filePath] ?? createIdleNamingSuggestionDocumentState();
-}
-
-function setNamingSuggestionState(filePath: string, value: NamingSuggestionDocumentState): void {
-  state.namingSuggestions = {
-    byDocumentPath: {
-      ...state.namingSuggestions.byDocumentPath,
-      [filePath]: value
-    }
-  };
-}
-
-function clearNamingSuggestionStateForDocument(filePath: string): void {
-  if (!state.namingSuggestions.byDocumentPath[filePath]) {
-    return;
-  }
-
-  const { [filePath]: _removed, ...remaining } = state.namingSuggestions.byDocumentPath;
-  state.namingSuggestions = {
-    byDocumentPath: remaining
-  };
 }
 

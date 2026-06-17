@@ -91,6 +91,74 @@ function runSuggestionV2AnalysisForActiveDocument(): void {
   refreshSuggestionV2ForActiveDocument();
 }
 
+function applySuggestionV2ToEmptyFields(): void {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canApplySuggestionV2ToEmptyFields()) {
+    return;
+  }
+
+  const suggestion = getSuggestionV2State(activeDocument.filePath).result;
+  if (!suggestion) {
+    return;
+  }
+
+  const draftApplication = buildNamingDraftFromSuggestionV2(state.naming.draft, suggestion, activeDocument.name);
+  const targetFolder = getSuggestionV2RecommendedFolder(suggestion);
+  const shouldApplyTargetFolder = canApplySuggestionV2TargetFolder(targetFolder);
+  const messages: string[] = [];
+
+  if (draftApplication.appliedFields.length > 0) {
+    state.naming.draft = draftApplication.draft;
+    state.naming.overrideFilename = null;
+    state.naming.isLoading = true;
+    resetClassificationState();
+    resetDestinationCheck();
+    messages.push("Champs v2 appliqués aux champs vides.");
+  }
+
+  if (shouldApplyTargetFolder) {
+    messages.push("Dossier v2 appliqué au sous-dossier cible.");
+  }
+
+  if (messages.length === 0) {
+    messages.push("Aucun champ vide à compléter depuis la proposition v2.");
+  }
+
+  setSuggestionV2ResultMessage(activeDocument.filePath, messages.join(" "));
+
+  if (draftApplication.appliedFields.length > 0) {
+    render();
+    void updateNamingProposal(activeDocument.extension, ++namingRequestId);
+  } else {
+    render();
+  }
+
+  if (shouldApplyTargetFolder && targetFolder) {
+    void updateTargetFolderFromInput(targetFolder);
+  }
+}
+
+function canApplySuggestionV2ToEmptyFields(): boolean {
+  const activeDocument = getActiveDocument();
+  if (
+    !activeDocument ||
+    state.naming.isLoading ||
+    isClassificationBusy()
+  ) {
+    return false;
+  }
+
+  const suggestion = getSuggestionV2State(activeDocument.filePath).result;
+  if (!suggestion) {
+    return false;
+  }
+
+  return (
+    hasEmptyNamingFieldForSuggestionV2(state.naming.draft, suggestion, activeDocument.name) ||
+    canApplySuggestionV2TargetFolder(getSuggestionV2RecommendedFolder(suggestion))
+  );
+}
+
 function runSuggestionV2DiagnosticForActiveDocument(includeAi = false): void {
   const activeDocument = getActiveDocument();
   if (!activeDocument) {
@@ -171,6 +239,21 @@ function setSuggestionV2State(filePath: string, value: SuggestionV2DocumentState
   };
 }
 
+function setSuggestionV2ResultMessage(filePath: string, message: string): void {
+  const current = getSuggestionV2State(filePath);
+  if (!current.result) {
+    return;
+  }
+
+  setSuggestionV2State(filePath, {
+    ...current,
+    result: {
+      ...current.result,
+      message
+    }
+  });
+}
+
 function resetSuggestionV2State(): void {
   suggestionV2RequestId += 1;
   state.suggestionV2 = createIdleSuggestionV2State();
@@ -222,4 +305,138 @@ function getSuggestionV2DiagnosticTextContext(
         : "pdf-native",
     excerpt: text
   };
+}
+
+function buildNamingDraftFromSuggestionV2(
+  draft: NamingDraft,
+  suggestion: RendererSuggestionV2DocumentSuggestion,
+  sourceDocumentName = ""
+): { draft: NamingDraft; appliedFields: Array<keyof NamingDraft> } {
+  const nextDraft: NamingDraft = { ...draft };
+  const appliedFields: Array<keyof NamingDraft> = [];
+  const dateToken = normalizeSuggestionV2DateForCurrentDraft(suggestion.draft.dateToken);
+  const target = suggestion.draft.target?.trim() ?? "";
+
+  if (!nextDraft.documentDate.trim() && dateToken) {
+    nextDraft.documentDate = dateToken;
+    appliedFields.push("documentDate");
+  }
+
+  if (target && shouldApplySuggestionV2Subject(nextDraft.subject, target, sourceDocumentName)) {
+    nextDraft.subject = target;
+    appliedFields.push("subject");
+  }
+
+  if (!nextDraft.documentType.trim() && suggestion.draft.documentType?.trim()) {
+    nextDraft.documentType = suggestion.draft.documentType.trim();
+    appliedFields.push("documentType");
+  }
+
+  const keywords = uniqueStrings([
+    suggestion.draft.issuer?.trim() ?? "",
+    suggestion.draft.detail?.trim() ?? ""
+  ]).join(" ");
+  if (!nextDraft.keywords.trim() && keywords) {
+    nextDraft.keywords = keywords;
+    appliedFields.push("keywords");
+  }
+
+  return {
+    draft: nextDraft,
+    appliedFields
+  };
+}
+
+function hasEmptyNamingFieldForSuggestionV2(
+  draft: NamingDraft,
+  suggestion: RendererSuggestionV2DocumentSuggestion,
+  sourceDocumentName = ""
+): boolean {
+  const target = suggestion.draft.target?.trim() ?? "";
+  return (
+    (!draft.documentDate.trim() && Boolean(normalizeSuggestionV2DateForCurrentDraft(suggestion.draft.dateToken))) ||
+    (Boolean(target) && shouldApplySuggestionV2Subject(draft.subject, target, sourceDocumentName)) ||
+    (!draft.documentType.trim() && Boolean(suggestion.draft.documentType?.trim())) ||
+    (!draft.keywords.trim() && Boolean(suggestion.draft.issuer?.trim() || suggestion.draft.detail?.trim()))
+  );
+}
+
+function normalizeSuggestionV2DateForCurrentDraft(dateToken: string | undefined): string {
+  const trimmed = dateToken?.trim() ?? "";
+  return /^(19|20)\d{2}$/.test(trimmed) ||
+    /^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)
+    ? trimmed
+    : "";
+}
+
+function getSuggestionV2RecommendedFolder(
+  suggestion: RendererSuggestionV2DocumentSuggestion
+): string {
+  return (
+    suggestion.folderPlacement?.relativePath ??
+    suggestion.targetFolderSuggestion.recommended?.relativePath ??
+    ""
+  ).trim();
+}
+
+function canApplySuggestionV2TargetFolder(targetFolder: string): boolean {
+  return Boolean(
+    state.targetPath &&
+      !state.targetFolder.selectedFolder.trim() &&
+      targetFolder.trim()
+  );
+}
+
+function shouldApplySuggestionV2Subject(
+  currentSubject: string,
+  target: string,
+  sourceDocumentName: string
+): boolean {
+  const trimmedSubject = currentSubject.trim();
+  const trimmedTarget = target.trim();
+  if (!trimmedTarget) {
+    return false;
+  }
+  if (!trimmedSubject) {
+    return true;
+  }
+  if (normalizeSuggestionV2ComparisonValue(trimmedSubject) === normalizeSuggestionV2ComparisonValue(trimmedTarget)) {
+    return false;
+  }
+
+  return isSuggestionV2FilenameDerivedSubject(trimmedSubject, sourceDocumentName);
+}
+
+function isSuggestionV2FilenameDerivedSubject(currentSubject: string, sourceDocumentName: string): boolean {
+  const baseName = removeSuggestionV2Extension(sourceDocumentName);
+  if (!baseName) {
+    return false;
+  }
+
+  const candidates = uniqueStrings([
+    baseName,
+    baseName.replace(/^(?:19|20)\d{2}(?:-\d{2}){0,2}[-_\s]+/, ""),
+    baseName.replace(/^t\d{2}[-_\s]+/i, "")
+  ]).map(normalizeSuggestionV2ComparisonValue);
+  const normalizedSubject = normalizeSuggestionV2ComparisonValue(currentSubject);
+
+  return Boolean(normalizedSubject && candidates.includes(normalizedSubject));
+}
+
+function removeSuggestionV2Extension(fileName: string): string {
+  return fileName.trim().replace(/\.[^.\\/]+$/, "");
+}
+
+function normalizeSuggestionV2ComparisonValue(value: string): string {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
 }

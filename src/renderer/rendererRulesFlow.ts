@@ -57,7 +57,7 @@ async function saveUserRules(): Promise<void> {
   applyNamingRulesStatus(result.value as RendererNamingRulesStatus, true);
 }
 
-function applyNamingRulesStatus(status: RendererNamingRulesStatus, resetSuggestions: boolean): void {
+function applyNamingRulesStatus(status: RendererNamingRulesStatus, _resetSuggestions: boolean): void {
   state.namingRules = {
     ...state.namingRules,
     panelStatus: "ready",
@@ -73,10 +73,6 @@ function applyNamingRulesStatus(status: RendererNamingRulesStatus, resetSuggesti
     draftErrors: [],
     dirty: false
   };
-
-  if (resetSuggestions) {
-    resetNamingSuggestionsState();
-  }
 
   render();
 }

@@ -18,6 +18,8 @@ describe("suggestionV2Panel", () => {
     expect(text).not.toContain("entretien-vidange");
     expect(text).toContain("Vehicules/Captur");
     expect(text).toContain("Source : dossier existant");
+    expect(text).toContain("Nouveaux dossiers proposés");
+    expect(text).toContain("Vehicules/Captur/2024 (création manuelle uniquement)");
     expect(text).toContain("Dossier existant retenu");
     expect(text).toContain("Voir détails");
     expect(text).toContain("Domaine du dossier cohérent");
@@ -113,6 +115,38 @@ describe("suggestionV2Panel", () => {
     expect(analyzeCount).toBe(1);
   });
 
+  it("wires the v2 apply action only when a ready suggestion can fill empty fields", async () => {
+    let applyCount = 0;
+    const { api, applyButton } = await createPanelHarness(createReadyState(), {
+      onApplySuggestionToEmptyFields: () => {
+        applyCount += 1;
+      },
+      canApplySuggestionToEmptyFields: () => true
+    });
+
+    api.render();
+    applyButton.click();
+
+    expect(applyButton.disabled).toBe(false);
+    expect(applyCount).toBe(1);
+  });
+
+  it("keeps the v2 apply action disabled when no field can be completed", async () => {
+    let applyCount = 0;
+    const { api, applyButton } = await createPanelHarness(createReadyState(), {
+      onApplySuggestionToEmptyFields: () => {
+        applyCount += 1;
+      },
+      canApplySuggestionToEmptyFields: () => false
+    });
+
+    api.render();
+    applyButton.click();
+
+    expect(applyButton.disabled).toBe(true);
+    expect(applyCount).toBe(0);
+  });
+
   it("does not reference classification, OCR or AI commands", async () => {
     const source = await readFile(panelSourcePath(), "utf8");
 
@@ -131,12 +165,14 @@ async function createPanelHarness(
       SuggestionV2PanelOptions,
       "onRunDiagnostic" | "onRunAiDiagnostic" | "isAiDiagnosticAvailable"
       | "onAnalyzeDocument" | "isAnalyzeDisabled"
+      | "onApplySuggestionToEmptyFields" | "canApplySuggestionToEmptyFields"
     >
   > = {}
 ) {
   const details = new FakeElement("div", "suggestion-v2-details");
   const panel = new FakeElement("section", "suggestion-v2-panel");
   const analyzeButton = new FakeElement("button", "analyze-document-v2");
+  const applyButton = new FakeElement("button", "apply-suggestion-v2-empty");
   const diagnosticPanel = new FakeElement("details", "suggestion-v2-diagnostic-panel");
   const diagnosticMode = new FakeElement("p", "suggestion-v2-diagnostic-mode");
   const diagnosticResult = new FakeElement("div", "suggestion-v2-diagnostic-result");
@@ -145,6 +181,7 @@ async function createPanelHarness(
   const document = new FakeDocument([
     panel,
     analyzeButton,
+    applyButton,
     diagnosticPanel,
     diagnosticMode,
     diagnosticResult,
@@ -183,6 +220,7 @@ async function createPanelHarness(
     }),
     details,
     analyzeButton,
+    applyButton,
     diagnosticPanel,
     diagnosticMode,
     diagnosticResult,
@@ -230,7 +268,7 @@ function createReadyState(): SuggestionV2PanelState {
             confidence: 92,
             reasons: ["Profondeur équilibrée recommandée."],
             warnings: [],
-            source: "preference"
+            source: "inventory"
           },
           options: [
             {
@@ -251,7 +289,19 @@ function createReadyState(): SuggestionV2PanelState {
               confidence: 92,
               reasons: ["Profondeur équilibrée recommandée."],
               warnings: [],
-              source: "preference"
+              requiresCreation: false,
+              source: "inventory"
+            },
+            {
+              label: "detaille",
+              relativePath: "Vehicules/Captur/2024",
+              depth: 3,
+              recommended: false,
+              confidence: 72,
+              reasons: ["Dossier détaillé avec période."],
+              warnings: [],
+              requiresCreation: true,
+              source: "rules-v2"
             }
           ],
           warnings: [],

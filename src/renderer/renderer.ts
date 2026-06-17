@@ -15,7 +15,6 @@ const state: AppState = {
   history: createIdleHistoryState(),
   duplicates: createIdleDuplicateAnalysisState(),
   textExtraction: createIdleTextExtractionState(),
-  namingSuggestions: createIdleNamingSuggestionsState(),
   suggestionV2: createIdleSuggestionV2State(),
   namingRules: createIdleNamingRulesState(),
   ocr: createIdleOcrState(),
@@ -181,23 +180,6 @@ const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPan
   formatDate
 });
 
-const namingSuggestionsPanel = DocSorterNamingSuggestionsPanel.createNamingSuggestionsPanel({
-  getState: () => {
-    const activeDocument = getActiveDocument();
-    return {
-      activeDocument,
-      extractionState: activeDocument ? getTextExtractionState(activeDocument.filePath) : null,
-      suggestionState: activeDocument ? getNamingSuggestionState(activeDocument.filePath) : null
-    };
-  },
-  canAnalyze: (documentItem) => canAnalyzeNamingSuggestions(documentItem ?? getActiveDocument()),
-  canApplyToEmptyFields: canApplyNamingSuggestionsToEmptyFields,
-  canApplyTargetFolderSuggestion: canApplyTargetFolderSuggestion,
-  onAnalyze: analyzeNamingSuggestionsForActiveDocument,
-  onApplyToEmptyFields: applyNamingSuggestionsToEmptyFields,
-  onApplyTargetFolderSuggestion: applyTargetFolderSuggestion
-});
-
 const suggestionV2Panel = DocSorterSuggestionV2Panel.createSuggestionV2Panel({
   getState: () => {
     const activeDocument = getActiveDocument();
@@ -209,6 +191,7 @@ const suggestionV2Panel = DocSorterSuggestionV2Panel.createSuggestionV2Panel({
   onAnalyzeDocument: () => {
     runSuggestionV2AnalysisForActiveDocument();
   },
+  onApplySuggestionToEmptyFields: applySuggestionV2ToEmptyFields,
   onRunDiagnostic: () => {
     runSuggestionV2DiagnosticForActiveDocument(false);
   },
@@ -216,7 +199,8 @@ const suggestionV2Panel = DocSorterSuggestionV2Panel.createSuggestionV2Panel({
     runSuggestionV2DiagnosticForActiveDocument(true);
   },
   isAiDiagnosticAvailable: () => canRunAiSuggestion(),
-  isAnalyzeDisabled: () => isClassificationBusy()
+  isAnalyzeDisabled: () => isClassificationBusy(),
+  canApplySuggestionToEmptyFields: canApplySuggestionV2ToEmptyFields
 });
 
 const namingPanelView = DocSorterNamingPanel.createNamingPanel({

@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 + IA-2.5 + Nommage v2 Lot B : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, suggestions locales de nommage et de sous-dossier cible, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif, gestion du chargement/libération du modèle Ollama, générateur pur de nommage v2 et référentiels locaux simples en lecture seule.
+Lot 7 + 8A + OCR-2 + IA-2.5 + Nommage v2 Lot B : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, proposition de tri v2, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif, gestion du chargement/libération du modèle Ollama, générateur pur de nommage v2 et référentiels locaux simples en lecture seule.
 
 ## Commandes
 
@@ -82,10 +82,10 @@ npm run dev
 - affichage d'un extrait limité, du nombre de caractères et du nombre de pages analysées ;
 - message clair si aucun texte exploitable n'est détecté dans un PDF scanné ;
 - texte extrait conservé uniquement en mémoire pendant la session ;
-- bouton explicite `Analyser les suggestions` après extraction texte d'un PDF ;
-- suggestions locales de date, sujet, type et mots-clés depuis l'extrait texte et le nom de fichier ;
-- suggestions locales de sous-dossier cible depuis les règles, sans application automatique ;
-- bouton explicite pour appliquer le sous-dossier suggéré au champ cible ;
+- bouton explicite `Analyser le document` après extraction texte d'un PDF ou OCR image ;
+- proposition de tri v2 depuis l'extrait local borné, le nom de fichier, les référentiels locaux et l'inventaire cible disponible ;
+- bouton `Appliquer aux champs vides` dans `Proposition de tri`, sans remplacement des valeurs déjà saisies ;
+- application manuelle du dossier recommandé v2 au champ sous-dossier cible, sans création automatique ;
 - message `Dossier inexistant` et bouton `Créer ce dossier` si le sous-dossier choisi n'existe pas ;
 - création du sous-dossier cible uniquement après confirmation explicite, sous la racine cible ;
 - règles de suggestion par défaut externalisées dans un catalogue typé ;
@@ -109,7 +109,7 @@ npm run dev
 - OCR image via Tesseract CLI uniquement après configuration et test du moteur local ;
 - commande OCR limitée à `tesseract <imagePath> stdout -l <lang> --psm <psm>` avec timeout et sorties bornées ;
 - refus des images trop volumineuses pour OCR ;
-- affichage borné du texte OCR et réutilisation manuelle pour les suggestions locales ;
+- affichage borné du texte OCR et réutilisation manuelle pour la proposition de tri v2 ;
 - cache local des résultats OCR image sous `userData/cache/analysis`, invalidé par chemin, taille, date de modification, moteur, version Tesseract, langue et PSM.
 - contrat IA local strict pour proposer date, type, sujet, mots-clés, dossier, score et raisons ;
 - provider IA simulé déterministe, sans modèle réel, sans réseau et sans prompt modèle ;
@@ -223,15 +223,17 @@ Garde-fous MVP :
 - l'extraction texte PDF analyse au maximum les 50 premières pages ;
 - l'extrait affiché reste limité à 5 000 caractères.
 
-## Suggestions locales
+## Proposition de tri v2 et règles locales
 
-L'affichage et l'application des suggestions restent déclenchés manuellement après extraction du texte PDF natif. Les suggestions utilisent uniquement l'extrait local borné et le nom du fichier actif comme signal secondaire.
+L'affichage et l'application de la proposition de tri v2 restent déclenchés manuellement après extraction du texte PDF natif ou OCR image. La proposition utilise uniquement l'extrait local borné, le nom du fichier actif, les référentiels locaux et l'inventaire cible disponible.
 
-L'application peut proposer une date documentaire, un sujet, un type, un sous-dossier cible relatif et jusqu'à cinq mots-clés. Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides, puis relance le calcul du nom proposé et le contrôle cible. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
+Le bouton `Appliquer aux champs vides` du panneau `Proposition de tri` peut remplir les champs actuels depuis la suggestion v2 : date compatible, sujet, type, mots-clés et sous-dossier cible recommandé. Il relance ensuite le calcul du nom proposé et les contrôles cible existants. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
 
-La suggestion de sous-dossier cible utilise un bouton séparé. Elle ne crée jamais de dossier automatiquement et ne déclenche aucun classement réel.
+Le dossier recommandé v2 ne crée jamais de dossier automatiquement et ne déclenche aucun classement réel.
 
-Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
+L'ancien moteur de suggestions locales reste conservé en interne pour les dépendances cache, OCR et IA qui l'utilisent encore, mais il n'est plus exposé comme panneau `Suggestions locales` dans l'interface.
+
+Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format historique est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
 
 Les règles utilisateur sont stockées localement dans :
 

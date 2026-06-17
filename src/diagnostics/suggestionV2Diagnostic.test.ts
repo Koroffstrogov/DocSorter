@@ -41,6 +41,11 @@ describe("suggestion v2 diagnostics", () => {
     expect(log.text.text).toBe("Texte complet autorisé pour test T01.");
     expect(log.document.name).toBe("T01-facture-captur.pdf");
     expect(log.dossiers.candidats[0].score).toBe(95);
+    expect(log.dossiers.dossierExistantRecommande.relativePath).toBe("Véhicules/Captur");
+    expect(log.dossiers.nouveauxDossiersProposes.map((option: { relativePath: string }) => option.relativePath)).toEqual([
+      "Véhicules/Captur/2024"
+    ]);
+    expect(log.dossiers.fallback.relativePath).toBe("Divers/A-traiter-manuellement");
   });
 
   it("forces redacted diagnostics for normal documents", async () => {
@@ -193,9 +198,43 @@ function createSuggestionResult(): SuggestionV2Result {
           confidence: 95,
           reasons: ["Dossier existant correspondant à Captur."],
           warnings: [],
-          source: "preference"
+          source: "inventory"
         },
-        options: [],
+        options: [
+          {
+            label: "equilibre",
+            relativePath: "Véhicules/Captur",
+            depth: 2,
+            recommended: true,
+            confidence: 95,
+            reasons: ["Dossier existant correspondant à Captur."],
+            warnings: [],
+            requiresCreation: false,
+            source: "inventory"
+          },
+          {
+            label: "detaille",
+            relativePath: "Véhicules/Captur/2024",
+            depth: 3,
+            recommended: false,
+            confidence: 72,
+            reasons: ["Dossier détaillé avec période."],
+            warnings: [],
+            requiresCreation: true,
+            source: "rules-v2"
+          },
+          {
+            label: "court",
+            relativePath: "Divers/A-traiter-manuellement",
+            depth: 2,
+            recommended: false,
+            confidence: 15,
+            reasons: ["Fallback manuel proposé sans création automatique."],
+            warnings: [],
+            requiresCreation: false,
+            source: "fallback"
+          }
+        ],
         warnings: [],
         reasons: []
       },

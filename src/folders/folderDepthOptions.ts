@@ -61,11 +61,11 @@ export function buildFolderDepthOptions(
       confidence: rawOption.confidence + (exists ? 8 : 0),
       reasons: [
         rawOption.reason,
-        ...(exists ? ["Dossier déjà présent dans les dossiers connus."] : [])
+        ...(exists ? ["Dossier déjà présent dans l'arborescence cible."] : [])
       ],
       warnings: [...safety.warnings],
       requiresCreation: knownFolders.size > 0 ? !exists : undefined,
-      source: exists ? "existing-folder" : "rules-v2"
+      source: exists ? "inventory" : "rules-v2"
     };
 
     options.push(option);
@@ -145,11 +145,24 @@ function applyRecommendation(
     }
   }
 
+  const inventoryPath = input.inventoryRecommendedRelativePath
+    ? validateTargetFolderOptionPath(input.inventoryRecommendedRelativePath)
+    : null;
+  if (inventoryPath && inventoryPath.ok) {
+    const option = findOrCreateInventoryOption(options, inventoryPath.relativePath);
+    markRecommended(option, "inventory", "Dossier déjà présent dans l'arborescence cible.", reasons);
+    return;
+  }
+
+  if (input.inventoryRecommendedRelativePath && inventoryPath && !inventoryPath.ok) {
+    warnings.push("Dossier d'inventaire ignoré : chemin relatif invalide.");
+  }
+
   const detailed = options.find((option) => option.label === "detaille");
   const detailedReason = getDetailedRecommendationReason(input, rule, detailed);
   if (detailed && detailedReason) {
-    const source: FolderSuggestionSource = detailedReason === "Dossier détaillé déjà existant."
-      ? "existing-folder"
+    const source: FolderSuggestionSource = detailedReason === "Dossier détaillé déjà présent dans l'arborescence cible."
+      ? "inventory"
       : "rules-v2";
     markRecommended(detailed, source, detailedReason, reasons);
     return;
@@ -184,8 +197,8 @@ function getDetailedRecommendationReason(
     return null;
   }
 
-  if (detailed.source === "existing-folder") {
-    return "Dossier détaillé déjà existant.";
+  if (detailed.source === "inventory" || detailed.source === "existing-folder") {
+    return "Dossier détaillé déjà présent dans l'arborescence cible.";
   }
 
   const stat = findFolderStat(input, detailed.relativePath);
@@ -245,6 +258,38 @@ function findOrCreatePreferenceOption(
     reasons: ["Chemin issu d'une préférence utilisateur."],
     warnings: [],
     source: "preference"
+  };
+  options.push(option);
+  return option;
+}
+
+function findOrCreateInventoryOption(
+  options: FolderDepthOption[],
+  relativePath: string
+): FolderDepthOption {
+  const existing = options.find(
+    (option) => option.relativePath.toLowerCase() === relativePath.toLowerCase()
+  );
+  if (existing) {
+    existing.requiresCreation = false;
+    existing.source = "inventory";
+    existing.reasons = uniqueStrings([
+      ...existing.reasons,
+      "Dossier déjà présent dans l'arborescence cible."
+    ]);
+    return existing;
+  }
+
+  const option: FolderDepthOption = {
+    label: inferDepthLabel(relativePath),
+    relativePath,
+    depth: relativePath.split("/").length,
+    recommended: false,
+    confidence: 88,
+    reasons: ["Dossier déjà présent dans l'arborescence cible."],
+    warnings: [],
+    requiresCreation: false,
+    source: "inventory"
   };
   options.push(option);
   return option;

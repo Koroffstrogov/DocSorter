@@ -35,6 +35,12 @@ interface ReferenceDataPanelApi {
   render: () => void;
 }
 
+interface ReferenceDataFocusState {
+  selector: string;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+}
+
 interface ReferenceDataPanelFactoryApi {
   createReferenceDataPanel: (options: ReferenceDataPanelOptions) => ReferenceDataPanelApi;
 }
@@ -75,12 +81,15 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
         return;
       }
 
+      const focusState = captureReferenceDataFocus(elements.content);
       if (state.mode === "json" || selectedFile.key === "documentTypes") {
         elements.content.replaceChildren(createJsonView(state, selectedFile, busy, options));
+        restoreReferenceDataFocus(elements.content, focusState);
         return;
       }
 
       elements.content.replaceChildren(createSimpleView(state, selectedFile, busy, options));
+      restoreReferenceDataFocus(elements.content, focusState);
     }
 
     return { render };
@@ -185,6 +194,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
 
     container.className = "reference-data-json";
     labelText.textContent = `${file.relativePath} (${referenceDataFileStatusLabel(file.status)})`;
+    textarea.setAttribute("data-reference-json", file.key);
     textarea.value = content;
     textarea.spellcheck = false;
     textarea.addEventListener("input", () => options.onJsonDraftChange(file.key, textarea.value));
@@ -298,6 +308,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const input = document.createElement("input");
     label.hidden = hidden;
     span.textContent = labelText;
+    input.setAttribute("data-reference-field", field);
     input.value = value;
     input.autocomplete = "off";
     input.addEventListener("input", () => options.onSimpleFieldChange(field, input.value));
@@ -317,6 +328,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const textarea = document.createElement("textarea");
     label.hidden = hidden;
     span.textContent = labelText;
+    textarea.setAttribute("data-reference-field", field);
     textarea.value = value;
     textarea.addEventListener("input", () => options.onSimpleFieldChange(field, textarea.value));
     label.append(span, textarea);
@@ -336,6 +348,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     label.className = "reference-data-checkbox";
     label.hidden = hidden;
     input.type = "checkbox";
+    input.setAttribute("data-reference-field", field);
     input.checked = value;
     input.addEventListener("change", () => options.onSimpleFieldChange(field, input.checked));
     span.textContent = labelText;
@@ -418,6 +431,82 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
 
   function currentDraftContent(state: ReferenceDataState, file: ReferenceDataFileInfo): string {
     return state.jsonDrafts[file.key] ?? file.content;
+  }
+
+  function captureReferenceDataFocus(content: HTMLElement): ReferenceDataFocusState | null {
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLElement) || !content.contains(activeElement)) {
+      return null;
+    }
+
+    const field = activeElement.getAttribute("data-reference-field");
+    const jsonFile = activeElement.getAttribute("data-reference-json");
+    const selector = field
+      ? `[data-reference-field="${field}"]`
+      : jsonFile
+        ? `[data-reference-json="${jsonFile}"]`
+        : "";
+    if (!selector) {
+      return null;
+    }
+
+    return {
+      selector,
+      ...getReferenceDataSelection(activeElement)
+    };
+  }
+
+  function restoreReferenceDataFocus(
+    content: HTMLElement,
+    focusState: ReferenceDataFocusState | null
+  ): void {
+    if (!focusState) {
+      return;
+    }
+
+    const nextElement = content.querySelector<HTMLElement>(focusState.selector);
+    if (!nextElement) {
+      return;
+    }
+
+    nextElement.focus({ preventScroll: true });
+    if (
+      focusState.selectionStart !== null &&
+      focusState.selectionEnd !== null &&
+      isReferenceDataTextControl(nextElement)
+    ) {
+      const nextLength = nextElement.value.length;
+      nextElement.setSelectionRange(
+        Math.min(focusState.selectionStart, nextLength),
+        Math.min(focusState.selectionEnd, nextLength)
+      );
+    }
+  }
+
+  function getReferenceDataSelection(element: HTMLElement): {
+    selectionStart: number | null;
+    selectionEnd: number | null;
+  } {
+    if (!isReferenceDataTextControl(element)) {
+      return {
+        selectionStart: null,
+        selectionEnd: null
+      };
+    }
+
+    return {
+      selectionStart: element.selectionStart,
+      selectionEnd: element.selectionEnd
+    };
+  }
+
+  function isReferenceDataTextControl(
+    element: HTMLElement
+  ): element is HTMLInputElement | HTMLTextAreaElement {
+    return (
+      element instanceof HTMLTextAreaElement ||
+      (element instanceof HTMLInputElement && element.type !== "checkbox")
+    );
   }
 
   function getSelectedFile(state: ReferenceDataState): ReferenceDataFileInfo | null {

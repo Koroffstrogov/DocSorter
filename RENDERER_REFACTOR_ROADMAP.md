@@ -85,7 +85,7 @@ Panneaux UI deja isoles :
 - `src/renderer/documentDetailsPanel.ts`
 - `src/renderer/historyPanel.ts`
 - `src/renderer/textExtractionPanel.ts`
-- `src/renderer/namingSuggestionsPanel.ts`
+- `src/renderer/suggestionV2Panel.ts`
 - `src/renderer/namingPanel.ts`
 - `src/renderer/classificationPanel.ts`
 - `src/renderer/rulesPanel.ts`

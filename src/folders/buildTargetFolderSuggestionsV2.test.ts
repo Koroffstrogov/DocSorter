@@ -69,7 +69,7 @@ describe("buildTargetFolderSuggestionsV2", () => {
     });
 
     expect(result.recommended?.relativePath).toBe("Scolarite/Lea/2026-2027");
-    expect(result.recommended?.source).toBe("existing-folder");
+    expect(result.recommended?.source).toBe("inventory");
   });
 
   it("recommends level 3 for school report cards", () => {
@@ -149,6 +149,25 @@ describe("buildTargetFolderSuggestionsV2", () => {
     });
 
     expect(result.recommended?.relativePath).toBe("Vehicules/Captur/2026");
+    expect(result.recommended?.source).toBe("inventory");
+  });
+
+  it("uses an inventory recommended folder without presenting it as a user preference", () => {
+    const result = buildTargetFolderSuggestionsV2({
+      draft: createDraft({
+        documentType: "certificat-scolarite",
+        target: "lea",
+        dateToken: "2026",
+        dateSelection: schoolYearSelection()
+      }),
+      knownRelativeFolders: ["Scolarite"],
+      inventoryRecommendedRelativePath: "Scolarite"
+    });
+
+    expect(result.recommended?.relativePath).toBe("Scolarite");
+    expect(result.recommended?.source).toBe("inventory");
+    expect(result.recommended?.reasons.join(" ")).toContain("arborescence cible");
+    expect(result.recommended?.reasons.join(" ")).not.toContain("Préférence");
   });
 
   it("uses similar document stats to increase detailed priority", () => {

@@ -5,6 +5,7 @@ export type FolderDepthLabel = "court" | "equilibre" | "detaille";
 export type FolderSuggestionSource =
   | "rules-v2"
   | "existing-folder"
+  | "inventory"
   | "preference"
   | "fallback";
 
@@ -43,6 +44,7 @@ export interface BuildTargetFolderSuggestionsV2Input {
   draft: SuggestionDraftV2;
   knownRelativeFolders?: string[];
   knownFolderStats?: KnownFolderStat[];
+  inventoryRecommendedRelativePath?: string;
   userFolderPreferences?: UserFolderPreference[];
 }
 

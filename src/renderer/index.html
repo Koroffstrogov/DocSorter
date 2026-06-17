@@ -158,7 +158,10 @@
           >
             <div class="section-heading">
               <h3>Proposition de tri</h3>
-              <button id="analyze-document-v2" type="button" disabled>Analyser le document</button>
+              <div class="section-actions">
+                <button id="analyze-document-v2" type="button" disabled>Analyser le document</button>
+                <button id="apply-suggestion-v2-empty" type="button" disabled>Appliquer aux champs vides</button>
+              </div>
             </div>
             <div id="suggestion-v2-details" class="suggestion-v2-details">Proposition en attente.</div>
           </section>
@@ -172,18 +175,21 @@
             </div>
           </section>
 
-          <section id="suggestions-panel" class="detail-section suggestions-panel" aria-label="Suggestions locales" hidden>
+          <section id="ai-suggestion-panel" class="detail-section ai-suggestion-panel" aria-label="IA locale">
             <div class="section-heading">
-              <h3>Suggestions locales</h3>
-              <button id="analyze-suggestions" type="button" disabled>Analyser les suggestions</button>
+              <h3>IA locale</h3>
+              <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
             </div>
-            <div id="suggestions-details" class="suggestions-details">
-              Extrais le texte PDF ou lance l'OCR image pour obtenir des suggestions locales.
+            <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
+            <div id="ai-suggestion-details" class="ai-suggestion-details">
+              Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale.
             </div>
-            <button id="apply-target-folder-suggestion" type="button" disabled hidden>
-              Appliquer le dossier suggéré
-            </button>
-            <button id="apply-suggestions-empty" type="button" disabled>Appliquer aux champs vides</button>
+            <div class="ai-suggestion-actions">
+              <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
+                Appliquer aux champs vides
+              </button>
+              <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer</button>
+            </div>
           </section>
 
           <section id="rules-panel" class="detail-section rules-panel" aria-label="Règles de suggestion">
@@ -344,7 +350,6 @@
               <h3>IA locale</h3>
               <button id="refresh-ai-status" type="button">Rafraîchir</button>
             </div>
-            <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
             <p class="ai-note">Analyse locale explicite uniquement. Aucun classement automatique.</p>
             <form id="ai-settings-form" class="ai-settings-form">
               <label class="ai-checkbox">
@@ -382,17 +387,7 @@
               <div class="ai-advanced-actions">
                 <button id="unload-ai-model" type="button" disabled>Libérer le modèle IA</button>
               </div>
-              <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
             </form>
-            <div id="ai-suggestion-details" class="ai-suggestion-details">
-              Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale.
-            </div>
-            <div class="ai-suggestion-actions">
-              <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
-                Appliquer aux champs vides
-              </button>
-              <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer</button>
-            </div>
           </details>
 
           <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
@@ -536,7 +531,6 @@
     <script src="./documentDetailsPanel.js"></script>
     <script src="./historyPanel.js"></script>
     <script src="./textExtractionPanel.js"></script>
-    <script src="./namingSuggestionsPanel.js"></script>
     <script src="./suggestionV2Panel.js"></script>
     <script src="./namingPanel.js"></script>
     <script src="./classificationPanel.js"></script>

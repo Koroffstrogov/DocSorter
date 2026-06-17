@@ -7,10 +7,12 @@ interface SuggestionV2PanelOptions {
   root?: ParentNode;
   getState: () => SuggestionV2PanelState;
   onAnalyzeDocument?: () => void;
+  onApplySuggestionToEmptyFields?: () => void;
   onRunDiagnostic?: () => void;
   onRunAiDiagnostic?: () => void;
   isAiDiagnosticAvailable?: () => boolean;
   isAnalyzeDisabled?: () => boolean;
+  canApplySuggestionToEmptyFields?: () => boolean;
 }
 
 interface SuggestionV2PanelApi {
@@ -21,6 +23,7 @@ interface SuggestionV2PanelElements {
   panel: HTMLElement | null;
   details: HTMLElement | null;
   analyzeButton: HTMLButtonElement | null;
+  applyButton: HTMLButtonElement | null;
   diagnosticPanel: HTMLDetailsElement | null;
   diagnosticMode: HTMLElement | null;
   diagnosticResult: HTMLElement | null;
@@ -46,6 +49,10 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
       options.onAnalyzeDocument?.();
     });
 
+    elements.applyButton?.addEventListener("click", () => {
+      options.onApplySuggestionToEmptyFields?.();
+    });
+
     elements.diagnosticButton?.addEventListener("click", () => {
       options.onRunDiagnostic?.();
     });
@@ -69,6 +76,14 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
         elements.analyzeButton.textContent = state.status === "loading"
           ? "Analyse..."
           : "Analyser le document";
+      }
+      if (elements.applyButton) {
+        elements.applyButton.disabled =
+          !activeDocument ||
+          busy ||
+          state.status !== "ready" ||
+          !state.result ||
+          !Boolean(options.canApplySuggestionToEmptyFields?.());
       }
       if (elements.diagnosticButton) {
         elements.diagnosticButton.disabled = !activeDocument || diagnosticBusy;
@@ -121,6 +136,7 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
       panel: root.querySelector<HTMLElement>("#suggestion-v2-panel"),
       details: root.querySelector<HTMLElement>("#suggestion-v2-details"),
       analyzeButton: root.querySelector<HTMLButtonElement>("#analyze-document-v2"),
+      applyButton: root.querySelector<HTMLButtonElement>("#apply-suggestion-v2-empty"),
       diagnosticPanel: root.querySelector<HTMLDetailsElement>("#suggestion-v2-diagnostic-panel"),
       diagnosticMode: root.querySelector<HTMLElement>("#suggestion-v2-diagnostic-mode"),
       diagnosticResult: root.querySelector<HTMLElement>("#suggestion-v2-diagnostic-result"),
@@ -137,6 +153,7 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
 
     container.append(
       createHeader(suggestion),
+      createMessage(suggestion.message),
       createRecommendedFolder(suggestion),
       createShortReasons(suggestion),
       createShortAlerts(suggestion),
@@ -223,6 +240,13 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     message.textContent = messageText;
     container.append(statusLine, name, message);
     return container;
+  }
+
+  function createMessage(messageText: string): HTMLParagraphElement {
+    const message = document.createElement("p");
+    message.className = "suggestion-v2-message";
+    message.textContent = messageText;
+    return message;
   }
 
   function createFieldGrid(suggestion: RendererSuggestionV2DocumentSuggestion): HTMLDListElement {
@@ -329,6 +353,7 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
     content.append(
       createFieldGrid(suggestion),
       createFolderReasons(suggestion),
+      createNewFolderProposals(suggestion),
       createDepthOptions(suggestion),
       createNamingProfile(suggestion)
     );
@@ -392,6 +417,20 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
 
     container.append(title, list);
     return container;
+  }
+
+  function createNewFolderProposals(
+    suggestion: RendererSuggestionV2DocumentSuggestion
+  ): HTMLDivElement | DocumentFragment {
+    const folders = uniqueStrings(
+      suggestion.targetFolderSuggestion.options
+        .filter((option) => option.requiresCreation === true)
+        .map((option) => `${option.relativePath} (création manuelle uniquement)`)
+    );
+
+    return folders.length > 0
+      ? createList("Nouveaux dossiers proposés", folders)
+      : document.createDocumentFragment();
   }
 
   function createNamingProfile(
@@ -481,6 +520,8 @@ var DocSorterSuggestionV2Panel: SuggestionV2PanelFactoryApi;
 
   function folderOptionSourceLabel(source: RendererFolderDepthOption["source"]): string {
     switch (source) {
+      case "inventory":
+        return "inventaire";
       case "existing-folder":
         return "dossier existant";
       case "preference":

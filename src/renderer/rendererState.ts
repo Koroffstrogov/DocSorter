@@ -108,12 +108,6 @@ function createIdleNamingRulesState(): NamingRulesState {
   };
 }
 
-function createIdleNamingSuggestionsState(): NamingSuggestionsState {
-  return {
-    byDocumentPath: {}
-  };
-}
-
 function createIdleSuggestionV2State(): SuggestionV2State {
   return {
     byDocumentPath: {}
@@ -202,14 +196,6 @@ function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
     status: "idle",
     result: null,
     error: null
-  };
-}
-
-function createIdleNamingSuggestionDocumentState(): NamingSuggestionDocumentState {
-  return {
-    status: "idle",
-    suggestions: null,
-    message: ""
   };
 }
 

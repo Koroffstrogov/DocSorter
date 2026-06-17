@@ -84,6 +84,7 @@ export function buildSuggestionDraftV2(input: BuildSuggestionDraftV2Input): Sugg
     draft.warnings.push(
       ...generation.messages
         .filter((message) => message.level !== "info")
+        .filter((message) => exposeNamingMessageAsMainWarning(message, generation))
         .map((message) => message.message)
     );
 
@@ -271,6 +272,9 @@ function applyLegacyField(
   confidenceParts: number[]
 ): void {
   if (draft[field] || !value?.trim()) {
+    if (draft[field] && value && looksLikeFilenameOrLongIdentifier(value)) {
+      draft.reasons.push("Ancienne valeur ignorée : ressemble à un nom de fichier.");
+    }
     return;
   }
 
@@ -405,6 +409,33 @@ function resolveExtension(input: BuildSuggestionDraftV2Input): string {
   const lastPathSegment = input.fileName.split(/[\\/]/).pop() ?? input.fileName;
   const dotIndex = lastPathSegment.lastIndexOf(".");
   return dotIndex > 0 ? lastPathSegment.slice(dotIndex) : "";
+}
+
+function exposeNamingMessageAsMainWarning(
+  message: GeneratedDocumentNameV2["messages"][number],
+  generation: GeneratedDocumentNameV2
+): boolean {
+  if (message.code !== "SENSITIVE_IDENTIFIER" || !message.field) {
+    return true;
+  }
+
+  const generatedValue = generation.normalizedInput[message.field];
+  return typeof generatedValue === "string" && containsLongIdentifier(generatedValue);
+}
+
+function looksLikeFilenameOrLongIdentifier(value: string): boolean {
+  const trimmed = value.trim();
+  const normalized = normalizeNameBlock(trimmed);
+  return (
+    containsLongIdentifier(trimmed) ||
+    /\.(pdf|jpg|jpeg|png)$/i.test(trimmed) ||
+    /^t[0-9][0-9]-/.test(normalized)
+  );
+}
+
+function containsLongIdentifier(value: string): boolean {
+  const compact = value.replace(/[-_\s]/g, "");
+  return /[A-Za-z0-9]{18,}/.test(compact) && /\d/.test(compact);
 }
 
 function computeConfidence(confidenceParts: number[], draft: SuggestionDraftV2): number {

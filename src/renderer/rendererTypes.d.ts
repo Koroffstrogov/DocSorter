@@ -276,7 +276,6 @@ interface DuplicateAnalysisState {
 }
 
 type TextExtractionStatus = "idle" | "extracting" | "text-found" | "empty" | "error";
-type NamingSuggestionStatus = "idle" | "ready" | "empty";
 
 interface PdfTextExtraction {
   status: "text-found" | "empty";
@@ -332,16 +331,6 @@ interface TextExtractionState {
   byDocumentPath: Record<string, TextExtractionDocumentState>;
 }
 
-interface NamingSuggestionDocumentState {
-  status: NamingSuggestionStatus;
-  suggestions: NamingSuggestions | null;
-  message: string;
-}
-
-interface NamingSuggestionsState {
-  byDocumentPath: Record<string, NamingSuggestionDocumentState>;
-}
-
 type SuggestionV2Status = "idle" | "loading" | "ready" | "error";
 type SuggestionV2DiagnosticStatus = "idle" | "running" | "ready" | "error";
 type SuggestionV2MissingField = "dateToken" | "target" | "documentType";
@@ -394,7 +383,7 @@ interface RendererFolderDepthOption {
   reasons: string[];
   warnings: string[];
   requiresCreation?: boolean;
-  source: "rules-v2" | "existing-folder" | "preference" | "fallback";
+  source: "rules-v2" | "existing-folder" | "inventory" | "preference" | "fallback";
 }
 
 interface RendererTargetFolderSuggestionV2 {
@@ -801,7 +790,6 @@ interface AppState {
   history: HistoryState;
   duplicates: DuplicateAnalysisState;
   textExtraction: TextExtractionState;
-  namingSuggestions: NamingSuggestionsState;
   suggestionV2: SuggestionV2State;
   namingRules: NamingRulesState;
   ocr: OcrState;

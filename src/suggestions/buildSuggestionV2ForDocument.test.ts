@@ -176,6 +176,64 @@ describe("buildSuggestionV2ForDocument", () => {
     expect(result.value.draft.proposedName).not.toContain("entretien-vidange");
   });
 
+  it("keeps T02 clean when a reliable person replaces the filename-like legacy target", async () => {
+    const workspace = await createWorkspace();
+    await writeReferenceData(workspace.userDataPath);
+    const targetRootPath = path.join(workspace.root, "target");
+    await mkdir(path.join(targetRootPath, "Scolarite"), { recursive: true });
+    const documentPath = path.join(workspace.sourcePath, "T02-ancien-scan-abcdefghijklmnopqrstuv.pdf");
+    await writeFile(documentPath, "source", "utf8");
+    const before = await readdir(targetRootPath);
+
+    const result = await buildSuggestionV2ForDocument({
+      documentPath,
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Certificat de scolarité Léa année scolaire 2026/2027"
+      },
+      legacyDraft: {
+        documentDate: "",
+        subject: "T02-ancien-scan-abcdefghijklmnopqrstuv.pdf",
+        documentType: "",
+        keywords: ""
+      },
+      queuedDocuments: [{ filePath: documentPath, name: "T02-ancien-scan-abcdefghijklmnopqrstuv.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      userDataPath: workspace.userDataPath,
+      targetRootPath
+    });
+
+    const after = await readdir(targetRootPath);
+    expect(after).toEqual(before);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.draft).toMatchObject({
+      dateToken: "2026",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      proposedName: "2026_lea_certificat-scolarite.pdf"
+    });
+    expect(result.value.draft.dateSelection?.selected?.token).toBe("2026-2027");
+    expect(result.value.draft.warnings).not.toContain("Identifiant long probable détecté.");
+    expect(result.value.targetFolderSuggestion.recommended).toMatchObject({
+      relativePath: "Scolarite",
+      source: "inventory"
+    });
+    expect(result.value.targetFolderSuggestion.recommended?.reasons.join(" ")).toContain(
+      "Dossier déjà présent dans l'arborescence cible"
+    );
+    expect(result.value.targetFolderSuggestion.recommended?.reasons.join(" ")).not.toContain(
+      "Préférence utilisateur"
+    );
+    const proposedFolders = result.value.targetFolderSuggestion.options
+      .filter((option) => option.requiresCreation)
+      .map((option) => option.relativePath);
+    expect(proposedFolders).toEqual(["Scolarite/Lea", "Scolarite/Lea/2026-2027"]);
+  });
+
   it("exposes a monthly naming profile from the recommended folder", async () => {
     const workspace = await createWorkspace();
     const targetRootPath = path.join(workspace.root, "target");
@@ -344,6 +402,19 @@ async function writeReferenceData(userDataPath: string): Promise<void> {
   const referenceDataPath = path.join(userDataPath, "config", "reference-data");
   const entitiesPath = path.join(referenceDataPath, "entities");
   await mkdir(entitiesPath, { recursive: true });
+  await writeFile(
+    path.join(entitiesPath, "people.json"),
+    JSON.stringify([
+      {
+        id: "lea",
+        label: "Léa",
+        fileAlias: "lea",
+        folderAlias: "Scolarite/Lea",
+        aliases: ["Léa", "Lea"]
+      }
+    ]),
+    "utf8"
+  );
   await writeFile(
     path.join(entitiesPath, "vehicles.json"),
     JSON.stringify([

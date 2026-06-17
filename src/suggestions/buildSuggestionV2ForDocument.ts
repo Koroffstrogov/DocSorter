@@ -9,7 +9,7 @@ import type {
   FolderPlacementRanking
 } from "../folder-inventory/folderInventoryTypes";
 import { buildTargetFolderSuggestionsV2 } from "../folders/buildTargetFolderSuggestionsV2";
-import type { TargetFolderSuggestionV2, UserFolderPreference } from "../folders/folderSuggestionTypes";
+import type { TargetFolderSuggestionV2 } from "../folders/folderSuggestionTypes";
 import { generateDocumentNameV2 } from "../naming/documentNameV2";
 import type { DuplicateSourceDocument } from "../duplicates/exactDuplicates";
 import { loadReferenceDataCatalog } from "../reference-data/referenceDataLoader";
@@ -168,7 +168,7 @@ export async function buildSuggestionV2ForDocument(
     const targetFolderSuggestion = buildTargetFolderSuggestionsV2({
       draft,
       knownRelativeFolders: getKnownRelativeFolders(options.knownRelativeFolders ?? [], inventory),
-      userFolderPreferences: createPlacementPreferences(draft, placementRanking)
+      inventoryRecommendedRelativePath: getInventoryRecommendedRelativePath(placementRanking)
     });
     mergeFolderPlacementContext(targetFolderSuggestion, placementRanking, inventory);
 
@@ -237,26 +237,6 @@ function getKnownRelativeFolders(
   ]).sort((left, right) => left.localeCompare(right, "fr", { sensitivity: "base" }));
 }
 
-function createPlacementPreferences(
-  draft: SuggestionDraftV2,
-  placement: FolderPlacementRanking | null
-): UserFolderPreference[] {
-  if (!placement?.recommended.relativePath) {
-    return [];
-  }
-
-  const keys = [
-    draft.documentType ? `documentType:${draft.documentType}` : "",
-    draft.target ? `target:${draft.target}` : "",
-    draft.documentType && draft.target ? `documentType:${draft.documentType}|target:${draft.target}` : ""
-  ].filter(Boolean);
-
-  return keys.map((matchKey) => ({
-    matchKey,
-    preferredRelativePath: placement.recommended.relativePath
-  }));
-}
-
 function mergeFolderPlacementContext(
   targetFolderSuggestion: TargetFolderSuggestionV2,
   placement: FolderPlacementRanking | null,
@@ -273,6 +253,16 @@ function mergeFolderPlacementContext(
     ...(placement?.reasons ?? []),
     ...(placement?.recommended.reasons ?? [])
   ]);
+}
+
+function getInventoryRecommendedRelativePath(
+  placement: FolderPlacementRanking | null
+): string | undefined {
+  if (placement?.recommended.source !== "inventory") {
+    return undefined;
+  }
+
+  return placement.recommended.relativePath;
 }
 
 function applyNamingProfile(

@@ -171,6 +171,44 @@ describe("buildSuggestionDraftV2", () => {
     expect(draft.warnings).toContain("Date sensible probable détectée hors bloc date.");
   });
 
+  it("does not expose a long legacy filename warning when reference data replaces it", () => {
+    const draft = buildSuggestionDraftV2({
+      fileName: "T02-certificat.pdf",
+      extractedText: "Certificat de scolarité Léa année scolaire 2026/2027",
+      legacyDraft: {
+        documentDate: "",
+        subject: "T02-ancien-scan-abcdefghijklmnopqrstuv.pdf",
+        documentType: "",
+        keywords: ""
+      },
+      referenceData: {
+        targetCandidates: [createCandidate("person", "lea", 85)],
+        documentTypeCandidates: [createCandidate("documentType", "certificat-scolarite", 85)],
+        issuerCandidates: [],
+        warnings: []
+      }
+    });
+
+    expect(draft.proposedName).toBe("2026_lea_certificat-scolarite.pdf");
+    expect(draft.warnings).not.toContain("Identifiant long probable détecté.");
+    expect(draft.reasons).toContain("Ancienne valeur ignorée : ressemble à un nom de fichier.");
+  });
+
+  it("keeps a long identifier warning when the sensitive value is still used", () => {
+    const draft = buildSuggestionDraftV2({
+      fileName: "document.pdf",
+      legacyDraft: {
+        documentDate: "2026",
+        subject: "ABCD1234EFGH5678IJKL",
+        documentType: "attestation",
+        keywords: ""
+      }
+    });
+
+    expect(draft.proposedName).toBe("2026_abcd1234efgh5678ijkl_attestation.pdf");
+    expect(draft.warnings).toContain("Identifiant long probable détecté.");
+  });
+
   it("keeps birth dates as detection hints only", () => {
     const draft = buildSuggestionDraftV2({
       fileName: "document.pdf",

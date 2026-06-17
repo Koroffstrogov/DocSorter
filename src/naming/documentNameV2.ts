@@ -396,7 +396,8 @@ function containsFrenchSocialSecurityNumber(value: string): boolean {
 }
 
 function containsLongIdentifier(value: string): boolean {
-  return /[A-Za-z0-9]{18,}/.test(value.replace(/[-_\s]/g, ""));
+  const compact = value.replace(/[-_\s]/g, "");
+  return /[A-Za-z0-9]{18,}/.test(compact) && /\d/.test(compact);
 }
 
 function isReservedWindowsName(value: string): boolean {
