@@ -16,6 +16,7 @@ const state: AppState = {
   duplicates: createIdleDuplicateAnalysisState(),
   textExtraction: createIdleTextExtractionState(),
   namingSuggestions: createIdleNamingSuggestionsState(),
+  suggestionV2: createIdleSuggestionV2State(),
   namingRules: createIdleNamingRulesState(),
   ocr: createIdleOcrState(),
   ai: createIdleAiState(),
@@ -28,6 +29,7 @@ let destinationRequestId = 0;
 let classificationRequestId = 0;
 let duplicateAnalysisRequestId = 0;
 let textExtractionRequestId = 0;
+let suggestionV2RequestId = 0;
 let targetFolderRequestId = 0;
 let ocrRequestId = 0;
 let aiRequestId = 0;
@@ -162,6 +164,16 @@ const namingSuggestionsPanel = DocSorterNamingSuggestionsPanel.createNamingSugge
   onAnalyze: analyzeNamingSuggestionsForActiveDocument,
   onApplyToEmptyFields: applyNamingSuggestionsToEmptyFields,
   onApplyTargetFolderSuggestion: applyTargetFolderSuggestion
+});
+
+const suggestionV2Panel = DocSorterSuggestionV2Panel.createSuggestionV2Panel({
+  getState: () => {
+    const activeDocument = getActiveDocument();
+    return {
+      activeDocument,
+      suggestionState: activeDocument ? getSuggestionV2State(activeDocument.filePath) : null
+    };
+  }
 });
 
 const namingPanelView = DocSorterNamingPanel.createNamingPanel({

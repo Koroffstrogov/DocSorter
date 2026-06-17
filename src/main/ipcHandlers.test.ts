@@ -40,6 +40,7 @@ import type {
   UserRulesLoadResult,
   UserRulesResult
 } from "../rules/userNamingRulesStore";
+import type { SuggestionV2Result } from "../suggestions/buildSuggestionV2ForDocument";
 import {
   createMainProcessAppState,
   registerIpcHandlers,
@@ -93,6 +94,7 @@ describe("sensitive IPC handler contract", () => {
       IPC_CHANNELS.extractionExtractPdfText,
       IPC_CHANNELS.ocrRunImage,
       IPC_CHANNELS.aiRunSuggestion,
+      IPC_CHANNELS.suggestionV2Build,
       IPC_CHANNELS.classificationPreparePlan,
       IPC_CHANNELS.classificationExecute
     ]);
@@ -184,6 +186,13 @@ describe("sensitive IPC handler contract", () => {
       usesMainTarget: true,
       usesUserDataPath: true,
       serviceName: "runAiSuggestionForDocument"
+    });
+    expect(contractFor(IPC_CHANNELS.suggestionV2Build)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesMainTarget: true,
+      usesUserDataPath: true,
+      serviceName: "buildSuggestionV2ForDocument"
     });
   });
 });
@@ -490,6 +499,46 @@ describe("registerIpcHandlers", () => {
       rulesCatalog: createEmptyCatalog(),
       knownRelativeFolders: [TARGET_FOLDER]
     });
+  });
+
+  it("builds v2 suggestions only for the active document with main-state queue and target folders", async () => {
+    const appState = createStateWithQueue({ selectedTargetFolder: TARGET_FOLDER });
+    const services = createServices();
+    const harness = createHarness({ appState, services });
+    const textContext = {
+      source: "pdf-native" as const,
+      excerpt: "Facture Renault Captur"
+    };
+    const legacyDraft: NamingDraft = {
+      documentDate: "",
+      subject: "",
+      documentType: "",
+      keywords: ""
+    };
+
+    await harness.invoke(
+      IPC_CHANNELS.suggestionV2Build,
+      DOCUMENT_PATH,
+      textContext,
+      legacyDraft,
+      "C:\\renderer-target"
+    );
+
+    expect(services.listTargetSubdirectories).toHaveBeenCalledWith(TARGET_PATH);
+    expect(services.buildSuggestionV2ForDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      textContext,
+      legacyDraft,
+      queuedDocuments: appState.queuedDocuments,
+      queuedDocumentPaths: appState.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      knownRelativeFolders: [TARGET_FOLDER]
+    });
+    expect(services.extractTextFromPdfDocument).not.toHaveBeenCalled();
+    expect(services.runImageOcrForDocument).not.toHaveBeenCalled();
+    expect(services.runAiSuggestionForDocument).not.toHaveBeenCalled();
+    expect(services.createTargetSubdirectory).not.toHaveBeenCalled();
+    expect(services.executeClassification).not.toHaveBeenCalled();
   });
 
   it("selects OCR paths through reviewed dialogs only", async () => {
@@ -814,6 +863,7 @@ function createServices(overrides: Partial<IpcHandlerServices> = {}): IpcHandler
       ok: true,
       value: createAiDocumentSuggestion()
     } as AiSettingsResult<AiDocumentSuggestion>)),
+    buildSuggestionV2ForDocument: vi.fn(async () => createSuggestionV2Result()),
     loadMergedNamingRulesCatalog: vi.fn(async () => ({
       ok: true,
       value: createRulesStatus()
@@ -943,6 +993,53 @@ function createAiDocumentSuggestion(): AiDocumentSuggestion {
     promptCharacterCount: 1200,
     differsFromLocalRules: false,
     message: "Suggestion IA prête."
+  };
+}
+
+function createSuggestionV2Result(): SuggestionV2Result {
+  return {
+    ok: true,
+    value: {
+      status: "ready",
+      documentName: "document.pdf",
+      extension: ".pdf",
+      draft: {
+        dateToken: "2024-03-05",
+        target: "captur",
+        documentType: "facture-entretien",
+        issuer: "renault",
+        proposedName: "2024-03-05_captur_facture-entretien_renault.pdf",
+        confidence: 80,
+        reasons: ["alias détecté"],
+        warnings: [],
+        source: {
+          target: "reference-data",
+          documentType: "reference-data",
+          issuer: "reference-data",
+          dateToken: "text"
+        },
+        namingMessages: []
+      },
+      targetFolderSuggestion: {
+        recommended: {
+          label: "equilibre",
+          relativePath: TARGET_FOLDER,
+          depth: 2,
+          recommended: true,
+          confidence: 90,
+          reasons: ["Profondeur équilibrée recommandée."],
+          warnings: [],
+          source: "existing-folder"
+        },
+        options: [],
+        warnings: [],
+        reasons: ["Profondeur équilibrée recommandée."]
+      },
+      missingFields: [],
+      referenceDataWarnings: [],
+      builtAt: "2026-06-16T10:00:00.000Z",
+      message: "Suggestion v2 expérimentale prête."
+    }
   };
 }
 

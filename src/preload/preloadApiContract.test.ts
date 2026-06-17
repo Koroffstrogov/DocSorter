@@ -66,6 +66,19 @@ describe("preload API surface", () => {
       ".pdf"
     );
     await api.checkDestinationAvailability("document.pdf");
+    await api.buildSuggestionV2(
+      "C:\\source\\document.pdf",
+      {
+        source: "pdf-native",
+        excerpt: "texte extrait"
+      },
+      {
+        documentDate: "",
+        subject: "",
+        documentType: "",
+        keywords: ""
+      }
+    );
     await api.prepareClassificationPlan("C:\\source\\document.pdf", "document.pdf");
     await api.executeClassification("C:\\source\\document.pdf", "document.pdf");
     await api.undoLastClassification();
@@ -123,6 +136,7 @@ describe("preload API surface", () => {
       IPC_CHANNELS.namingCreateInitialDraft,
       IPC_CHANNELS.namingBuildProposal,
       IPC_CHANNELS.namingCheckDestinationAvailability,
+      IPC_CHANNELS.suggestionV2Build,
       IPC_CHANNELS.classificationPreparePlan,
       IPC_CHANNELS.classificationExecute,
       IPC_CHANNELS.classificationUndoLast,

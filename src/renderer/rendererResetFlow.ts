@@ -19,6 +19,7 @@ function resetTextExtractionState(): void {
   textExtractionRequestId += 1;
   state.textExtraction = createIdleTextExtractionState();
   resetNamingSuggestionsState();
+  resetSuggestionV2State();
   resetAiSuggestionState();
 }
 

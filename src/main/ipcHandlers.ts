@@ -104,6 +104,11 @@ import {
   type UserRulesLoadResult,
   type UserRulesResult
 } from "../rules/userNamingRulesStore";
+import {
+  buildSuggestionV2ForDocument as buildSuggestionV2ForDocumentService,
+  type SuggestionV2Result,
+  type SuggestionV2TextContext
+} from "../suggestions/buildSuggestionV2ForDocument";
 
 interface DirectorySelection {
   path: string;
@@ -232,6 +237,15 @@ export interface IpcHandlerServices {
     rulesCatalog: NamingSuggestionRulesCatalog;
     knownRelativeFolders: string[];
   }) => Promise<AiSettingsResult<AiDocumentSuggestion>>;
+  buildSuggestionV2ForDocument: (options: {
+    documentPath: string;
+    textContext: SuggestionV2TextContext | null;
+    legacyDraft: unknown;
+    queuedDocuments: Iterable<DuplicateSourceDocument>;
+    queuedDocumentPaths: Iterable<string>;
+    userDataPath: string;
+    knownRelativeFolders: string[];
+  }) => Promise<SuggestionV2Result>;
   loadMergedNamingRulesCatalog: (
     userDataPath: string
   ) => Promise<UserRulesResult<NamingRulesStatus>>;
@@ -431,6 +445,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "runAiSuggestionForDocument"
   },
   {
+    channel: IPC_CHANNELS.suggestionV2Build,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: true,
+    usesUserDataPath: true,
+    serviceName: "buildSuggestionV2ForDocument"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -550,6 +572,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   getAiModelStatus: getConfiguredOllamaModelStatusService,
   unloadAiModel: unloadConfiguredOllamaModelService,
   runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
+  buildSuggestionV2ForDocument: buildSuggestionV2ForDocumentService,
   loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
   loadUserRulesCatalog: loadUserRulesCatalogService,
   saveUserRulesCatalog: saveUserRulesCatalogService
@@ -763,6 +786,19 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         knownRelativeFolders: await getKnownTargetFoldersForAi(state, services)
       })
   );
+  options.ipcMain.handle(
+    IPC_CHANNELS.suggestionV2Build,
+    async (_event, documentPath: unknown, textContext: unknown, legacyDraft: unknown) =>
+      services.buildSuggestionV2ForDocument({
+        documentPath: typeof documentPath === "string" ? documentPath : "",
+        textContext: readSuggestionV2TextContext(textContext),
+        legacyDraft,
+        queuedDocuments: state.queuedDocuments,
+        queuedDocumentPaths: state.queuedDocumentPaths,
+        userDataPath: options.app.getPath("userData"),
+        knownRelativeFolders: await getKnownTargetFoldersForSuggestionV2(state, services)
+      })
+  );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(
       getJournalFilePath(options.app, services),
@@ -940,6 +976,13 @@ async function getKnownTargetFoldersForAi(
   state: MainProcessAppState,
   services: IpcHandlerServices
 ): Promise<string[]> {
+  return getKnownTargetFoldersForSuggestionV2(state, services);
+}
+
+async function getKnownTargetFoldersForSuggestionV2(
+  state: MainProcessAppState,
+  services: IpcHandlerServices
+): Promise<string[]> {
   const folders = new Set<string>();
   if (state.selectedTargetFolder) {
     folders.add(state.selectedTargetFolder);
@@ -961,6 +1004,25 @@ function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null
   }
 
   const candidate = value as Partial<AiDocumentTextContext>;
+  if (
+    (candidate.source !== "pdf-native" && candidate.source !== "tesseract-cli") ||
+    typeof candidate.excerpt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    source: candidate.source,
+    excerpt: candidate.excerpt
+  };
+}
+
+function readSuggestionV2TextContext(value: unknown): SuggestionV2TextContext | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Partial<SuggestionV2TextContext>;
   if (
     (candidate.source !== "pdf-native" && candidate.source !== "tesseract-cli") ||
     typeof candidate.excerpt !== "string"

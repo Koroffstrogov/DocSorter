@@ -114,6 +114,20 @@ function createIdleNamingSuggestionsState(): NamingSuggestionsState {
   };
 }
 
+function createIdleSuggestionV2State(): SuggestionV2State {
+  return {
+    byDocumentPath: {}
+  };
+}
+
+function createIdleSuggestionV2DocumentState(): SuggestionV2DocumentState {
+  return {
+    status: "idle",
+    result: null,
+    error: null
+  };
+}
+
 function createIdleOcrState(): OcrState {
   return {
     panelStatus: "loading",

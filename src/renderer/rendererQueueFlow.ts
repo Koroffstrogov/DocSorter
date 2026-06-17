@@ -67,6 +67,7 @@ function renderDetails(): void {
   renderDuplicatePanel();
   renderTextExtractionPanel();
   renderNamingSuggestionsPanel();
+  renderSuggestionV2Panel();
   renderNamingPanel(true);
 }
 

@@ -3,26 +3,46 @@
 Ce document explique comment DocSorter Local détermine :
 
 - le nom proposé pour un fichier ;
+- la date documentaire utilisée dans le nom ;
+- la cible logique, le type documentaire, l'émetteur et le détail ;
 - le sous-dossier cible suggéré ;
 - ce qui change quand l'IA locale Ollama est utilisée.
 
-Point important : l'application ne classe jamais automatiquement un document. Les règles locales et l'IA proposent des valeurs. L'utilisateur garde toujours la décision finale.
+Point important : l'application ne classe jamais automatiquement un document. Les règles locales, les référentiels, le moteur v2 et l'IA proposent des valeurs. L'utilisateur garde toujours la décision finale.
+
+## Etat Actuel
+
+DocSorter contient aujourd'hui deux niveaux de logique :
+
+- le flux applicatif actuel, branché à l'interface, qui utilise encore les champs historiques `Date documentaire`, `Sujet`, `Type` et `Mots-clés` ;
+- les briques pures de nommage v2, préparées pour un futur branchement UI, qui utilisent `dateToken`, `target`, `documentType`, `issuer` et `detail`.
+
+Les briques v2 sont testées localement mais ne déclenchent encore aucun classement réel dans l'interface.
 
 ## Résumé Du Flux
 
 1. L'utilisateur sélectionne un document dans la file.
-2. DocSorter prépare un brouillon de renommage à partir du nom actuel.
+2. DocSorter prépare un brouillon de renommage depuis le nom actuel.
 3. L'utilisateur peut extraire le texte PDF ou lancer l'OCR image.
 4. Les règles locales peuvent proposer date, sujet, type, mots-clés et sous-dossier.
-5. L'IA locale peut proposer les mêmes champs, séparément des règles.
-6. L'utilisateur peut appliquer les suggestions uniquement aux champs vides.
-7. DocSorter calcule le nom final proposé.
-8. DocSorter vérifie le dossier cible, le sous-dossier et les collisions.
-9. Le classement réel ne se fait qu'après validation explicite.
+5. Les référentiels locaux peuvent détecter une cible, un type documentaire et un émetteur.
+6. Le moteur de dates peut choisir une date documentaire candidate.
+7. Le moteur de dossiers v2 peut proposer plusieurs profondeurs de sous-dossier.
+8. L'IA locale peut proposer des champs séparés, uniquement après action explicite.
+9. L'utilisateur peut appliquer certaines suggestions aux champs vides.
+10. DocSorter vérifie le nom, le dossier cible et les collisions.
+11. Le classement réel ne se fait qu'après validation explicite.
 
-## Nom De Fichier Proposé
+## Nommage Historique Branché À L'UI
 
-Le nom final suit cette convention :
+Le panneau actuel `Renommage proposé` construit encore le nom depuis quatre champs :
+
+- `Date documentaire`
+- `Sujet`
+- `Type`
+- `Mots-clés`
+
+Format historique :
 
 ```text
 AAAA-MM-JJ_Sujet_Type_MotsCles.ext
@@ -40,112 +60,131 @@ Exemple :
 2024-03-05_Renault-Captur_Facture_Entretien-Vidange.pdf
 ```
 
-Le nom est construit depuis quatre champs du panneau `Renommage proposé` :
+Ce flux reste celui affiché dans l'application tant que le nommage v2 n'est pas branché à l'interface.
 
-- `Date documentaire`
-- `Sujet`
-- `Type`
-- `Mots-clés`
+## Nommage V2 Préparé
 
-L'extension du fichier d'origine est conservée en minuscule.
+Le générateur pur v2 produit cette convention :
 
-## Champs Obligatoires Et Recommandés
+```text
+DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext
+```
 
-Pour générer un nom valide :
+Exemples :
 
-- la date documentaire est obligatoire ;
-- le sujet est obligatoire ;
-- le type est recommandé mais non bloquant ;
-- les mots-clés sont optionnels.
+```text
+2024-03-05_captur_facture-entretien_renault_vidange.pdf
+2025_foyer_avis-imposition.pdf
+2026_lea_certificat-scolarite_college-monet.pdf
+```
 
-Si la date ou le sujet manque, DocSorter affiche un message et ne produit pas de nom final fiable.
+Champs v2 :
 
-## Normalisation Du Nom
+- `dateToken` : date documentaire contrôlée ;
+- `target` : cible logique du document, par exemple `captur`, `lea`, `foyer` ;
+- `documentType` : type documentaire contrôlé, par exemple `facture-entretien` ;
+- `issuer` : émetteur ou organisme, optionnel ;
+- `detail` : précision courte, optionnelle.
 
-Avant de construire le nom, DocSorter normalise les champs :
+Le générateur v2 est pur : il ne lit pas de fichier, ne déplace rien, ne renomme rien et ne crée aucun dossier.
 
-- accents retirés ;
-- espaces remplacés par des tirets dans chaque bloc ;
-- caractères Windows interdits supprimés ou remplacés ;
-- séparateurs multiples compactés ;
-- points ou espaces finaux retirés ;
-- noms réservés Windows évités ;
-- longueur maximale du nom bornée à 180 caractères.
+## Champs Obligatoires Et Optionnels En V2
+
+Pour générer un nom v2 valide :
+
+- `dateToken` est obligatoire ;
+- `target` est obligatoire ;
+- `documentType` est obligatoire ;
+- `issuer` est optionnel ;
+- `detail` est optionnel.
+
+Si `target` ou `documentType` manque, le brouillon v2 peut rester incomplet. DocSorter ne force pas un mauvais nom.
+
+## Date Documentaire V2
+
+La date en tête du nom doit être celle qui aide réellement à retrouver le document, pas automatiquement la date technique du scan, du PDF ou du fichier Windows.
+
+Le domaine pur `src/dates` extrait plusieurs candidats, puis sélectionne un `dateToken`.
+
+Formats acceptés :
+
+```text
+AAAA-MM-JJ
+AAAA-MM
+AAAA
+AAAA-env
+date-inconnue
+```
+
+Le moteur peut détecter :
+
+- dates ISO : `2024-03-05`, `2024-03`, `2024` ;
+- dates françaises : `05/03/2024`, `05-03-2024`, `5 mars 2024` ;
+- périodes mensuelles : `mai 2026`, `05/2026`, `2026-05` ;
+- années scolaires : `2026-2027`, `année scolaire 2026/2027` ;
+- métadonnées techniques disponibles : date fichier, date PDF, EXIF, date de scan.
+
+Les dates techniques sont des indices faibles. Elles ne remplacent pas silencieusement une date documentaire trouvée dans le texte.
+
+## Règles De Date Par Type Documentaire
+
+Le moteur de dates applique des règles simples :
+
+- `avis-imposition` : privilégie l'année fiscale ou l'année de référence ;
+- `releve-bancaire` : privilégie le mois ou la période couverte ;
+- `facture`, `facture-entretien`, `facture-energie` : privilégie la date de facture ou d'émission ;
+- `contrat`, `contrat-assurance-habitation`, `avenant` : privilégie la date d'effet, puis signature ou émission ;
+- `attestation-scolarite`, `certificat-scolarite`, `bulletin-scolaire` : privilégie l'année scolaire ;
+- `carnet-vaccination` : utilise une date de mise à jour visible, sinon une date de scan/EXIF avec avertissement ;
+- `carte-identite`, `passeport`, `acte-naissance`, `livret-famille` : privilégie la date d'émission ou d'établissement ;
+- type inconnu : utilise seulement une date claire, sinon `date-inconnue`.
+
+Pour une année scolaire, le candidat complet peut être conservé :
+
+```text
+candidat = 2026-2027
+dateToken du nom = 2026
+```
+
+Le candidat complet reste utile pour proposer un dossier détaillé comme `Scolarite/Lea/2026-2027`.
+
+## Dates Sensibles
+
+Une date de naissance peut aider à détecter une personne via les référentiels, mais elle ne doit jamais devenir :
+
+- le `dateToken` du nom ;
+- un segment de sous-dossier ;
+- un détail ;
+- une raison affichée avec la date brute.
 
 Exemple :
 
 ```text
-Sujet saisi : Renault Captur / révision
-Sujet normalisé : Renault-Captur-revision
+Texte : Né le 12/03/2014
+Résultat : date-inconnue si aucune autre date documentaire n'est disponible
 ```
-
-Les grands blocs sont ensuite séparés par des underscores :
-
-```text
-2024-03-05_Renault-Captur-revision_Facture_Entretien.pdf
-```
-
-## Brouillon Initial
-
-Quand un document est sélectionné, DocSorter crée un brouillon initial depuis son nom actuel.
-
-Il essaie de détecter :
-
-- une date complète au format `AAAA-MM-JJ` ;
-- ou une année `AAAA`.
-
-Le reste du nom sert de base prudente pour le sujet.
-
-Exemple :
-
-```text
-Nom actuel : 2024-03-05_facture_renault_captur.pdf
-Date détectée : 2024-03-05
-Sujet initial : facture-renault-captur
-```
-
-Ce brouillon reste modifiable par l'utilisateur.
-
-## Suggestions Locales Sans IA
-
-Après extraction texte PDF ou OCR image, DocSorter peut analyser localement :
-
-- le nom du fichier ;
-- l'extrait texte borné ;
-- les règles de suggestion par défaut ;
-- les règles utilisateur locales.
-
-Les règles peuvent proposer :
-
-- date ;
-- sujet ;
-- type ;
-- mots-clés ;
-- sous-dossier cible.
-
-Ces suggestions restent locales, sans appel réseau.
-
-Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides. Il ne remplace jamais une valeur saisie manuellement.
 
 ## Référentiels Locaux Contrôlés
 
-DocSorter prépare aussi des référentiels locaux simples pour le nommage v2.
+DocSorter dispose d'un domaine pur `src/reference-data`.
 
-Ils servent à reconnaître de façon déterministe :
+Il sert à reconnaître de façon déterministe :
 
-- une cible de classement logique : personne, véhicule, foyer ou bien ;
-- un type documentaire contrôlé ;
-- un émetteur ou organisme ;
-- plus tard, certains détails.
+- une personne ;
+- un véhicule ;
+- un bien ou foyer ;
+- un fournisseur ou organisme ;
+- un type documentaire.
 
 Ces référentiels sont distincts :
 
-- des règles de suggestion ;
+- des règles de suggestion historiques ;
 - de l'IA locale ;
 - du journal ;
-- du cache d'analyse.
+- du cache d'analyse ;
+- du classement réel.
 
-Ils sont lus localement, sans réseau et sans apprentissage, depuis un emplacement prévu sous :
+Emplacement prévu :
 
 ```text
 app.getPath("userData")/config/reference-data/
@@ -161,9 +200,9 @@ entities/providers.json
 document-types.json
 ```
 
-Chaque entrée expose un `fileAlias` contrôlé. C'est cet alias qui pourra alimenter le futur nommage v2.
+Le loader ne crée pas automatiquement ces fichiers. Les entités absentes donnent des listes vides. Les types documentaires disposent de valeurs par défaut embarquées.
 
-Exemple :
+Exemple véhicule :
 
 ```json
 {
@@ -181,9 +220,7 @@ Si le texte contient `Renault Captur`, le référentiel peut proposer :
 target = captur
 ```
 
-Pour les personnes, une date de naissance peut servir uniquement d'indice de détection. Elle ne doit jamais devenir un morceau du nom de fichier, du dossier, de l'émetteur ou du détail.
-
-Exemple :
+Exemple personne :
 
 ```json
 {
@@ -196,13 +233,43 @@ Exemple :
 }
 ```
 
-Même si `16/06/2012` est détecté dans un document, le nom peut utiliser `lea`, jamais la date de naissance.
+Même si `16/06/2012` est détecté, le nom peut utiliser `lea`, jamais la date de naissance.
 
-À ce stade, cette brique est préparatoire : elle ne modifie pas encore l'interface et ne déclenche aucun classement.
+## Brouillon De Suggestion V2
 
-## Sous-Dossier Cible
+Le domaine pur `src/suggestions` construit un `SuggestionDraftV2`.
 
-Le sous-dossier cible est toujours relatif à la racine cible choisie par l'utilisateur.
+Il peut utiliser :
+
+- le nom du fichier source ;
+- le texte PDF extrait ;
+- le texte OCR image ;
+- des métadonnées simples ;
+- les candidats des référentiels ;
+- l'ancien `NamingDraft` si disponible ;
+- le générateur de nom v2 ;
+- le moteur de dates.
+
+Le brouillon v2 peut contenir :
+
+```text
+dateToken
+target
+documentType
+issuer
+detail
+proposedName
+confidence
+reasons
+warnings
+dateSelection
+```
+
+Il ne modifie pas l'interface, ne classe pas et ne touche pas aux fichiers.
+
+## Sous-Dossier Cible Historique
+
+Le sous-dossier cible reste toujours relatif à la racine cible choisie par l'utilisateur.
 
 Exemple :
 
@@ -218,7 +285,8 @@ Le sous-dossier peut être :
 - saisi manuellement ;
 - sélectionné dans la liste des sous-dossiers existants ;
 - proposé par une règle locale ;
-- proposé par l'IA locale.
+- proposé par l'IA locale ;
+- proposé plus tard par le moteur de dossiers v2.
 
 ## Validation Du Sous-Dossier
 
@@ -237,7 +305,7 @@ Exemples acceptés :
 ```text
 Vehicules/Renault-Captur/Entretien
 Maison/Assurance
-Impots/2024
+Fiscalite/Foyer/2025
 ```
 
 Exemples refusés :
@@ -248,6 +316,78 @@ C:\Users\Seb\Documents
 Maison/../../Autre
 A/B/C/D
 ```
+
+## Dossiers Cibles V2
+
+Le domaine pur `src/folders` propose plusieurs options de sous-dossier relatif à partir d'un `SuggestionDraftV2`.
+
+Il produit des options de profondeur :
+
+- `court` : domaine seul ;
+- `equilibre` : domaine + cible ;
+- `detaille` : domaine + cible ou période.
+
+Exemple pour un certificat de scolarité :
+
+```text
+court      : Scolarite
+equilibre  : Scolarite/Lea
+detaille   : Scolarite/Lea/2026-2027
+recommande : Scolarite/Lea
+```
+
+Le moteur recommande par défaut le chemin le plus court qui reste clair. Il ne propose pas automatiquement une arborescence trop profonde.
+
+## Règles De Profondeur V2
+
+Le niveau `equilibre` est recommandé par défaut quand la cible est connue.
+
+Le niveau `detaille` est recommandé seulement si au moins un signal fort existe :
+
+- le dossier détaillé existe déjà dans les dossiers connus ;
+- plusieurs documents similaires sont déjà connus ;
+- le type documentaire est périodique ou volumineux ;
+- une préférence utilisateur explicite le demande ;
+- le type impose une période utile, par exemple fiscalité ou banque.
+
+Le niveau `detaille` n'est pas recommandé seulement parce qu'une année est disponible.
+
+## Règles De Dossier Par Type
+
+Exemples de règles v2 :
+
+- fiscalité : `Fiscalite/Foyer/2025` ;
+- banque : `Finances/Banque/2026` ;
+- facture entretien véhicule : `Vehicules/Captur` ;
+- carnet vaccination : `Sante/Paul` ;
+- carte identité : `Identite-famille/Paul` ;
+- certificat scolarité : `Scolarite/Lea` ;
+- bulletin scolaire : `Scolarite/Lea/2026-2027` ;
+- facture énergie : `Maison/Energie/2026` ;
+- type inconnu : `Divers/A-traiter-manuellement`.
+
+Les dossiers v2 sont des suggestions. Ils ne créent aucun dossier et ne déclenchent aucun classement.
+
+## Suggestions Locales Sans IA
+
+Après extraction texte PDF ou OCR image, DocSorter peut analyser localement :
+
+- le nom du fichier ;
+- l'extrait texte borné ;
+- les règles de suggestion par défaut ;
+- les règles utilisateur locales.
+
+Les règles historiques peuvent proposer :
+
+- date ;
+- sujet ;
+- type ;
+- mots-clés ;
+- sous-dossier cible.
+
+Ces suggestions restent locales, sans appel réseau.
+
+Le bouton `Appliquer aux champs vides` remplit seulement les champs encore vides. Il ne remplace jamais une valeur saisie manuellement.
 
 ## Quand L'IA Locale Est Utilisée
 
@@ -403,24 +543,24 @@ Si le dossier IA est appliqué, DocSorter relance les contrôles existants :
 
 Si le dossier n'existe pas, l'interface peut proposer `Créer ce dossier`, mais la création demande une confirmation explicite.
 
-## Conflit Entre Règles Et IA
+## Conflit Entre Règles, Référentiels Et IA
 
-Les règles locales et l'IA restent séparées.
+Les règles locales, les référentiels et l'IA restent séparés.
 
-Si la suggestion IA diffère des règles locales, DocSorter affiche :
+En pratique :
+
+- les règles locales restent le signal historique branché à l'UI ;
+- les référentiels fournissent un signal déterministe pour le nommage v2 ;
+- l'IA peut apporter une suggestion supplémentaire ;
+- l'utilisateur choisit quoi appliquer ;
+- les valeurs déjà saisies restent prioritaires ;
+- aucune fusion automatique avancée n'est encore faite.
+
+Si la suggestion IA diffère des règles locales, DocSorter peut afficher :
 
 ```text
 Diffère des règles locales.
 ```
-
-Il n'y a pas encore de fusion automatique.
-
-En pratique :
-
-- les règles locales restent le signal déterministe ;
-- l'IA peut apporter une suggestion supplémentaire ;
-- l'utilisateur choisit quoi appliquer ;
-- les valeurs déjà saisies restent prioritaires.
 
 ## Contrôle De Collision
 
@@ -442,7 +582,7 @@ Le suffixe n'est qu'une proposition visuelle tant que l'utilisateur ne valide pa
 
 ## Classement Réel
 
-Le classement réel n'est jamais déclenché par l'IA.
+Le classement réel n'est jamais déclenché par l'IA, les référentiels ou les moteurs v2.
 
 Il nécessite :
 
@@ -455,7 +595,91 @@ Il nécessite :
 
 Juste avant la mutation disque, DocSorter refait les contrôles essentiels.
 
-## Exemple Complet Avec IA
+## Exemple V2 Sans IA
+
+Document actif :
+
+```text
+scan_renault_captur.pdf
+```
+
+Texte extrait :
+
+```text
+Facture Renault Captur vidange du 05/03/2024
+```
+
+Référentiels détectés :
+
+```text
+target = captur
+documentType = facture-entretien
+issuer = renault
+```
+
+Date sélectionnée :
+
+```text
+dateToken = 2024-03-05
+```
+
+Nom v2 proposé :
+
+```text
+2024-03-05_captur_facture-entretien_renault.pdf
+```
+
+Dossiers v2 possibles :
+
+```text
+court      : Vehicules
+equilibre  : Vehicules/Captur
+detaille   : Vehicules/Captur/2024
+recommande : Vehicules/Captur
+```
+
+Aucun fichier n'est déplacé sans validation explicite.
+
+## Exemple Scolarité V2
+
+Document actif :
+
+```text
+certificat_lea.pdf
+```
+
+Texte extrait :
+
+```text
+Certificat de scolarité Léa année scolaire 2026/2027
+```
+
+Résultat v2 :
+
+```text
+dateToken = 2026
+target = lea
+documentType = certificat-scolarite
+```
+
+Nom v2 proposé :
+
+```text
+2026_lea_certificat-scolarite.pdf
+```
+
+Dossiers v2 possibles :
+
+```text
+court      : Scolarite
+equilibre  : Scolarite/Lea
+detaille   : Scolarite/Lea/2026-2027
+recommande : Scolarite/Lea
+```
+
+Le niveau détaillé n'est recommandé que si le dossier existe déjà, si une préférence utilisateur le demande ou si le type documentaire est une série scolaire.
+
+## Exemple Avec IA
 
 Document actif :
 
@@ -485,7 +709,7 @@ Suggestion IA :
 }
 ```
 
-Après `Appliquer aux champs vides`, si les champs étaient vides :
+Après `Appliquer aux champs vides`, si les champs étaient vides dans le flux historique :
 
 ```text
 Date documentaire : 2024-03-05
@@ -495,7 +719,7 @@ Mots-clés : vidange
 Sous-dossier cible : Vehicules/Renault-Captur/Entretien
 ```
 
-Nom proposé :
+Nom historique proposé :
 
 ```text
 2024-03-05_Renault-Captur_facture_vidange.pdf
@@ -513,4 +737,5 @@ Le fichier n'est déplacé qu'après validation explicite.
 - Aucune suppression automatique.
 - Aucun remplacement automatique des champs déjà saisis.
 - Aucun log de contenu documentaire sensible.
+- Aucune date de naissance injectée dans un nom ou un dossier.
 - Validation finale toujours humaine.

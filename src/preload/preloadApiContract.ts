@@ -32,6 +32,10 @@ import type {
 } from "../ocr/ocrTypes";
 import type { PreviewData } from "../preview/previewTypes";
 import type {
+  SuggestionV2Result,
+  SuggestionV2TextContext
+} from "../suggestions/buildSuggestionV2ForDocument";
+import type {
   TargetFolderCreation,
   TargetFolderList,
   TargetFolderResult
@@ -62,6 +66,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "createInitialNamingDraft",
   "buildNamingProposal",
   "checkDestinationAvailability",
+  "buildSuggestionV2",
   "prepareClassificationPlan",
   "executeClassification",
   "undoLastClassification",
@@ -134,6 +139,17 @@ export function createPreloadApi(ipc: IpcInvoker) {
         IPC_CHANNELS.namingCheckDestinationAvailability,
         proposedFilename
       ) as Promise<DestinationAvailabilityResult>,
+    buildSuggestionV2: (
+      documentPath: string,
+      textContext: SuggestionV2TextContext | null,
+      legacyDraft: NamingDraft
+    ): Promise<SuggestionV2Result> =>
+      ipc.invoke(
+        IPC_CHANNELS.suggestionV2Build,
+        documentPath,
+        textContext,
+        legacyDraft
+      ) as Promise<SuggestionV2Result>,
     prepareClassificationPlan: (
       documentPath: string,
       proposedFilename: string

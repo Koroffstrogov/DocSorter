@@ -17,6 +17,8 @@ const api: DocSorterApi = {
     ipcRenderer.invoke("naming:buildProposal", draft, originalExtension),
   checkDestinationAvailability: (proposedFilename) =>
     ipcRenderer.invoke("naming:checkDestinationAvailability", proposedFilename),
+  buildSuggestionV2: (documentPath, textContext, legacyDraft) =>
+    ipcRenderer.invoke("suggestion-v2:build", documentPath, textContext, legacyDraft),
   prepareClassificationPlan: (documentPath, proposedFilename) =>
     ipcRenderer.invoke("classification:preparePlan", documentPath, proposedFilename),
   executeClassification: (documentPath, proposedFilename) =>

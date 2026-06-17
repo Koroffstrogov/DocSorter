@@ -169,6 +169,7 @@ async function extractTextFromActivePdf(): Promise<void> {
     error: null
   });
   render();
+  refreshSuggestionV2ForActiveDocument();
 }
 
 async function runOcrForActiveImage(): Promise<void> {
@@ -215,6 +216,7 @@ async function runOcrForActiveImage(): Promise<void> {
     error: null
   });
   render();
+  refreshSuggestionV2ForActiveDocument();
 }
 
 function extractTextFromActiveDocument(): Promise<void> {

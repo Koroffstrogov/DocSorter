@@ -19,6 +19,9 @@ async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> 
   };
   renderNamingPanel(true);
   await updateNamingProposal(documentItem.extension, requestId);
+  if (requestId === namingRequestId && state.activeDocumentPath === documentItem.filePath) {
+    refreshSuggestionV2ForActiveDocument();
+  }
 }
 
 function updateNamingDraftFromInputs(draft: NamingDraft): void {

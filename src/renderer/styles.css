@@ -894,6 +894,119 @@ h2 {
   color: var(--muted);
 }
 
+.suggestion-v2-panel[hidden] {
+  display: none;
+}
+
+.suggestion-v2-details {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcf8;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.suggestion-v2-summary {
+  display: grid;
+  gap: 11px;
+}
+
+.suggestion-v2-header,
+.suggestion-v2-folder {
+  display: grid;
+  gap: 3px;
+}
+
+.suggestion-v2-header span,
+.suggestion-v2-folder span,
+.suggestion-v2-depth-options > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.suggestion-v2-header strong,
+.suggestion-v2-folder strong {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.suggestion-v2-header small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.suggestion-v2-grid {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.suggestion-v2-grid div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.suggestion-v2-grid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.suggestion-v2-grid dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.suggestion-v2-depth-options,
+.suggestion-v2-list {
+  display: grid;
+  gap: 5px;
+}
+
+.suggestion-v2-depth-options ul,
+.suggestion-v2-list ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.suggestion-v2-depth-options li {
+  color: var(--muted);
+}
+
+.suggestion-v2-depth-options li strong {
+  display: inline-block;
+  min-width: 66px;
+  color: var(--ink);
+}
+
+.suggestion-v2-depth-options li span {
+  overflow-wrap: anywhere;
+}
+
+.suggestion-v2-depth-options .recommended-folder-option {
+  color: var(--accent);
+  font-weight: 760;
+}
+
+.suggestion-v2-list strong {
+  color: var(--ink);
+}
+
+.suggestion-v2-list li {
+  color: var(--muted);
+}
+
 #apply-suggestions-empty {
   min-height: 32px;
   border: 1px solid var(--accent);

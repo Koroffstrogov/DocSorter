@@ -342,6 +342,81 @@ interface NamingSuggestionsState {
   byDocumentPath: Record<string, NamingSuggestionDocumentState>;
 }
 
+type SuggestionV2Status = "idle" | "loading" | "ready" | "error";
+type SuggestionV2MissingField = "dateToken" | "target" | "documentType";
+type SuggestionV2TextSource = "pdf-native" | "tesseract-cli";
+
+interface RendererSuggestionV2TextContext {
+  source: SuggestionV2TextSource;
+  excerpt: string;
+}
+
+interface RendererSuggestionDraftV2 {
+  dateToken?: string;
+  target?: string;
+  documentType?: string;
+  issuer?: string;
+  detail?: string;
+  proposedName?: string;
+  dateSelection?: unknown;
+  confidence: number;
+  reasons: string[];
+  warnings: string[];
+  source: Record<string, string | undefined>;
+  namingMessages: Array<{
+    level: "error" | "warning" | "info";
+    code: string;
+    field?: string;
+    message: string;
+  }>;
+}
+
+interface RendererFolderDepthOption {
+  label: "court" | "equilibre" | "detaille";
+  relativePath: string;
+  depth: number;
+  recommended: boolean;
+  confidence: number;
+  reasons: string[];
+  warnings: string[];
+  requiresCreation?: boolean;
+  source: "rules-v2" | "existing-folder" | "preference" | "fallback";
+}
+
+interface RendererTargetFolderSuggestionV2 {
+  recommended?: RendererFolderDepthOption;
+  options: RendererFolderDepthOption[];
+  warnings: string[];
+  reasons: string[];
+}
+
+interface RendererSuggestionV2DocumentSuggestion {
+  status: "ready";
+  documentName: string;
+  extension: string;
+  draft: RendererSuggestionDraftV2;
+  targetFolderSuggestion: RendererTargetFolderSuggestionV2;
+  missingFields: SuggestionV2MissingField[];
+  referenceDataWarnings: string[];
+  builtAt: string;
+  message: string;
+}
+
+interface RendererSuggestionV2Error {
+  code: string;
+  message: string;
+}
+
+interface SuggestionV2DocumentState {
+  status: SuggestionV2Status;
+  result: RendererSuggestionV2DocumentSuggestion | null;
+  error: RendererSuggestionV2Error | null;
+}
+
+interface SuggestionV2State {
+  byDocumentPath: Record<string, SuggestionV2DocumentState>;
+}
+
 type RendererUserRulesFileStatus = "loaded" | "created" | "invalid" | "read-error";
 type NamingRulesPanelStatus = "loading" | "ready" | "saving" | "error";
 
@@ -594,6 +669,7 @@ interface AppState {
   duplicates: DuplicateAnalysisState;
   textExtraction: TextExtractionState;
   namingSuggestions: NamingSuggestionsState;
+  suggestionV2: SuggestionV2State;
   namingRules: NamingRulesState;
   ocr: OcrState;
   ai: AiState;
