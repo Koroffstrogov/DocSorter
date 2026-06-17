@@ -2,7 +2,7 @@ import {
   type AiClassificationSuggestion,
   type BoundedAiClassificationInput
 } from "./aiClassificationTypes";
-import { validateDate } from "./aiClassificationValidator";
+import { validateLegacyDate } from "./aiClassificationValidator";
 
 export function simulatedAiClassificationProvider(
   input: BoundedAiClassificationInput
@@ -12,9 +12,10 @@ export function simulatedAiClassificationProvider(
       input.filename,
       input.extractedTextExcerpt,
       input.ocrTextExcerpt,
-      input.currentRuleSuggestions?.subject ?? "",
-      input.currentRuleSuggestions?.documentType ?? "",
-      input.currentRuleSuggestions?.keywords?.join(" ") ?? ""
+      input.currentSuggestionV2?.target ?? "",
+      input.currentSuggestionV2?.documentType ?? "",
+      input.currentSuggestionV2?.issuer ?? "",
+      input.currentSuggestionV2?.detail ?? ""
     ].join(" ")
   );
   const date = detectDate(input);
@@ -22,10 +23,11 @@ export function simulatedAiClassificationProvider(
 
   if (hasAll(search, ["renault", "captur"]) && hasAny(search, ["facture", "garage", "entretien"])) {
     return {
-      ...(date ? { date } : {}),
+      ...(date ? { dateToken: date } : {}),
+      target: "captur",
       documentType: "facture-entretien",
-      subject: "Renault-Captur",
-      keywords: ["entretien"],
+      issuer: "renault",
+      detail: "entretien",
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       confidence: 84,
       reasons: [
@@ -39,11 +41,10 @@ export function simulatedAiClassificationProvider(
 
   if (hasAll(search, ["avis", "imposition"]) || hasAll(search, ["impot", "revenu"])) {
     return {
-      ...(date ? { date } : year ? { date: year } : {}),
+      ...(date ? { dateToken: date } : year ? { dateToken: year } : {}),
+      target: "foyer",
       documentType: "avis-imposition",
-      subject: "Impots",
-      keywords: year ? [year] : [],
-      targetFolder: year ? `Impots/${year}` : "Impots",
+      targetFolder: year ? `Fiscalite/Foyer/${year}` : "Fiscalite/Foyer",
       confidence: 78,
       reasons: ["Avis d'imposition detecte par le provider simule."],
       warnings: ["Verifier l'annee fiscale avant classement."],
@@ -53,10 +54,11 @@ export function simulatedAiClassificationProvider(
 
   if (hasAll(search, ["assurance", "habitation"])) {
     return {
-      ...(date ? { date } : {}),
+      ...(date ? { dateToken: date } : {}),
+      target: "foyer",
       documentType: "assurance-habitation",
-      subject: "Maison",
-      keywords: ["assurance", "habitation"],
+      issuer: "assurance",
+      detail: "habitation",
       targetFolder: "Maison/Assurance",
       confidence: 74,
       reasons: ["Assurance habitation detectee par le provider simule."],
@@ -67,10 +69,9 @@ export function simulatedAiClassificationProvider(
 
   if (hasAll(search, ["certificat", "scolarite"])) {
     return {
-      ...(date ? { date } : {}),
+      ...(date ? { dateToken: date } : {}),
+      target: "enfants-ecole",
       documentType: "certificat-scolarite",
-      subject: "Enfants-Ecole",
-      keywords: ["scolarite"],
       targetFolder: "Enfants/Ecole",
       confidence: 72,
       reasons: ["Certificat de scolarite detecte par le provider simule."],
@@ -80,8 +81,7 @@ export function simulatedAiClassificationProvider(
   }
 
   return {
-    ...(date ? { date } : {}),
-    keywords: [],
+    ...(date ? { dateToken: date } : {}),
     confidence: 18,
     reasons: ["Aucun scenario simule reconnu."],
     warnings: ["Suggestion IA faible : conserver la decision manuelle."],
@@ -90,7 +90,7 @@ export function simulatedAiClassificationProvider(
 }
 
 function detectDate(input: BoundedAiClassificationInput): string | null {
-  if (validateDate(input.detectedDate)) {
+  if (validateLegacyDate(input.detectedDate)) {
     return input.detectedDate;
   }
 
@@ -98,7 +98,7 @@ function detectDate(input: BoundedAiClassificationInput): string | null {
   const fullDateMatch = source.match(/(^|[^0-9])((?:19|20)\d{2})-(\d{2})-(\d{2})(?=$|[^0-9])/);
   if (fullDateMatch) {
     const candidate = `${fullDateMatch[2]}-${fullDateMatch[3]}-${fullDateMatch[4]}`;
-    return validateDate(candidate) ? candidate : null;
+    return validateLegacyDate(candidate) ? candidate : null;
   }
 
   return null;

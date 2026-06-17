@@ -601,10 +601,10 @@ Elle peut contenir :
 - le nom de fichier sans chemin complet ;
 - l'extension ;
 - un extrait texte PDF ou OCR, limité à 6000 caractères ;
-- les suggestions issues des règles locales ;
+- la proposition v2 déterministe courante ;
 - les sous-dossiers relatifs connus ;
 - les dossiers racines relatifs disponibles ;
-- la convention de nommage ;
+- la convention de nommage v2 ;
 - une date ou année détectée.
 
 Elle ne contient pas :
@@ -625,10 +625,11 @@ Le JSON attendu peut contenir :
 
 ```json
 {
-  "date": "AAAA-MM-JJ ou AAAA optionnel",
-  "documentType": "type normalisé optionnel",
-  "subject": "sujet normalisé optionnel",
-  "keywords": ["maximum 5 mots-clés"],
+  "dateToken": "AAAA-MM-JJ, AAAA-MM, AAAA, AAAA-env ou date-inconnue optionnel",
+  "target": "cible normalisée optionnelle",
+  "documentType": "type documentaire normalisé optionnel",
+  "issuer": "émetteur normalisé optionnel",
+  "detail": "détail normalisé optionnel",
   "targetFolder": "dossier relatif optionnel",
   "confidence": 80,
   "reasons": ["raisons courtes"],
@@ -643,6 +644,7 @@ Le prompt rappelle à l'IA :
 - que l'utilisateur garde la décision finale ;
 - que `targetFolder` doit rester relatif ;
 - qu'elle ne doit pas inclure de chemin Windows complet ;
+- que `target`, `documentType`, `issuer` et `detail` doivent rester des blocs courts compatibles avec le nommage v2 ;
 - qu'elle doit indiquer un avertissement si le signal est faible.
 
 ## Validation De La Réponse IA
@@ -654,8 +656,7 @@ DocSorter refuse notamment :
 - un JSON invalide ;
 - des champs inconnus ;
 - un score hors `0..100` ;
-- plus de 5 mots-clés ;
-- une date invalide ;
+- un `dateToken` invalide ;
 - un dossier cible absolu ;
 - un dossier cible avec `..` ;
 - un dossier cible trop profond ;
@@ -670,9 +671,10 @@ L'IA ne modifie pas directement le nom proposé.
 Elle affiche une suggestion séparée :
 
 - date ;
+- cible ;
 - type ;
-- sujet ;
-- mots-clés ;
+- émetteur ;
+- détail ;
 - sous-dossier ;
 - score ;
 - raisons ;
@@ -684,7 +686,11 @@ L'utilisateur peut ensuite cliquer sur :
 Appliquer aux champs vides
 ```
 
-Dans ce cas, DocSorter copie uniquement les valeurs IA vers les champs de renommage qui sont encore vides.
+Dans ce cas, DocSorter copie les valeurs IA vers les champs de renommage qui sont encore vides.
+
+Si une valeur présente vient déjà d'un brouillon automatique ou de la proposition v2, l'IA peut la remplacer uniquement si son score est au moins `70`.
+
+Une saisie manuelle utilisateur n'est jamais remplacée.
 
 Exemple :
 
@@ -694,17 +700,19 @@ Champ Sujet vide
 Champ Type vide
 
 Suggestion IA :
-date = 2024-03-10
-subject = Renault-Captur
-documentType = facture
+dateToken = 2024-03-10
+target = renault-captur
+documentType = facture-entretien
+issuer = renault
 
 Résultat après application :
 Date reste 2024-03-05
-Sujet devient Renault-Captur
-Type devient facture
+Sujet devient renault-captur
+Type devient facture-entretien
+Mots-clés devient renault
 ```
 
-Les champs déjà remplis ne sont pas remplacés.
+Les champs manuels déjà remplis ne sont pas remplacés.
 
 ## Comment L'IA Influence Le Sous-Dossier
 
@@ -740,10 +748,10 @@ En pratique :
 - les valeurs déjà saisies restent prioritaires ;
 - aucune fusion automatique avancée n'est encore faite.
 
-Si la suggestion IA diffère des règles locales, DocSorter peut afficher :
+Si la suggestion IA diffère de la proposition v2 déterministe, DocSorter peut afficher :
 
 ```text
-Diffère des règles locales.
+Diffère de la proposition V2.
 ```
 
 ## Contrôle De Collision
@@ -881,10 +889,11 @@ Suggestion IA :
 
 ```json
 {
-  "date": "2024-03-05",
-  "documentType": "facture",
-  "subject": "Renault-Captur",
-  "keywords": ["vidange"],
+  "dateToken": "2024-03-05",
+  "target": "captur",
+  "documentType": "facture-entretien",
+  "issuer": "renault",
+  "detail": "vidange",
   "targetFolder": "Vehicules/Renault-Captur/Entretien",
   "confidence": 82,
   "reasons": ["Facture et véhicule détectés dans le texte."],
@@ -897,16 +906,16 @@ Après `Appliquer aux champs vides`, si les champs étaient vides dans le flux h
 
 ```text
 Date documentaire : 2024-03-05
-Sujet : Renault-Captur
-Type : facture
-Mots-clés : vidange
+Sujet : captur
+Type : facture-entretien
+Mots-clés : renault vidange
 Sous-dossier cible : Vehicules/Renault-Captur/Entretien
 ```
 
-Nom historique proposé :
+Nom v2 proposé :
 
 ```text
-2024-03-05_Renault-Captur_facture_vidange.pdf
+2024-03-05_captur_facture-entretien_renault_vidange.pdf
 ```
 
 Le fichier n'est déplacé qu'après validation explicite.

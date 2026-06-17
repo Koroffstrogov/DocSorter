@@ -250,11 +250,13 @@ export interface IpcHandlerServices {
   runAiSuggestionForDocument: (options: {
     documentPath: string;
     textContext: AiDocumentTextContext | null;
+    legacyDraft: unknown;
     queuedDocuments: Iterable<DuplicateSourceDocument>;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
-    rulesCatalog: NamingSuggestionRulesCatalog;
+    targetRootPath: string | null | undefined;
     knownRelativeFolders: string[];
+    competingRelativePaths?: string[];
   }) => Promise<AiSettingsResult<AiDocumentSuggestion>>;
   buildSuggestionV2ForDocument: (options: {
     documentPath: string;
@@ -893,15 +895,17 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   );
   options.ipcMain.handle(
     IPC_CHANNELS.aiRunSuggestion,
-    async (_event, documentPath: unknown, textContext: unknown) =>
+    async (_event, documentPath: unknown, textContext: unknown, legacyDraft: unknown) =>
       services.runAiSuggestionForDocument({
         documentPath: typeof documentPath === "string" ? documentPath : "",
         textContext: readAiDocumentTextContext(textContext),
+        legacyDraft,
         queuedDocuments: state.queuedDocuments,
         queuedDocumentPaths: state.queuedDocumentPaths,
         userDataPath: options.app.getPath("userData"),
-        rulesCatalog: await getRulesCatalogForAnalysis(options.app, services),
-        knownRelativeFolders: await getKnownTargetFoldersForAi(state, services)
+        targetRootPath: state.selectedTargetPath,
+        knownRelativeFolders: await getKnownTargetFoldersForAi(state, services),
+        competingRelativePaths: getSelectedTargetFolderCandidates(state)
       })
   );
   options.ipcMain.handle(
@@ -946,11 +950,13 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         ? await services.runAiSuggestionForDocument({
             documentPath: safeDocumentPath,
             textContext: safeTextContext,
+            legacyDraft,
             queuedDocuments: state.queuedDocuments,
             queuedDocumentPaths: state.queuedDocumentPaths,
             userDataPath: options.app.getPath("userData"),
-            rulesCatalog: await getRulesCatalogForAnalysis(options.app, services),
-            knownRelativeFolders
+            targetRootPath: state.selectedTargetPath,
+            knownRelativeFolders,
+            competingRelativePaths: getSelectedTargetFolderCandidates(state)
           })
         : null;
 

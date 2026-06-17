@@ -13,6 +13,7 @@ async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> 
 
   state.naming = {
     draft,
+    origins: createAutoNamingDraftOrigins(),
     proposal: null,
     overrideFilename: null,
     isLoading: true
@@ -27,6 +28,7 @@ function updateNamingDraftFromInputs(draft: NamingDraft): void {
     return;
   }
 
+  state.naming.origins = mergeNamingDraftOriginsForManualEdit(state.naming.draft, draft, state.naming.origins);
   state.naming.draft = draft;
   state.naming.overrideFilename = null;
   state.naming.isLoading = true;
@@ -34,6 +36,21 @@ function updateNamingDraftFromInputs(draft: NamingDraft): void {
   resetDestinationCheck();
   renderNamingPanel(false);
   void updateNamingProposal(activeDocument.extension, ++namingRequestId);
+}
+
+function mergeNamingDraftOriginsForManualEdit(
+  previousDraft: NamingDraft,
+  nextDraft: NamingDraft,
+  previousOrigins: NamingDraftOrigins
+): NamingDraftOrigins {
+  return {
+    documentDate:
+      previousDraft.documentDate !== nextDraft.documentDate ? "manual" : previousOrigins.documentDate,
+    subject: previousDraft.subject !== nextDraft.subject ? "manual" : previousOrigins.subject,
+    documentType:
+      previousDraft.documentType !== nextDraft.documentType ? "manual" : previousOrigins.documentType,
+    keywords: previousDraft.keywords !== nextDraft.keywords ? "manual" : previousOrigins.keywords
+  };
 }
 
 function applyDestinationAlternative(): void {
@@ -94,13 +111,17 @@ async function loadTargetFolders(): Promise<void> {
   renderNamingPanel(false);
 }
 
-async function updateTargetFolderFromInput(targetFolder: string): Promise<void> {
+async function updateTargetFolderFromInput(
+  targetFolder: string,
+  origin: NamingFieldOrigin = "manual"
+): Promise<void> {
   const requestId = ++targetFolderRequestId;
   state.targetFolder = {
     ...state.targetFolder,
     selectedFolder: targetFolder,
     status: state.targetPath ? "ready" : "idle",
-    message: targetFolder ? "Sous-dossier cible à vérifier." : "Classement à la racine cible."
+    message: targetFolder ? "Sous-dossier cible à vérifier." : "Classement à la racine cible.",
+    origin
   };
   resetClassificationState();
   resetDestinationCheck();
@@ -117,7 +138,8 @@ async function updateTargetFolderFromInput(targetFolder: string): Promise<void> 
       ...state.targetFolder,
       selectedFolder: targetFolder,
       status: "invalid",
-      message: result.error.message
+      message: result.error.message,
+      origin
     };
     state.destination = {
       ...createIdleDestinationCheckState(),
@@ -134,7 +156,8 @@ async function updateTargetFolderFromInput(targetFolder: string): Promise<void> 
     ...state.targetFolder,
     selectedFolder: result.value,
     status: "ready",
-    message: result.value ? "Sous-dossier cible à vérifier." : "Classement à la racine cible."
+    message: result.value ? "Sous-dossier cible à vérifier." : "Classement à la racine cible.",
+    origin
   };
   renderPaths();
   scheduleDestinationCheck();
@@ -188,7 +211,8 @@ async function createSelectedTargetFolder(): Promise<void> {
     selectedFolder: result.value.targetFolder,
     folders: addFolderToList(state.targetFolder.folders, result.value.targetFolder),
     status: result.value.created ? "created" : "ready",
-    message: result.value.message
+    message: result.value.message,
+    origin: state.targetFolder.origin
   };
   renderPaths();
   renderNamingPanel(false);

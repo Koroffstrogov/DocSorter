@@ -365,8 +365,8 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     heading.append(score, meta);
     container.append(heading, createAiSuggestionGrid(state.suggestion));
 
-    if (state.suggestion.differsFromLocalRules) {
-      container.append(createWarningLine("Diffère des règles locales."));
+    if (state.suggestion.differsFromSuggestionV2) {
+      container.append(createWarningLine("Diffère de la proposition V2."));
     }
 
     if (suggestion.reasons.length > 0) {
@@ -384,11 +384,12 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     const grid = document.createElement("dl");
     grid.className = "ai-suggestion-grid";
     grid.append(
-      createSuggestionRow("Date", suggestion.suggestion.date),
-      createSuggestionRow("Sujet", suggestion.suggestion.subject),
+      createSuggestionRow("Date", suggestion.suggestion.dateToken),
+      createSuggestionRow("Cible", suggestion.suggestion.target),
       createSuggestionRow("Type", suggestion.suggestion.documentType),
-      createSuggestionRow("Dossier", suggestion.suggestion.targetFolder),
-      createSuggestionRow("Mots-clés", suggestion.suggestion.keywords.join(" "))
+      createSuggestionRow("Émetteur", suggestion.suggestion.issuer),
+      createSuggestionRow("Détail", suggestion.suggestion.detail),
+      createSuggestionRow("Dossier", suggestion.suggestion.targetFolder)
     );
     return grid;
   }

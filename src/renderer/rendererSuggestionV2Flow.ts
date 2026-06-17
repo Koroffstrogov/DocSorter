@@ -109,6 +109,11 @@ function applySuggestionV2ToEmptyFields(): void {
 
   if (draftApplication.appliedFields.length > 0) {
     state.naming.draft = draftApplication.draft;
+    state.naming.origins = applyNamingDraftOrigin(
+      state.naming.origins,
+      draftApplication.appliedFields,
+      "suggestion-v2"
+    );
     state.naming.overrideFilename = null;
     state.naming.isLoading = true;
     resetClassificationState();
@@ -134,7 +139,7 @@ function applySuggestionV2ToEmptyFields(): void {
   }
 
   if (shouldApplyTargetFolder && targetFolder) {
-    void updateTargetFolderFromInput(targetFolder);
+    void updateTargetFolderFromInput(targetFolder, "suggestion-v2");
   }
 }
 
@@ -345,6 +350,18 @@ function buildNamingDraftFromSuggestionV2(
     draft: nextDraft,
     appliedFields
   };
+}
+
+function applyNamingDraftOrigin(
+  origins: NamingDraftOrigins,
+  fields: Array<keyof NamingDraft>,
+  origin: NamingFieldOrigin
+): NamingDraftOrigins {
+  const nextOrigins = { ...origins };
+  for (const field of fields) {
+    nextOrigins[field] = origin;
+  }
+  return nextOrigins;
 }
 
 function hasEmptyNamingFieldForSuggestionV2(

@@ -502,24 +502,32 @@ describe("registerIpcHandlers", () => {
       source: "pdf-native",
       excerpt: "texte extrait"
     };
+    const legacyDraft: NamingDraft = {
+      documentDate: "",
+      subject: "",
+      documentType: "",
+      keywords: ""
+    };
 
     await harness.invoke(
       IPC_CHANNELS.aiRunSuggestion,
       DOCUMENT_PATH,
       textContext,
-      "C:\\renderer-target"
+      legacyDraft
     );
 
-    expect(services.loadMergedNamingRulesCatalog).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(services.loadMergedNamingRulesCatalog).not.toHaveBeenCalled();
     expect(services.listTargetSubdirectories).toHaveBeenCalledWith(TARGET_PATH);
     expect(services.runAiSuggestionForDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       textContext,
+      legacyDraft,
       queuedDocuments: appState.queuedDocuments,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
-      rulesCatalog: createEmptyCatalog(),
-      knownRelativeFolders: [TARGET_FOLDER]
+      targetRootPath: TARGET_PATH,
+      knownRelativeFolders: [TARGET_FOLDER],
+      competingRelativePaths: [TARGET_FOLDER]
     });
   });
 
@@ -637,11 +645,13 @@ describe("registerIpcHandlers", () => {
     expect(services.runAiSuggestionForDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       textContext,
+      legacyDraft: null,
       queuedDocuments: appState.queuedDocuments,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
-      rulesCatalog: createEmptyCatalog(),
-      knownRelativeFolders: [TARGET_FOLDER]
+      targetRootPath: TARGET_PATH,
+      knownRelativeFolders: [TARGET_FOLDER],
+      competingRelativePaths: []
     });
     expect(services.writeSuggestionV2Diagnostic).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1186,17 +1196,20 @@ function createAiDocumentSuggestion(): AiDocumentSuggestion {
       extension: ".pdf",
       extractedTextExcerpt: "texte extrait",
       ocrTextExcerpt: "",
-      currentRuleSuggestions: null,
+      currentSuggestionV2: null,
       availableRootFolders: ["Vehicules"],
       knownRelativeFolders: [TARGET_FOLDER],
-      namingConvention: "AAAA-MM-JJ_Sujet_Type_MotsCles.ext",
+      namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
       detectedDate: "",
       detectedYear: ""
     },
+    deterministicSuggestion: createSuggestionV2Result().value,
     suggestion: {
-      documentType: "facture",
-      subject: "Renault-Captur",
-      keywords: ["entretien"],
+      dateToken: "2024-03-05",
+      target: "captur",
+      documentType: "facture-entretien",
+      issuer: "renault",
+      detail: "entretien",
       targetFolder: TARGET_FOLDER,
       confidence: 70,
       reasons: ["Analyse locale Ollama."],
@@ -1204,8 +1217,8 @@ function createAiDocumentSuggestion(): AiDocumentSuggestion {
       source: "ollama"
     },
     promptCharacterCount: 1200,
-    differsFromLocalRules: false,
-    message: "Suggestion IA prête."
+    differsFromSuggestionV2: false,
+    message: "Suggestion IA V2 prête."
   };
 }
 

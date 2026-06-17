@@ -103,10 +103,11 @@ describe("runOllamaSuggestionForDocument", () => {
       ...createOptions(workspace),
       fetchClient: createSuccessfulFetch({
         response: JSON.stringify({
-          date: "2026-06-16",
+          dateToken: "2026-06-16",
+          target: "Renault Captur",
           documentType: "facture",
-          subject: "Renault Captur",
-          keywords: ["entretien", "vidange"],
+          issuer: "Renault",
+          detail: "vidange",
           targetFolder: "Vehicules/Renault-Captur/Entretien",
           confidence: 82,
           reasons: ["Facture détectée."],
@@ -119,9 +120,11 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      date: "2026-06-16",
+      dateToken: "2026-06-16",
+      target: "renault-captur",
       documentType: "facture",
-      subject: "Renault-Captur",
+      issuer: "renault",
+      detail: "vidange",
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       source: "ollama"
     });
@@ -159,7 +162,6 @@ describe("runOllamaSuggestionForDocument", () => {
         response: JSON.stringify({
           targetFolder: "../Secret",
           confidence: 70,
-          keywords: [],
           reasons: ["test"],
           warnings: [],
           source: "ollama"
@@ -229,11 +231,18 @@ function createOptions(
       excerpt: "Facture Renault Captur du 05/03/2024",
       ...textContext
     },
+    legacyDraft: {
+      documentDate: "",
+      subject: "",
+      documentType: "",
+      keywords: ""
+    },
     queuedDocuments: [{ filePath: workspace.documentPath, name: "document.pdf" }],
     queuedDocumentPaths: [workspace.documentPath],
     userDataPath: workspace.userData,
-    rulesCatalog: createEmptyCatalog(),
+    targetRootPath: workspace.sourcePath,
     knownRelativeFolders: ["Vehicules/Renault-Captur/Entretien"],
+    competingRelativePaths: [],
     modelManager: createReadyModelManager(),
     now: () => new Date("2026-06-16T10:00:00.000Z")
   };
@@ -249,8 +258,12 @@ function createSuccessfulFetch(
       response:
         options.response ??
         JSON.stringify({
+          dateToken: "2026",
+          target: "captur",
+          documentType: "facture-entretien",
+          issuer: "renault",
+          detail: "vidange",
           confidence: 70,
-          keywords: [],
           reasons: ["Analyse locale Ollama."],
           warnings: [],
           source: "ollama"
@@ -324,15 +337,5 @@ async function createWorkspace() {
     sourcePath,
     documentPath,
     userData
-  };
-}
-
-function createEmptyCatalog(): NamingSuggestionRulesCatalog {
-  return {
-    version: 1,
-    documentTypeRules: [],
-    subjectRules: [],
-    keywordRules: [],
-    stopWords: []
   };
 }

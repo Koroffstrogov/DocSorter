@@ -145,7 +145,7 @@ describe("generateOllamaCompletion", () => {
     const fetchClient = createMockFetch([
       {
         response:
-          '{"confidence":70,"keywords":[],"reasons":["test"],"warnings":[],"source":"ollama"}'
+          '{"confidence":70,"target":"captur","reasons":["test"],"warnings":[],"source":"ollama"}'
       }
     ]);
 
@@ -157,7 +157,7 @@ describe("generateOllamaCompletion", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value).toEqual({
       responseText:
-        '{"confidence":70,"keywords":[],"reasons":["test"],"warnings":[],"source":"ollama"}',
+        '{"confidence":70,"target":"captur","reasons":["test"],"warnings":[],"source":"ollama"}',
       model: "llama3.2",
       generatedAt: "2026-06-16T10:00:00.000Z"
     });

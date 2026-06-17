@@ -111,7 +111,7 @@ npm run dev
 - refus des images trop volumineuses pour OCR ;
 - affichage borné du texte OCR et réutilisation manuelle pour la proposition de tri v2 ;
 - cache local des résultats OCR image sous `userData/cache/analysis`, invalidé par chemin, taille, date de modification, moteur, version Tesseract, langue et PSM.
-- contrat IA local strict pour proposer date, type, sujet, mots-clés, dossier, score et raisons ;
+- contrat IA local strict aligné sur le nommage v2 pour proposer `dateToken`, `target`, `documentType`, `issuer`, `detail`, dossier, score et raisons ;
 - provider IA simulé déterministe, sans modèle réel, sans réseau et sans prompt modèle ;
 - validation stricte des sorties IA : score borné, date valide, dossier cible relatif, listes bornées et source contrôlée ;
 - orchestrateur IA pur qui borne l'entrée, valide la sortie et n'applique jamais automatiquement les suggestions.
@@ -128,12 +128,12 @@ npm run dev
 - statut discret du modèle IA : prêt, chargement, absent, Ollama indisponible ou erreur locale ;
 - bouton avancé `Libérer le modèle IA`, sans effet sur les documents ;
 - tentative sobre de libération du modèle à la fermeture de l'application avec timeout court ;
-- prompt Ollama borné à partir du nom de fichier, de l'extension, de l'extrait PDF/OCR, des règles locales et des dossiers relatifs connus, sans chemin Windows complet, sans journal, sans cache complet, sans autres documents et sans texte intégral ;
+- prompt Ollama borné à partir du nom de fichier, de l'extension, de l'extrait PDF/OCR, de la proposition v2 déterministe courante et des dossiers relatifs connus, sans chemin Windows complet, sans journal, sans cache complet, sans autres documents et sans texte intégral ;
 - génération Ollama locale via `/api/generate` avec sortie JSON demandée strictement ;
 - validation IA-0 obligatoire de toute réponse Ollama, avec refus sobre des JSON invalides et des dossiers cible dangereux ;
-- affichage séparé de la suggestion IA : date, type, sujet, mots-clés, dossier, score, raisons, avertissements et conflit avec les règles locales ;
-- bouton `Appliquer aux champs vides` pour la suggestion IA, sans remplacement des champs déjà saisis ;
-- application éventuelle du dossier IA uniquement dans le champ de sous-dossier cible vide, puis relance des contrôles dossier/collision existants ;
+- affichage séparé de la suggestion IA : date, cible, type, émetteur, détail, dossier, score, raisons, avertissements et conflit avec la proposition v2 ;
+- bouton `Appliquer aux champs vides` pour la suggestion IA, sans remplacement des champs saisis manuellement ;
+- application éventuelle du dossier IA uniquement avec racine cible sélectionnée et sans écraser un dossier saisi manuellement, puis relance des contrôles dossier/collision existants ;
 - action `Ignorer` pour masquer la suggestion IA courante, sans mutation fichier.
 
 ## Convention de nommage
@@ -231,7 +231,7 @@ Le bouton `Appliquer aux champs vides` du panneau `Proposition de tri` peut remp
 
 Le dossier recommandé v2 ne crée jamais de dossier automatiquement et ne déclenche aucun classement réel.
 
-L'ancien moteur de suggestions locales reste conservé en interne pour les dépendances cache, OCR et IA qui l'utilisent encore, mais il n'est plus exposé comme panneau `Suggestions locales` dans l'interface.
+L'ancien moteur de suggestions locales reste conservé en interne pour les dépendances cache et OCR qui l'utilisent encore, mais il n'est plus exposé comme panneau `Suggestions locales` dans l'interface. La suggestion IA documentaire s'appuie désormais sur la proposition v2 déterministe, pas sur ce contrat historique.
 
 Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format historique est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
 
@@ -326,17 +326,17 @@ IA-0 prépare un contrat de classification pour une IA locale. IA-1 ajoute la co
 
 Aucune analyse IA n'est lancée automatiquement au changement de document, au scan, à l'extraction texte ou à l'OCR. L'IA propose seulement : elle ne renomme pas, ne déplace pas, ne classe pas, ne crée pas de dossier et ne remplace pas les champs déjà saisis.
 
-L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, les suggestions de règles locales déjà calculées, les dossiers relatifs connus, la convention de nommage et une date ou année détectée.
+L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, la proposition v2 déterministe courante, les dossiers relatifs connus, la convention de nommage v2 et une date ou année détectée.
 
 La sortie IA validée peut proposer uniquement :
 
 ```text
-date?, documentType?, subject?, keywords[], targetFolder?, confidence, reasons[], warnings[], source="simulated-ai"|"ollama"
+dateToken?, target?, documentType?, issuer?, detail?, targetFolder?, confidence, reasons[], warnings[], source="simulated-ai"|"ollama"
 ```
 
-Le validateur refuse les objets non JSON, les champs inconnus, les scores hors `0..100`, les dates invalides et les dossiers absolus, trop profonds ou avec traversée `..`. Les types, sujets et mots-clés sont normalisés avec la logique de nommage existante.
+Le validateur refuse les objets non JSON, les champs inconnus, les scores hors `0..100`, les `dateToken` invalides et les dossiers absolus, trop profonds ou avec traversée `..`. Les champs `target`, `documentType`, `issuer` et `detail` sont normalisés avec la logique de nommage v2.
 
-Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Les suggestions IA restent séparées des règles utilisateur, ne modifient aucun fichier et ne déclenchent jamais de classement.
+Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Les suggestions IA restent séparées de la proposition v2 déterministe, ne modifient aucun fichier et ne déclenchent jamais de classement.
 
 La configuration Ollama est stockée localement dans :
 
@@ -356,7 +356,7 @@ Avant l'envoi du prompt, DocSorter vérifie que le modèle configuré est dispon
 
 La conservation utilise `keep_alive: "30m"`. L'action avancée `Libérer le modèle IA` envoie une requête de déchargement `keep_alive: 0`. À la fermeture, l'application tente aussi de libérer le modèle avec un timeout court, sans bloquer indéfiniment.
 
-Le bouton `Appliquer aux champs vides` peut recopier date, sujet, type et mots-clés uniquement quand les champs correspondants sont vides. Si le dossier cible IA est appliqué, l'application relance les contrôles existants de dossier et de collision. La fusion intelligente entre règles locales et IA est volontairement reportée.
+Le bouton `Appliquer aux champs vides` peut recopier `dateToken`, `target`, `documentType`, `issuer` et `detail` vers les champs historiques encore utilisés par le panneau de renommage. L'IA peut remplacer une valeur automatique ou issue de la proposition v2 uniquement si le score est au moins `70`; elle ne remplace jamais une saisie manuelle. Si le dossier cible IA est appliqué, l'application relance les contrôles existants de dossier et de collision.
 
 ## Raccourcis clavier
 
@@ -531,10 +531,10 @@ Un prochain lot pourra ajouter :
 - après libération manuelle, une nouvelle analyse recharge le modèle ;
 - fermer l'application tente de libérer le modèle sans écrire de contenu documentaire dans les logs ;
 - cliquer sur `Analyser avec IA locale` affiche une suggestion validée ou une erreur sobre, sans modifier le document ;
-- la suggestion IA affiche date, type, sujet, mots-clés, dossier, score, raisons et avertissements ;
+- la suggestion IA affiche date, cible, type, émetteur, détail, dossier, score, raisons et avertissements ;
 - si Ollama est arrêté ou si le modèle est absent, l'analyse IA affiche une erreur sobre ;
 - une réponse Ollama non JSON ou hors contrat affiche `Suggestion IA invalide` sans crash ;
-- `Appliquer aux champs vides` depuis la suggestion IA ne remplace pas les champs déjà saisis ;
+- `Appliquer aux champs vides` depuis la suggestion IA ne remplace jamais les champs saisis manuellement ;
 - appliquer un dossier IA dans un champ cible vide relance les contrôles existants de dossier et collision ;
 - changer de document ou relancer extraction/OCR efface la suggestion IA courante ;
 - ignorer une suggestion IA ne modifie aucun fichier et ne modifie pas le journal ;

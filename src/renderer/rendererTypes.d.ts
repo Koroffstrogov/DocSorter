@@ -90,6 +90,15 @@ interface NamingDraft {
   keywords: string;
 }
 
+type NamingFieldOrigin = "auto" | "suggestion-v2" | "ai-v2" | "manual";
+
+interface NamingDraftOrigins {
+  documentDate: NamingFieldOrigin;
+  subject: NamingFieldOrigin;
+  documentType: NamingFieldOrigin;
+  keywords: NamingFieldOrigin;
+}
+
 interface NamingMessage {
   level: NamingMessageLevel;
   code: string;
@@ -105,6 +114,7 @@ interface ProposedFilename {
 
 interface NamingState {
   draft: NamingDraft;
+  origins: NamingDraftOrigins;
   proposal: ProposedFilename | null;
   overrideFilename: string | null;
   isLoading: boolean;
@@ -150,6 +160,7 @@ interface TargetFolderState {
   folders: string[];
   status: TargetFolderStatus;
   message: string;
+  origin: NamingFieldOrigin;
 }
 
 interface ClassificationPlanCheck {
@@ -365,7 +376,7 @@ interface RendererSuggestionDraftV2 {
   confidence: number;
   reasons: string[];
   warnings: string[];
-  source: Record<string, string | undefined>;
+  source: unknown;
   namingMessages: Array<{
     level: "error" | "warning" | "info";
     code: string;
@@ -619,10 +630,11 @@ interface AiSettingsDraft {
 }
 
 interface RendererAiClassificationSuggestion {
-  date?: string;
+  dateToken?: string;
+  target?: string;
   documentType?: string;
-  subject?: string;
-  keywords: string[];
+  issuer?: string;
+  detail?: string;
   targetFolder?: string;
   confidence: number;
   reasons: string[];
@@ -638,9 +650,10 @@ interface RendererAiDocumentSuggestion {
   suggestedAt: string;
   textSource: "pdf-native" | "tesseract-cli";
   modelStatus: RendererAiModelStatus;
+  deterministicSuggestion: RendererSuggestionV2DocumentSuggestion;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;
-  differsFromLocalRules: boolean;
+  differsFromSuggestionV2: boolean;
   message: string;
 }
 

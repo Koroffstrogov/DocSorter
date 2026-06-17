@@ -20,12 +20,12 @@ describe("buildAiClassificationSuggestion", () => {
     temporaryRoots.length = 0;
   });
 
-  it("returns a ready result for a valid provider output", async () => {
+  it("returns a ready result for a valid V2 provider output", async () => {
     const result = await buildAiClassificationSuggestion(createInput(), () => ({
-      date: "2026",
+      dateToken: "2026",
+      target: "Sujet test",
       documentType: "facture",
-      subject: "Sujet test",
-      keywords: ["test"],
+      issuer: "test",
       targetFolder: "Maison/Assurance",
       confidence: 60,
       reasons: ["Sortie de test."],
@@ -34,7 +34,7 @@ describe("buildAiClassificationSuggestion", () => {
     }));
 
     expect(result.status).toBe("ready");
-    expect(result.status === "ready" && result.suggestion.subject).toBe("Sujet-test");
+    expect(result.status === "ready" && result.suggestion.target).toBe("sujet-test");
   });
 
   it("returns an invalid result for invalid provider output", async () => {
@@ -64,7 +64,6 @@ describe("buildAiClassificationSuggestion", () => {
         seenTextLength = input.extractedTextExcerpt.length;
         return {
           confidence: 10,
-          keywords: [],
           reasons: ["Test."],
           warnings: [],
           source: "simulated-ai"
@@ -103,9 +102,10 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
-      date: "2026-03-10",
+      dateToken: "2026-03-10",
+      target: "captur",
       documentType: "facture-entretien",
-      subject: "Renault-Captur",
+      issuer: "renault",
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       source: "simulated-ai"
     });
@@ -122,10 +122,10 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
-      date: "2025",
+      dateToken: "2025",
+      target: "foyer",
       documentType: "avis-imposition",
-      subject: "Impots",
-      targetFolder: "Impots/2025"
+      targetFolder: "Fiscalite/Foyer/2025"
     });
   });
 
@@ -140,8 +140,9 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
+      target: "foyer",
       documentType: "assurance-habitation",
-      subject: "Maison",
+      detail: "habitation",
       targetFolder: "Maison/Assurance"
     });
   });
@@ -157,8 +158,8 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
+      target: "enfants-ecole",
       documentType: "certificat-scolarite",
-      subject: "Enfants-Ecole",
       targetFolder: "Enfants/Ecole"
     });
   });
@@ -174,7 +175,7 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion.confidence).toBeLessThan(30);
-    expect(result.status === "ready" && result.suggestion.keywords).toEqual([]);
+    expect(result.status === "ready" && result.suggestion.target).toBeUndefined();
   });
 });
 
@@ -184,15 +185,15 @@ function createInput(overrides: Partial<AiClassificationInput> = {}): AiClassifi
     extension: ".pdf",
     extractedTextExcerpt: "",
     ocrTextExcerpt: "",
-    currentRuleSuggestions: null,
-    availableRootFolders: ["Maison", "Vehicules", "Impots", "Enfants"],
+    currentSuggestionV2: null,
+    availableRootFolders: ["Maison", "Vehicules", "Fiscalite", "Enfants"],
     knownRelativeFolders: [
       "Maison/Assurance",
       "Vehicules/Renault-Captur/Entretien",
-      "Impots/2025",
+      "Fiscalite/Foyer/2025",
       "Enfants/Ecole"
     ],
-    namingConvention: "AAAA-MM-JJ_Sujet_Type_MotsCles.ext",
+    namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
     ...overrides
   };
 }

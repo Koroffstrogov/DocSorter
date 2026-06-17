@@ -28,9 +28,19 @@ function createIdleNamingState(): NamingState {
       documentType: "",
       keywords: ""
     },
+    origins: createAutoNamingDraftOrigins(),
     proposal: null,
     overrideFilename: null,
     isLoading: false
+  };
+}
+
+function createAutoNamingDraftOrigins(): NamingDraftOrigins {
+  return {
+    documentDate: "auto",
+    subject: "auto",
+    documentType: "auto",
+    keywords: "auto"
   };
 }
 
@@ -48,7 +58,8 @@ function createIdleTargetFolderState(): TargetFolderState {
     selectedFolder: "",
     folders: [],
     status: "idle",
-    message: "Classement à la racine cible"
+    message: "Classement à la racine cible",
+    origin: "auto"
   };
 }
 

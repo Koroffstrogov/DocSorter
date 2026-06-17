@@ -6,12 +6,13 @@ import {
 } from "./aiClassificationValidator";
 
 describe("validateAiClassificationSuggestion", () => {
-  it("accepts and normalizes a valid simulated AI output", () => {
+  it("accepts and normalizes a valid V2 AI output", () => {
     const result = validateAiClassificationSuggestion({
-      date: "2026-06-16",
+      dateToken: "2026-06-16",
+      target: "Renault Captur",
       documentType: "Facture entretien",
-      subject: "Renault Captur",
-      keywords: ["vidange", "contrôle"],
+      issuer: "Renault",
+      detail: "contrôle technique",
       targetFolder: "Vehicules\\Renault-Captur / Entretien",
       confidence: 82,
       reasons: ["Facture detectee."],
@@ -22,10 +23,11 @@ describe("validateAiClassificationSuggestion", () => {
     expect(result).toEqual({
       status: "valid",
       suggestion: {
-        date: "2026-06-16",
-        documentType: "Facture-entretien",
-        subject: "Renault-Captur",
-        keywords: ["vidange", "controle"],
+        dateToken: "2026-06-16",
+        target: "renault-captur",
+        documentType: "facture-entretien",
+        issuer: "renault",
+        detail: "controle-technique",
         targetFolder: "Vehicules/Renault-Captur/Entretien",
         confidence: 82,
         reasons: ["Facture detectee."],
@@ -45,7 +47,6 @@ describe("validateAiClassificationSuggestion", () => {
   it("accepts controlled Ollama outputs", () => {
     const result = validateAiClassificationSuggestion({
       confidence: 70,
-      keywords: [],
       reasons: ["Analyse locale Ollama."],
       warnings: [],
       source: "ollama"
@@ -55,14 +56,14 @@ describe("validateAiClassificationSuggestion", () => {
     expect(result.status === "valid" && result.suggestion.source).toBe("ollama");
   });
 
-  it("rejects unknown output fields", () => {
+  it("rejects old output fields", () => {
     const result = validateAiClassificationSuggestion({
       confidence: 50,
+      subject: "Renault-Captur",
       keywords: [],
       reasons: [],
       warnings: [],
-      source: "simulated-ai",
-      windowsPath: "C:\\Users\\Seb\\Documents"
+      source: "simulated-ai"
     });
 
     expect(result.status).toBe("invalid");
@@ -72,7 +73,6 @@ describe("validateAiClassificationSuggestion", () => {
   it("rejects confidence outside 0..100", () => {
     const result = validateAiClassificationSuggestion({
       confidence: 150,
-      keywords: [],
       reasons: [],
       warnings: [],
       source: "simulated-ai"
@@ -82,11 +82,10 @@ describe("validateAiClassificationSuggestion", () => {
     expect(result.status === "invalid" && result.error.code).toBe("AI_CONFIDENCE_INVALID");
   });
 
-  it("rejects invalid dates", () => {
+  it("rejects invalid date tokens", () => {
     const result = validateAiClassificationSuggestion({
-      date: "2026-02-31",
+      dateToken: "2026-02-31",
       confidence: 50,
-      keywords: [],
       reasons: [],
       warnings: [],
       source: "simulated-ai"
@@ -101,7 +100,6 @@ describe("validateAiClassificationSuggestion", () => {
       validateAiClassificationSuggestion({
         targetFolder: "C:\\Users\\Seb",
         confidence: 50,
-        keywords: [],
         reasons: [],
         warnings: [],
         source: "simulated-ai"
@@ -117,7 +115,6 @@ describe("validateAiClassificationSuggestion", () => {
       validateAiClassificationSuggestion({
         targetFolder: "Maison/../Secret",
         confidence: 50,
-        keywords: [],
         reasons: [],
         warnings: [],
         source: "simulated-ai"
@@ -130,17 +127,15 @@ describe("validateAiClassificationSuggestion", () => {
     });
   });
 
-  it("bounds keywords, reasons and warnings", () => {
+  it("bounds reasons and warnings", () => {
     const result = validateAiClassificationSuggestion({
       confidence: 50,
-      keywords: ["a", "b", "c", "d", "e", "f"],
       reasons: ["r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9"],
       warnings: ["w1", "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9"],
       source: "simulated-ai"
     });
 
     expect(result.status).toBe("valid");
-    expect(result.status === "valid" && result.suggestion.keywords).toHaveLength(5);
     expect(result.status === "valid" && result.suggestion.reasons).toHaveLength(8);
     expect(result.status === "valid" && result.suggestion.warnings).toHaveLength(8);
   });
@@ -153,6 +148,12 @@ describe("boundAiClassificationInput", () => {
       extension: "PDF",
       extractedTextExcerpt: "a".repeat(6_000),
       ocrTextExcerpt: "b".repeat(6_000),
+      currentSuggestionV2: {
+        target: "Renault Captur",
+        documentType: "Facture entretien",
+        targetFolder: "Maison/Assurance",
+        proposedName: "n".repeat(200)
+      },
       knownRelativeFolders: ["Maison/Assurance", "C:\\Secret", "A/B/C/D", "Vehicules/../X"],
       availableRootFolders: ["Maison", "Vehicules/Renault", "C:\\Secret"],
       namingConvention: "n".repeat(600)
@@ -162,6 +163,11 @@ describe("boundAiClassificationInput", () => {
     expect(bounded.extension).toBe(".pdf");
     expect(bounded.extractedTextExcerpt).toHaveLength(6_000);
     expect(bounded.ocrTextExcerpt).toHaveLength(6_000);
+    expect(bounded.currentSuggestionV2).toMatchObject({
+      target: "renault-captur",
+      documentType: "facture-entretien",
+      targetFolder: "Maison/Assurance"
+    });
     expect(bounded.knownRelativeFolders).toEqual(["Maison/Assurance"]);
     expect(bounded.availableRootFolders).toEqual(["Maison"]);
     expect(bounded.namingConvention).toHaveLength(500);

@@ -1,4 +1,4 @@
-import { normalizeFilenameBlock } from "../naming/namingDraft";
+import { normalizeNameBlock, validateDateToken } from "../naming/documentNameV2";
 import { normalizeTargetFolderRelative } from "../naming/targetFolder";
 import {
   AI_CLASSIFICATION_LIMITS,
@@ -6,15 +6,16 @@ import {
   type AiClassificationSuggestion,
   type AiClassificationValidationError,
   type AiClassificationValidationResult,
-  type AiRuleSuggestionSnapshot,
+  type AiSuggestionV2Snapshot,
   type BoundedAiClassificationInput
 } from "./aiClassificationTypes";
 
 const allowedSuggestionKeys = new Set([
-  "date",
+  "dateToken",
+  "target",
   "documentType",
-  "subject",
-  "keywords",
+  "issuer",
+  "detail",
   "targetFolder",
   "confidence",
   "reasons",
@@ -36,14 +37,14 @@ export function boundAiClassificationInput(
       input.ocrTextExcerpt ?? "",
       AI_CLASSIFICATION_LIMITS.textExcerptChars
     ),
-    currentRuleSuggestions: boundRuleSuggestions(input.currentRuleSuggestions ?? null),
+    currentSuggestionV2: boundSuggestionV2(input.currentSuggestionV2 ?? null),
     availableRootFolders: boundFolderList(input.availableRootFolders ?? [], true),
     knownRelativeFolders: boundFolderList(input.knownRelativeFolders ?? [], false),
     namingConvention: limitString(
       input.namingConvention ?? "",
       AI_CLASSIFICATION_LIMITS.namingConventionChars
     ),
-    detectedDate: validateDate(input.detectedDate ?? "") ? input.detectedDate?.trim() ?? "" : "",
+    detectedDate: validateLegacyDate(input.detectedDate ?? "") ? input.detectedDate?.trim() ?? "" : "",
     detectedYear: /^(19|20)\d{2}$/.test(input.detectedYear?.trim() ?? "")
       ? input.detectedYear?.trim() ?? ""
       : ""
@@ -80,9 +81,13 @@ export function validateAiClassificationSuggestion(
     return invalid("AI_CONFIDENCE_INVALID", "Score IA hors bornes 0..100.", "confidence");
   }
 
-  const date = readOptionalString(record.date);
-  if (date && !validateDate(date)) {
-    return invalid("AI_DATE_INVALID", "Date IA invalide. Utiliser AAAA-MM-JJ ou AAAA.", "date");
+  const dateToken = readOptionalString(record.dateToken);
+  if (dateToken && validateDateToken(dateToken)) {
+    return invalid(
+      "AI_DATE_INVALID",
+      "Date IA invalide. Utiliser AAAA-MM-JJ, AAAA-MM, AAAA, AAAA-env ou date-inconnue.",
+      "dateToken"
+    );
   }
 
   const targetFolder = readOptionalString(record.targetFolder);
@@ -95,25 +100,25 @@ export function validateAiClassificationSuggestion(
     );
   }
 
-  const documentType = normalizeOptionalFilenameField(record.documentType);
-  const subject = normalizeOptionalFilenameField(record.subject);
-  const keywords = normalizeStringList(record.keywords, AI_CLASSIFICATION_LIMITS.keywords)
-    .map(normalizeFilenameBlock)
-    .filter(Boolean);
+  const target = normalizeOptionalNameBlock(record.target);
+  const documentType = normalizeOptionalNameBlock(record.documentType);
+  const issuer = normalizeOptionalNameBlock(record.issuer);
+  const detail = normalizeOptionalNameBlock(record.detail);
   const reasons = normalizeStringList(record.reasons, AI_CLASSIFICATION_LIMITS.reasons);
   const warnings = normalizeStringList(record.warnings, AI_CLASSIFICATION_LIMITS.warnings);
 
   if (
+    (record.dateToken !== undefined && typeof record.dateToken !== "string") ||
+    (record.target !== undefined && typeof record.target !== "string") ||
     (record.documentType !== undefined && typeof record.documentType !== "string") ||
-    (record.subject !== undefined && typeof record.subject !== "string") ||
-    (record.date !== undefined && typeof record.date !== "string") ||
+    (record.issuer !== undefined && typeof record.issuer !== "string") ||
+    (record.detail !== undefined && typeof record.detail !== "string") ||
     (record.targetFolder !== undefined && typeof record.targetFolder !== "string")
   ) {
     return invalid("AI_FIELD_INVALID", "Champ IA invalide.", "field");
   }
 
   if (
-    !isStringArrayOrMissing(record.keywords) ||
     !isStringArrayOrMissing(record.reasons) ||
     !isStringArrayOrMissing(record.warnings)
   ) {
@@ -123,10 +128,11 @@ export function validateAiClassificationSuggestion(
   return {
     status: "valid",
     suggestion: {
-      ...(date ? { date } : {}),
+      ...(dateToken ? { dateToken: dateToken.trim().toLowerCase() } : {}),
+      ...(target ? { target } : {}),
       ...(documentType ? { documentType } : {}),
-      ...(subject ? { subject } : {}),
-      keywords: uniqueStrings(keywords).slice(0, AI_CLASSIFICATION_LIMITS.keywords),
+      ...(issuer ? { issuer } : {}),
+      ...(detail ? { detail } : {}),
       ...(normalizedTargetFolder?.ok && normalizedTargetFolder.value
         ? { targetFolder: normalizedTargetFolder.value }
         : {}),
@@ -138,7 +144,7 @@ export function validateAiClassificationSuggestion(
   };
 }
 
-export function validateDate(value: string): boolean {
+export function validateLegacyDate(value: string): boolean {
   const trimmed = value.trim();
   if (/^(19|20)\d{2}$/.test(trimmed)) {
     return true;
@@ -152,29 +158,28 @@ export function validateDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === trimmed;
 }
 
-function boundRuleSuggestions(
-  suggestions: AiRuleSuggestionSnapshot | null
-): AiRuleSuggestionSnapshot | null {
+function boundSuggestionV2(
+  suggestions: AiSuggestionV2Snapshot | null
+): AiSuggestionV2Snapshot | null {
   if (!suggestions) {
     return null;
   }
 
   return {
-    date: validateDate(suggestions.date ?? "") ? suggestions.date?.trim() ?? null : null,
-    documentType: normalizeFilenameBlock(suggestions.documentType ?? ""),
-    subject: normalizeFilenameBlock(suggestions.subject ?? ""),
-    keywords: uniqueStrings(
-      (suggestions.keywords ?? [])
-        .slice(0, AI_CLASSIFICATION_LIMITS.keywords)
-        .map((keyword) => normalizeFilenameBlock(keyword))
-        .filter(Boolean)
-    ),
+    dateToken: normalizeSafeDateToken(suggestions.dateToken ?? ""),
+    target: normalizeNameBlock(suggestions.target ?? ""),
+    documentType: normalizeNameBlock(suggestions.documentType ?? ""),
+    issuer: normalizeNameBlock(suggestions.issuer ?? ""),
+    detail: normalizeNameBlock(suggestions.detail ?? ""),
     targetFolder: normalizeSafeFolder(suggestions.targetFolder ?? ""),
+    proposedName: limitString(suggestions.proposedName ?? "", AI_CLASSIFICATION_LIMITS.listItemChars),
+    missingFields: normalizeStringList(suggestions.missingFields, 5),
     confidence:
       typeof suggestions.confidence === "number" && Number.isFinite(suggestions.confidence)
         ? Math.max(0, Math.min(100, suggestions.confidence))
         : undefined,
-    reasons: normalizeStringList(suggestions.reasons, AI_CLASSIFICATION_LIMITS.reasons)
+    reasons: normalizeStringList(suggestions.reasons, AI_CLASSIFICATION_LIMITS.reasons),
+    warnings: normalizeStringList(suggestions.warnings, AI_CLASSIFICATION_LIMITS.warnings)
   };
 }
 
@@ -193,8 +198,13 @@ function normalizeSafeFolder(value: string): string | null {
   return result.ok && result.value ? result.value : null;
 }
 
-function normalizeOptionalFilenameField(value: unknown): string {
-  return typeof value === "string" ? normalizeFilenameBlock(value) : "";
+function normalizeOptionalNameBlock(value: unknown): string {
+  return typeof value === "string" ? normalizeNameBlock(value) : "";
+}
+
+function normalizeSafeDateToken(value: string | null | undefined): string | null {
+  const trimmed = value?.trim().toLowerCase() ?? "";
+  return trimmed && !validateDateToken(trimmed) ? trimmed : null;
 }
 
 function normalizeStringList(value: unknown, maxItems: number): string[] {

@@ -220,7 +220,8 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
 
   const result = await window.docSorter.runAiSuggestionForActiveDocument(
     activeDocument.filePath,
-    textContext
+    textContext,
+    state.naming.draft
   );
   if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
     return;
@@ -272,21 +273,24 @@ function applyAiSuggestionToEmptyFields(): void {
   }
 
   const targetFolder = state.ai.suggestion.suggestion.targetFolder?.trim() ?? "";
-  const result = DocSorterNamingSuggestions.applySuggestionsToEmptyFields(
+  const result = buildNamingDraftFromAiSuggestionV2(
     state.naming.draft,
-    aiSuggestionToNamingSuggestions(state.ai.suggestion.suggestion)
+    state.naming.origins,
+    state.ai.suggestion.suggestion
+  );
+  const shouldApplyTargetFolder = canApplyAiSuggestionTargetFolder(
+    targetFolder,
+    state.ai.suggestion.suggestion.confidence
   );
 
   state.ai = {
     ...state.ai,
-    message:
-      result.appliedFields.length > 0 || hasEmptyTargetFolderForAiSuggestion(targetFolder)
-        ? "Suggestion IA appliquée aux champs vides. Les champs déjà remplis n'ont pas été modifiés."
-        : "Aucun champ vide à compléter depuis la suggestion IA."
+    message: createAiApplicationMessage(result.appliedFields, shouldApplyTargetFolder)
   };
 
   if (result.appliedFields.length > 0) {
     state.naming.draft = result.draft;
+    state.naming.origins = result.origins;
     state.naming.overrideFilename = null;
     state.naming.isLoading = true;
     resetClassificationState();
@@ -297,8 +301,8 @@ function applyAiSuggestionToEmptyFields(): void {
     render();
   }
 
-  if (hasEmptyTargetFolderForAiSuggestion(targetFolder)) {
-    void updateTargetFolderFromInput(targetFolder);
+  if (shouldApplyTargetFolder && targetFolder) {
+    void updateTargetFolderFromInput(targetFolder, "ai-v2");
   }
 }
 
@@ -315,8 +319,15 @@ function canApplyAiSuggestionToEmptyFields(): boolean {
   }
 
   return Boolean(
-    hasEmptyFieldForAiSuggestion(state.naming.draft, state.ai.suggestion.suggestion) ||
-      hasEmptyTargetFolderForAiSuggestion(state.ai.suggestion.suggestion.targetFolder ?? "")
+    hasApplicableAiSuggestionField(
+      state.naming.draft,
+      state.naming.origins,
+      state.ai.suggestion.suggestion
+    ) ||
+      canApplyAiSuggestionTargetFolder(
+        state.ai.suggestion.suggestion.targetFolder ?? "",
+        state.ai.suggestion.suggestion.confidence
+      )
   );
 }
 
@@ -418,64 +429,139 @@ function getActiveAiTextContext(
   };
 }
 
-function aiSuggestionToNamingSuggestions(
-  suggestion: RendererAiClassificationSuggestion
-): NamingSuggestions {
-  const confidence = Math.max(0, Math.min(1, suggestion.confidence / 100));
-  return {
-    date: aiSuggestionField(suggestion.date, confidence, "Date proposée par l'IA locale."),
-    subject: aiSuggestionField(suggestion.subject, confidence, "Sujet proposé par l'IA locale."),
-    documentType: aiSuggestionField(
-      suggestion.documentType,
-      confidence,
-      "Type proposé par l'IA locale."
-    ),
-    targetFolder: aiSuggestionField(
-      suggestion.targetFolder,
-      confidence,
-      "Dossier proposé par l'IA locale."
-    ),
-    keywords: suggestion.keywords.map((keyword) => ({
-      value: keyword,
-      confidence,
-      reason: "Mot-clé proposé par l'IA locale.",
-      source: "text"
-    })),
-    confidence,
-    reasons: suggestion.reasons
-  };
-}
+const AI_V2_PRIORITY_CONFIDENCE = 70;
 
-function aiSuggestionField(
-  value: string | undefined,
-  confidence: number,
-  reason: string
-): SuggestedNamingField | null {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  return {
-    value: trimmed,
-    confidence,
-    reason,
-    source: "text"
-  };
-}
-
-function hasEmptyFieldForAiSuggestion(
+function buildNamingDraftFromAiSuggestionV2(
   draft: NamingDraft,
+  origins: NamingDraftOrigins,
+  suggestion: RendererAiClassificationSuggestion
+): { draft: NamingDraft; origins: NamingDraftOrigins; appliedFields: Array<keyof NamingDraft> } {
+  const nextDraft: NamingDraft = { ...draft };
+  const nextOrigins: NamingDraftOrigins = { ...origins };
+  const appliedFields: Array<keyof NamingDraft> = [];
+  const dateToken = normalizeAiV2DateForCurrentDraft(suggestion.dateToken);
+  const keywords = buildAiV2Keywords(suggestion);
+
+  applyAiV2Field("documentDate", dateToken);
+  applyAiV2Field("subject", suggestion.target?.trim() ?? "");
+  applyAiV2Field("documentType", suggestion.documentType?.trim() ?? "");
+  applyAiV2Field("keywords", keywords);
+
+  return {
+    draft: nextDraft,
+    origins: nextOrigins,
+    appliedFields
+  };
+
+  function applyAiV2Field(field: keyof NamingDraft, value: string): void {
+    if (!shouldApplyAiV2Value(nextDraft[field], nextOrigins[field], value, suggestion.confidence)) {
+      return;
+    }
+
+    nextDraft[field] = value;
+    nextOrigins[field] = "ai-v2";
+    appliedFields.push(field);
+  }
+}
+
+function hasApplicableAiSuggestionField(
+  draft: NamingDraft,
+  origins: NamingDraftOrigins,
   suggestion: RendererAiClassificationSuggestion
 ): boolean {
+  const dateToken = normalizeAiV2DateForCurrentDraft(suggestion.dateToken);
+  const keywords = buildAiV2Keywords(suggestion);
   return (
-    (!draft.documentDate.trim() && Boolean(suggestion.date?.trim())) ||
-    (!draft.subject.trim() && Boolean(suggestion.subject?.trim())) ||
-    (!draft.documentType.trim() && Boolean(suggestion.documentType?.trim())) ||
-    (!draft.keywords.trim() && suggestion.keywords.length > 0)
+    shouldApplyAiV2Value(draft.documentDate, origins.documentDate, dateToken, suggestion.confidence) ||
+    shouldApplyAiV2Value(draft.subject, origins.subject, suggestion.target?.trim() ?? "", suggestion.confidence) ||
+    shouldApplyAiV2Value(
+      draft.documentType,
+      origins.documentType,
+      suggestion.documentType?.trim() ?? "",
+      suggestion.confidence
+    ) ||
+    shouldApplyAiV2Value(draft.keywords, origins.keywords, keywords, suggestion.confidence)
   );
 }
 
-function hasEmptyTargetFolderForAiSuggestion(targetFolder: string): boolean {
-  return Boolean(state.targetPath && !state.targetFolder.selectedFolder.trim() && targetFolder.trim());
+function shouldApplyAiV2Value(
+  currentValue: string,
+  currentOrigin: NamingFieldOrigin,
+  nextValue: string,
+  confidence: number
+): boolean {
+  const trimmedNext = nextValue.trim();
+  if (!trimmedNext) {
+    return false;
+  }
+
+  const trimmedCurrent = currentValue.trim();
+  if (!trimmedCurrent) {
+    return true;
+  }
+
+  return (
+    confidence >= AI_V2_PRIORITY_CONFIDENCE &&
+    currentOrigin !== "manual" &&
+    trimmedCurrent.toLowerCase() !== trimmedNext.toLowerCase()
+  );
+}
+
+function canApplyAiSuggestionTargetFolder(targetFolder: string, confidence: number): boolean {
+  const trimmedFolder = targetFolder.trim();
+  if (!state.targetPath || !trimmedFolder) {
+    return false;
+  }
+
+  const currentFolder = state.targetFolder.selectedFolder.trim();
+  if (!currentFolder) {
+    return true;
+  }
+
+  return (
+    confidence >= AI_V2_PRIORITY_CONFIDENCE &&
+    state.targetFolder.origin !== "manual" &&
+    currentFolder.toLowerCase() !== trimmedFolder.toLowerCase()
+  );
+}
+
+function normalizeAiV2DateForCurrentDraft(dateToken: string | undefined): string {
+  const trimmed = dateToken?.trim() ?? "";
+  return /^(19|20)\d{2}$/.test(trimmed) ||
+    /^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)
+    ? trimmed
+    : "";
+}
+
+function buildAiV2Keywords(suggestion: RendererAiClassificationSuggestion): string {
+  return uniqueAiV2Strings([
+    suggestion.issuer?.trim() ?? "",
+    suggestion.detail?.trim() ?? ""
+  ]).join(" ");
+}
+
+function uniqueAiV2Strings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function createAiApplicationMessage(
+  appliedFields: Array<keyof NamingDraft>,
+  targetFolderApplied: boolean
+): string {
+  if (appliedFields.length === 0 && !targetFolderApplied) {
+    return "Aucun champ modifiable à compléter depuis la suggestion IA V2.";
+  }
+
+  return "Suggestion IA V2 appliquée. Les champs manuels n'ont pas été modifiés.";
 }

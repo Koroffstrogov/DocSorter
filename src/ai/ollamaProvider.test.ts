@@ -78,8 +78,9 @@ describe("Ollama provider preparation", () => {
     expect(
       provider.validateOutput({
         source: "simulated-ai",
+        target: "captur",
+        documentType: "facture-entretien",
         confidence: 70,
-        keywords: [],
         reasons: [],
         warnings: []
       }).status

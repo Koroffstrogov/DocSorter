@@ -8,7 +8,7 @@ import {
 import type {
   AiClassificationInput,
   AiClassificationSuggestion,
-  AiRuleSuggestionSnapshot,
+  AiSuggestionV2Snapshot,
   BoundedAiClassificationInput
 } from "./aiClassificationTypes";
 import {
@@ -26,9 +26,11 @@ import {
   loadAiSettings,
   type AiSettingsResult
 } from "./ollamaSettings";
-import "../rules/defaultNamingSuggestionRules";
-import "../rules/namingSuggestionRulesCatalog";
-import "../rules/namingSuggestions";
+import {
+  buildSuggestionV2ForDocument,
+  type SuggestionV2DocumentSuggestion,
+  type SuggestionV2TextContext
+} from "../suggestions/buildSuggestionV2ForDocument";
 
 export type AiDocumentTextSource = "pdf-native" | "tesseract-cli";
 
@@ -51,20 +53,23 @@ export interface AiDocumentSuggestion {
   textSource: AiDocumentTextSource;
   modelStatus: OllamaModelStatus;
   input: BoundedAiClassificationInput;
+  deterministicSuggestion: SuggestionV2DocumentSuggestion;
   suggestion: AiClassificationSuggestion;
   promptCharacterCount: number;
-  differsFromLocalRules: boolean;
+  differsFromSuggestionV2: boolean;
   message: string;
 }
 
 export interface RunOllamaSuggestionForDocumentOptions {
   documentPath: string;
   textContext: AiDocumentTextContext | null;
+  legacyDraft: unknown;
   queuedDocuments: Iterable<AiQueuedDocument>;
   queuedDocumentPaths: Iterable<string>;
   userDataPath: string;
-  rulesCatalog: NamingSuggestionRulesCatalog;
+  targetRootPath?: string | null;
   knownRelativeFolders?: string[];
+  competingRelativePaths?: string[];
   fetchClient?: OllamaHttpClient;
   modelManager?: OllamaModelManagerLike;
   statFile?: (filePath: string) => Promise<Pick<Stats, "isFile">>;
@@ -96,6 +101,21 @@ export async function runOllamaSuggestionForDocument(
     return aiFailure("AI_TEXT_NOT_AVAILABLE", "Texte extrait requis avant l'analyse IA locale.");
   }
 
+  const deterministicSuggestion = await buildSuggestionV2ForDocument({
+    documentPath: activeDocument.value.filePath,
+    textContext: textContext as SuggestionV2TextContext,
+    legacyDraft: options.legacyDraft,
+    queuedDocuments: options.queuedDocuments,
+    queuedDocumentPaths: options.queuedDocumentPaths,
+    userDataPath: options.userDataPath,
+    targetRootPath: options.targetRootPath,
+    knownRelativeFolders: options.knownRelativeFolders ?? [],
+    competingRelativePaths: options.competingRelativePaths ?? []
+  });
+  if (!deterministicSuggestion.ok) {
+    return aiFailure("AI_OUTPUT_INVALID", "Contexte V2 indisponible pour l'analyse IA.");
+  }
+
   const settingsResult = await loadAiSettings(options.userDataPath);
   if (!settingsResult.ok) {
     return settingsResult;
@@ -115,16 +135,11 @@ export async function runOllamaSuggestionForDocument(
     return modelReady;
   }
 
-  const localSuggestions = buildLocalRuleSuggestions(
-    activeDocument.value.name,
-    textContext.excerpt,
-    options.rulesCatalog
-  );
   const aiInput = buildAiInput({
     documentName: activeDocument.value.name,
     extension: path.extname(activeDocument.value.name),
     textContext,
-    localSuggestions,
+    deterministicSuggestion: deterministicSuggestion.value,
     knownRelativeFolders: options.knownRelativeFolders ?? []
   });
   const prompt = buildOllamaClassificationPrompt(aiInput);
@@ -146,9 +161,9 @@ export async function runOllamaSuggestionForDocument(
     return aiFailure("AI_OUTPUT_INVALID", "Suggestion IA invalide.");
   }
 
-  const differsFromLocalRules = differsFromRuleSuggestions(
+  const differsFromSuggestionV2 = differsFromDeterministicSuggestion(
     classified.suggestion,
-    prompt.input.currentRuleSuggestions
+    prompt.input.currentSuggestionV2
   );
 
   return {
@@ -162,12 +177,13 @@ export async function runOllamaSuggestionForDocument(
       textSource: textContext.source,
       modelStatus: modelReady.value,
       input: prompt.input,
+      deterministicSuggestion: deterministicSuggestion.value,
       suggestion: classified.suggestion,
       promptCharacterCount: prompt.prompt.length,
-      differsFromLocalRules,
-      message: differsFromLocalRules
-        ? "Suggestion IA prête. Diffère des règles locales."
-        : "Suggestion IA prête."
+      differsFromSuggestionV2,
+      message: differsFromSuggestionV2
+        ? "Suggestion IA V2 prête. Diffère de la proposition V2."
+        : "Suggestion IA V2 prête."
     }
   };
 }
@@ -233,26 +249,14 @@ function normalizeTextContext(value: AiDocumentTextContext | null): AiDocumentTe
   };
 }
 
-function buildLocalRuleSuggestions(
-  filename: string,
-  extractedText: string,
-  rulesCatalog: NamingSuggestionRulesCatalog
-): NamingSuggestions {
-  return globalThis.DocSorterNamingSuggestions.buildNamingSuggestions({
-    filename,
-    extractedText,
-    rulesCatalog
-  });
-}
-
 function buildAiInput(options: {
   documentName: string;
   extension: string;
   textContext: AiDocumentTextContext;
-  localSuggestions: NamingSuggestions;
+  deterministicSuggestion: SuggestionV2DocumentSuggestion;
   knownRelativeFolders: string[];
 }): AiClassificationInput {
-  const detectedDate = options.localSuggestions.date?.value ?? "";
+  const dateToken = options.deterministicSuggestion.draft.dateToken ?? "";
   return {
     filename: path.basename(options.documentName),
     extension: options.extension,
@@ -260,37 +264,51 @@ function buildAiInput(options: {
       options.textContext.source === "pdf-native" ? options.textContext.excerpt : "",
     ocrTextExcerpt:
       options.textContext.source === "tesseract-cli" ? options.textContext.excerpt : "",
-    currentRuleSuggestions: toAiRuleSuggestionSnapshot(options.localSuggestions),
+    currentSuggestionV2: toAiSuggestionV2Snapshot(options.deterministicSuggestion),
     knownRelativeFolders: options.knownRelativeFolders,
     availableRootFolders: rootFoldersFromRelativeFolders(options.knownRelativeFolders),
-    namingConvention: "AAAA-MM-JJ_Sujet_Type_MotsCles.ext",
-    detectedDate,
-    detectedYear: /^(19|20)\d{2}$/.test(detectedDate)
-      ? detectedDate
-      : detectedDate.match(/^(19|20)\d{2}/)?.[0] ?? ""
+    namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
+    detectedDate: dateToken,
+    detectedYear: dateToken.match(/^(19|20)\d{2}/)?.[0] ?? ""
   };
 }
 
-function toAiRuleSuggestionSnapshot(suggestions: NamingSuggestions): AiRuleSuggestionSnapshot | null {
+function toAiSuggestionV2Snapshot(
+  suggestion: SuggestionV2DocumentSuggestion
+): AiSuggestionV2Snapshot | null {
+  const targetFolder = getDeterministicTargetFolder(suggestion);
   if (
-    !suggestions.date &&
-    !suggestions.documentType &&
-    !suggestions.subject &&
-    !suggestions.targetFolder &&
-    suggestions.keywords.length === 0
+    !suggestion.draft.dateToken &&
+    !suggestion.draft.target &&
+    !suggestion.draft.documentType &&
+    !suggestion.draft.issuer &&
+    !suggestion.draft.detail &&
+    !targetFolder
   ) {
     return null;
   }
 
   return {
-    date: suggestions.date?.value ?? null,
-    documentType: suggestions.documentType?.value ?? null,
-    subject: suggestions.subject?.value ?? null,
-    targetFolder: suggestions.targetFolder?.value ?? null,
-    keywords: suggestions.keywords.map((keyword) => keyword.value),
-    confidence: Math.round(suggestions.confidence * 100),
-    reasons: suggestions.reasons
+    dateToken: suggestion.draft.dateToken ?? null,
+    target: suggestion.draft.target ?? null,
+    documentType: suggestion.draft.documentType ?? null,
+    issuer: suggestion.draft.issuer ?? null,
+    detail: suggestion.draft.detail ?? null,
+    targetFolder: targetFolder || null,
+    proposedName: suggestion.draft.proposedName ?? null,
+    missingFields: suggestion.missingFields,
+    confidence: suggestion.draft.confidence,
+    reasons: suggestion.draft.reasons,
+    warnings: suggestion.draft.warnings
   };
+}
+
+function getDeterministicTargetFolder(suggestion: SuggestionV2DocumentSuggestion): string {
+  return (
+    suggestion.folderPlacement?.relativePath ??
+    suggestion.targetFolderSuggestion.recommended?.relativePath ??
+    ""
+  ).trim();
 }
 
 function rootFoldersFromRelativeFolders(folders: string[]): string[] {
@@ -311,19 +329,21 @@ function parseOllamaJson(value: string): AiSettingsResult<unknown> {
   }
 }
 
-function differsFromRuleSuggestions(
+function differsFromDeterministicSuggestion(
   suggestion: AiClassificationSuggestion,
-  ruleSuggestions: AiRuleSuggestionSnapshot | null
+  deterministic: AiSuggestionV2Snapshot | null
 ): boolean {
-  if (!ruleSuggestions) {
+  if (!deterministic) {
     return false;
   }
 
   return (
-    differs(suggestion.date, ruleSuggestions.date) ||
-    differs(suggestion.documentType, ruleSuggestions.documentType) ||
-    differs(suggestion.subject, ruleSuggestions.subject) ||
-    differs(suggestion.targetFolder, ruleSuggestions.targetFolder)
+    differs(suggestion.dateToken, deterministic.dateToken) ||
+    differs(suggestion.target, deterministic.target) ||
+    differs(suggestion.documentType, deterministic.documentType) ||
+    differs(suggestion.issuer, deterministic.issuer) ||
+    differs(suggestion.detail, deterministic.detail) ||
+    differs(suggestion.targetFolder, deterministic.targetFolder)
   );
 }
 

@@ -1,13 +1,17 @@
 export type AiClassificationSource = "simulated-ai" | "ollama";
 
-export interface AiRuleSuggestionSnapshot {
-  date?: string | null;
+export interface AiSuggestionV2Snapshot {
+  dateToken?: string | null;
+  target?: string | null;
   documentType?: string | null;
-  subject?: string | null;
-  keywords?: string[];
+  issuer?: string | null;
+  detail?: string | null;
   targetFolder?: string | null;
+  proposedName?: string | null;
+  missingFields?: string[];
   confidence?: number;
   reasons?: string[];
+  warnings?: string[];
 }
 
 export interface AiClassificationInput {
@@ -15,7 +19,7 @@ export interface AiClassificationInput {
   extension: string;
   extractedTextExcerpt?: string;
   ocrTextExcerpt?: string;
-  currentRuleSuggestions?: AiRuleSuggestionSnapshot | null;
+  currentSuggestionV2?: AiSuggestionV2Snapshot | null;
   availableRootFolders?: string[];
   knownRelativeFolders?: string[];
   namingConvention?: string;
@@ -26,7 +30,7 @@ export interface AiClassificationInput {
 export interface BoundedAiClassificationInput extends AiClassificationInput {
   extractedTextExcerpt: string;
   ocrTextExcerpt: string;
-  currentRuleSuggestions: AiRuleSuggestionSnapshot | null;
+  currentSuggestionV2: AiSuggestionV2Snapshot | null;
   availableRootFolders: string[];
   knownRelativeFolders: string[];
   namingConvention: string;
@@ -35,10 +39,11 @@ export interface BoundedAiClassificationInput extends AiClassificationInput {
 }
 
 export interface AiClassificationSuggestion {
-  date?: string;
+  dateToken?: string;
+  target?: string;
   documentType?: string;
-  subject?: string;
-  keywords: string[];
+  issuer?: string;
+  detail?: string;
   targetFolder?: string;
   confidence: number;
   reasons: string[];
