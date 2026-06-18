@@ -104,6 +104,7 @@ describe("runOllamaSuggestionForDocument", () => {
       fetchClient: createSuccessfulFetch({
         response: JSON.stringify({
           dateToken: "2026-06-16",
+          subject: "Renault Captur",
           target: "Renault Captur",
           documentType: "facture",
           issuer: "Renault",
@@ -121,10 +122,12 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2026-06-16",
+      subject: "renault-captur",
       target: "renault-captur",
       documentType: "facture",
       issuer: "renault",
       detail: "vidange",
+      proposedName: "2026-06-16_renault-captur_facture_renault_vidange.pdf",
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       source: "ollama"
     });
@@ -136,7 +139,65 @@ describe("runOllamaSuggestionForDocument", () => {
     });
   });
 
-  it("sanitizes inverted fiscal AI output without applying target equal to document type", async () => {
+  it("converts monthly Ollama dates before proposed name generation", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          dateToken: "2026-05",
+          target: "captur",
+          documentType: "facture-entretien",
+          confidence: 72,
+          reasons: ["Mois détecté."],
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026-05-01",
+      target: "captur",
+      documentType: "facture-entretien",
+      proposedName: "2026-05-01_captur_facture-entretien.pdf",
+      source: "ollama"
+    });
+  });
+
+  it("uses the AI subject for proposed name generation when no target is provided", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          dateToken: "2026",
+          subject: "Paul",
+          documentType: "carnet-vaccination",
+          confidence: 76,
+          reasons: ["Sujet détecté dans le document."],
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026",
+      subject: "paul",
+      documentType: "carnet-vaccination",
+      proposedName: "2026_paul_carnet-vaccination.pdf",
+      source: "ollama"
+    });
+  });
+
+  it("sanitizes AI output without using deterministic v2 fallback", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
     const documentPath = path.join(workspace.sourcePath, "T05-avis_imposition_foyer_2025.pdf");
@@ -149,15 +210,10 @@ describe("runOllamaSuggestionForDocument", () => {
       documentPath,
       queuedDocuments: [{ filePath: documentPath, name: "T05-avis_imposition_foyer_2025.pdf" }],
       queuedDocumentPaths: [documentPath],
-      legacyDraft: {
-        documentDate: "2025",
-        subject: "T05-avis-imposition-foyer",
-        documentType: "avis-imposition",
-        keywords: ""
-      },
       fetchClient: createSuccessfulFetch({
         response: JSON.stringify({
           dateToken: "2025",
+          subject: "avis-imposition",
           target: "avis-imposition",
           documentType: "avis-imposition",
           detail: "foyer",
@@ -174,12 +230,14 @@ describe("runOllamaSuggestionForDocument", () => {
       throw new Error(result.error.message);
     }
 
-    expect(result.value.input.currentSuggestionV2?.target).toBe("foyer");
-    expect(result.value.input.currentSuggestionV2?.documentType).toBe("avis-imposition");
-    expect(result.value.suggestion.target).toBe("foyer");
+    expect("currentSuggestionV2" in result.value.input).toBe(false);
+    expect(result.value.suggestion.subject).toBeUndefined();
+    expect(result.value.suggestion.target).toBeUndefined();
     expect(result.value.suggestion.documentType).toBe("avis-imposition");
-    expect(result.value.suggestion.detail).toBeUndefined();
+    expect(result.value.suggestion.detail).toBe("foyer");
+    expect(result.value.suggestion.proposedName).toBeUndefined();
     expect(result.value.suggestion.warnings.join(" ")).toContain("Cible IA ignorée");
+    expect(result.value.suggestion.warnings.join(" ")).toContain("Sujet IA ignoré");
   });
 
   it("refuses invalid JSON without crashing", async () => {
@@ -276,12 +334,6 @@ function createOptions(
       source: "pdf-native" as const,
       excerpt: "Facture Renault Captur du 05/03/2024",
       ...textContext
-    },
-    legacyDraft: {
-      documentDate: "",
-      subject: "",
-      documentType: "",
-      keywords: ""
     },
     queuedDocuments: [{ filePath: workspace.documentPath, name: "document.pdf" }],
     queuedDocumentPaths: [workspace.documentPath],

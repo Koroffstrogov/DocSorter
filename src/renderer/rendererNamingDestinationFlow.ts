@@ -6,17 +6,15 @@ async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> 
   };
   renderNamingPanel(true);
 
-  const draft = await window.docSorter.createInitialNamingDraft(documentItem.name);
   if (requestId !== namingRequestId || state.activeDocumentPath !== documentItem.filePath) {
     return;
   }
 
   state.naming = {
-    draft,
-    origins: createLegacyFilenameNamingDraftOrigins(),
+    ...createIdleNamingState(),
+    isLoading: true,
     proposal: null,
-    overrideFilename: null,
-    isLoading: true
+    overrideFilename: null
   };
   renderNamingPanel(true);
   await updateNamingProposal(documentItem.extension, requestId);

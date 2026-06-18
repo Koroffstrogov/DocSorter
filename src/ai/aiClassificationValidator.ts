@@ -1,4 +1,4 @@
-import { normalizeNameBlock, validateDateToken } from "../naming/documentNameV2";
+import { normalizeNameBlock } from "../naming/documentNameV2";
 import { normalizeTargetFolderRelative } from "../naming/targetFolder";
 import {
   AI_CLASSIFICATION_LIMITS,
@@ -6,16 +6,17 @@ import {
   type AiClassificationSuggestion,
   type AiClassificationValidationError,
   type AiClassificationValidationResult,
-  type AiSuggestionV2Snapshot,
   type BoundedAiClassificationInput
 } from "./aiClassificationTypes";
 
 const allowedSuggestionKeys = new Set([
   "dateToken",
+  "subject",
   "target",
   "documentType",
   "issuer",
   "detail",
+  "proposedName",
   "targetFolder",
   "confidence",
   "reasons",
@@ -37,7 +38,6 @@ export function boundAiClassificationInput(
       input.ocrTextExcerpt ?? "",
       AI_CLASSIFICATION_LIMITS.textExcerptChars
     ),
-    currentSuggestionV2: boundSuggestionV2(input.currentSuggestionV2 ?? null),
     availableRootFolders: boundFolderList(input.availableRootFolders ?? [], true),
     knownRelativeFolders: boundFolderList(input.knownRelativeFolders ?? [], false),
     namingConvention: limitString(
@@ -81,11 +81,11 @@ export function validateAiClassificationSuggestion(
     return invalid("AI_CONFIDENCE_INVALID", "Score IA hors bornes 0..100.", "confidence");
   }
 
-  const dateToken = readOptionalString(record.dateToken);
-  if (dateToken && validateDateToken(dateToken)) {
+  const dateToken = normalizeAiDateToken(readOptionalString(record.dateToken));
+  if (!dateToken.ok) {
     return invalid(
       "AI_DATE_INVALID",
-      "Date IA invalide. Utiliser AAAA-MM-JJ, AAAA-MM, AAAA, AAAA-env ou date-inconnue.",
+      "Date IA invalide. Utiliser AAAA-MM-JJ ou AAAA. AAAA-MM est converti en AAAA-MM-01.",
       "dateToken"
     );
   }
@@ -100,19 +100,23 @@ export function validateAiClassificationSuggestion(
     );
   }
 
+  const subject = normalizeOptionalNameBlock(record.subject);
   const target = normalizeOptionalNameBlock(record.target);
   const documentType = normalizeOptionalNameBlock(record.documentType);
   const issuer = normalizeOptionalNameBlock(record.issuer);
   const detail = normalizeOptionalNameBlock(record.detail);
+  const proposedName = readOptionalString(record.proposedName);
   const reasons = normalizeStringList(record.reasons, AI_CLASSIFICATION_LIMITS.reasons);
   const warnings = normalizeStringList(record.warnings, AI_CLASSIFICATION_LIMITS.warnings);
 
   if (
     (record.dateToken !== undefined && typeof record.dateToken !== "string") ||
+    (record.subject !== undefined && typeof record.subject !== "string") ||
     (record.target !== undefined && typeof record.target !== "string") ||
     (record.documentType !== undefined && typeof record.documentType !== "string") ||
     (record.issuer !== undefined && typeof record.issuer !== "string") ||
     (record.detail !== undefined && typeof record.detail !== "string") ||
+    (record.proposedName !== undefined && typeof record.proposedName !== "string") ||
     (record.targetFolder !== undefined && typeof record.targetFolder !== "string")
   ) {
     return invalid("AI_FIELD_INVALID", "Champ IA invalide.", "field");
@@ -128,11 +132,13 @@ export function validateAiClassificationSuggestion(
   return {
     status: "valid",
     suggestion: {
-      ...(dateToken ? { dateToken: dateToken.trim().toLowerCase() } : {}),
+      ...(dateToken.value ? { dateToken: dateToken.value } : {}),
+      ...(subject ? { subject } : {}),
       ...(target ? { target } : {}),
       ...(documentType ? { documentType } : {}),
       ...(issuer ? { issuer } : {}),
       ...(detail ? { detail } : {}),
+      ...(proposedName ? { proposedName: limitString(proposedName, AI_CLASSIFICATION_LIMITS.listItemChars) } : {}),
       ...(normalizedTargetFolder?.ok && normalizedTargetFolder.value
         ? { targetFolder: normalizedTargetFolder.value }
         : {}),
@@ -142,6 +148,28 @@ export function validateAiClassificationSuggestion(
       source: record.source
     }
   };
+}
+
+function normalizeAiDateToken(value: string): { ok: true; value: string } | { ok: false } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: true, value: "" };
+  }
+
+  if (/^(19|20)\d{2}$/.test(trimmed)) {
+    return { ok: true, value: trimmed };
+  }
+
+  const monthMatch = trimmed.match(/^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/);
+  if (monthMatch) {
+    return { ok: true, value: `${monthMatch[1]}-${monthMatch[2]}-01` };
+  }
+
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)) {
+    return validateLegacyDate(trimmed) ? { ok: true, value: trimmed } : { ok: false };
+  }
+
+  return { ok: false };
 }
 
 export function validateLegacyDate(value: string): boolean {
@@ -156,31 +184,6 @@ export function validateLegacyDate(value: string): boolean {
 
   const date = new Date(`${trimmed}T00:00:00.000Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === trimmed;
-}
-
-function boundSuggestionV2(
-  suggestions: AiSuggestionV2Snapshot | null
-): AiSuggestionV2Snapshot | null {
-  if (!suggestions) {
-    return null;
-  }
-
-  return {
-    dateToken: normalizeSafeDateToken(suggestions.dateToken ?? ""),
-    target: normalizeNameBlock(suggestions.target ?? ""),
-    documentType: normalizeNameBlock(suggestions.documentType ?? ""),
-    issuer: normalizeNameBlock(suggestions.issuer ?? ""),
-    detail: normalizeNameBlock(suggestions.detail ?? ""),
-    targetFolder: normalizeSafeFolder(suggestions.targetFolder ?? ""),
-    proposedName: limitString(suggestions.proposedName ?? "", AI_CLASSIFICATION_LIMITS.listItemChars),
-    missingFields: normalizeStringList(suggestions.missingFields, 5),
-    confidence:
-      typeof suggestions.confidence === "number" && Number.isFinite(suggestions.confidence)
-        ? Math.max(0, Math.min(100, suggestions.confidence))
-        : undefined,
-    reasons: normalizeStringList(suggestions.reasons, AI_CLASSIFICATION_LIMITS.reasons),
-    warnings: normalizeStringList(suggestions.warnings, AI_CLASSIFICATION_LIMITS.warnings)
-  };
 }
 
 function boundFolderList(folders: string[], rootOnly: boolean): string[] {
@@ -200,11 +203,6 @@ function normalizeSafeFolder(value: string): string | null {
 
 function normalizeOptionalNameBlock(value: unknown): string {
   return typeof value === "string" ? normalizeNameBlock(value) : "";
-}
-
-function normalizeSafeDateToken(value: string | null | undefined): string | null {
-  const trimmed = value?.trim().toLowerCase() ?? "";
-  return trimmed && !validateDateToken(trimmed) ? trimmed : null;
 }
 
 function normalizeStringList(value: unknown, maxItems: number): string[] {

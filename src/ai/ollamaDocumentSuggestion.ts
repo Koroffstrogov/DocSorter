@@ -8,7 +8,6 @@ import {
 import type {
   AiClassificationInput,
   AiClassificationSuggestion,
-  AiSuggestionV2Snapshot,
   BoundedAiClassificationInput
 } from "./aiClassificationTypes";
 import {
@@ -26,11 +25,7 @@ import {
   loadAiSettings,
   type AiSettingsResult
 } from "./ollamaSettings";
-import {
-  buildSuggestionV2ForDocument,
-  type SuggestionV2DocumentSuggestion,
-  type SuggestionV2TextContext
-} from "../suggestions/buildSuggestionV2ForDocument";
+import { generateDocumentNameV2 } from "../naming/documentNameV2";
 import { isFilenameLikeTarget } from "../suggestions/filenameLikeTarget";
 
 export type AiDocumentTextSource = "pdf-native" | "tesseract-cli";
@@ -54,17 +49,14 @@ export interface AiDocumentSuggestion {
   textSource: AiDocumentTextSource;
   modelStatus: OllamaModelStatus;
   input: BoundedAiClassificationInput;
-  deterministicSuggestion: SuggestionV2DocumentSuggestion;
   suggestion: AiClassificationSuggestion;
   promptCharacterCount: number;
-  differsFromSuggestionV2: boolean;
   message: string;
 }
 
 export interface RunOllamaSuggestionForDocumentOptions {
   documentPath: string;
   textContext: AiDocumentTextContext | null;
-  legacyDraft: unknown;
   queuedDocuments: Iterable<AiQueuedDocument>;
   queuedDocumentPaths: Iterable<string>;
   userDataPath: string;
@@ -76,8 +68,6 @@ export interface RunOllamaSuggestionForDocumentOptions {
   statFile?: (filePath: string) => Promise<Pick<Stats, "isFile">>;
   now?: () => Date;
 }
-
-const FISCAL_DOCUMENT_TYPES = new Set(["avis-imposition", "declaration-revenus", "taxe-fonciere"]);
 
 export async function runOllamaSuggestionForDocument(
   options: RunOllamaSuggestionForDocumentOptions
@@ -104,21 +94,6 @@ export async function runOllamaSuggestionForDocument(
     return aiFailure("AI_TEXT_NOT_AVAILABLE", "Texte extrait requis avant l'analyse IA locale.");
   }
 
-  const deterministicSuggestion = await buildSuggestionV2ForDocument({
-    documentPath: activeDocument.value.filePath,
-    textContext: textContext as SuggestionV2TextContext,
-    legacyDraft: options.legacyDraft,
-    queuedDocuments: options.queuedDocuments,
-    queuedDocumentPaths: options.queuedDocumentPaths,
-    userDataPath: options.userDataPath,
-    targetRootPath: options.targetRootPath,
-    knownRelativeFolders: options.knownRelativeFolders ?? [],
-    competingRelativePaths: options.competingRelativePaths ?? []
-  });
-  if (!deterministicSuggestion.ok) {
-    return aiFailure("AI_OUTPUT_INVALID", "Contexte V2 indisponible pour l'analyse IA.");
-  }
-
   const settingsResult = await loadAiSettings(options.userDataPath);
   if (!settingsResult.ok) {
     return settingsResult;
@@ -142,7 +117,6 @@ export async function runOllamaSuggestionForDocument(
     documentName: activeDocument.value.name,
     extension: path.extname(activeDocument.value.name),
     textContext,
-    deterministicSuggestion: deterministicSuggestion.value,
     knownRelativeFolders: options.knownRelativeFolders ?? []
   });
   const prompt = buildOllamaClassificationPrompt(aiInput);
@@ -164,15 +138,10 @@ export async function runOllamaSuggestionForDocument(
     return aiFailure("AI_OUTPUT_INVALID", "Suggestion IA invalide.");
   }
 
-  const sanitizedSuggestion = sanitizeAiSuggestionV2(
+  const sanitizedSuggestion = sanitizeAiSuggestion(
     classified.suggestion,
-    prompt.input.currentSuggestionV2,
-    prompt.input.filename
-  );
-
-  const differsFromSuggestionV2 = differsFromDeterministicSuggestion(
-    sanitizedSuggestion,
-    prompt.input.currentSuggestionV2
+    prompt.input.filename,
+    prompt.input.extension
   );
 
   return {
@@ -186,71 +155,81 @@ export async function runOllamaSuggestionForDocument(
       textSource: textContext.source,
       modelStatus: modelReady.value,
       input: prompt.input,
-      deterministicSuggestion: deterministicSuggestion.value,
       suggestion: sanitizedSuggestion,
       promptCharacterCount: prompt.prompt.length,
-      differsFromSuggestionV2,
-      message: differsFromSuggestionV2
-        ? "Suggestion IA V2 prête. Diffère de la proposition V2."
-        : "Suggestion IA V2 prête."
+      message: "Suggestion IA autonome prête."
     }
   };
 }
 
-function sanitizeAiSuggestionV2(
+function sanitizeAiSuggestion(
   suggestion: AiClassificationSuggestion,
-  deterministic: AiSuggestionV2Snapshot | null,
-  fileName: string
+  fileName: string,
+  extension: string
 ): AiClassificationSuggestion {
   const next: AiClassificationSuggestion = {
     ...suggestion,
     reasons: [...suggestion.reasons],
     warnings: [...suggestion.warnings]
   };
-  const documentType = next.documentType?.trim() ?? deterministic?.documentType?.trim() ?? "";
+  const documentType = next.documentType?.trim() ?? "";
+
+  if (
+    next.subject &&
+    isFilenameLikeTarget(next.subject, {
+      fileName,
+      documentType,
+      dateToken: next.dateToken
+    })
+  ) {
+    delete next.subject;
+    next.warnings.push("Sujet IA ignoré : ressemble à un nom de fichier ou au type documentaire.");
+  }
 
   if (
     next.target &&
     isFilenameLikeTarget(next.target, {
       fileName,
       documentType,
-      dateToken: next.dateToken ?? deterministic?.dateToken ?? undefined
+      dateToken: next.dateToken
     })
   ) {
     delete next.target;
     next.warnings.push("Cible IA ignorée : ressemble à un nom de fichier ou au type documentaire.");
   }
 
-  if (isFoyerFiscalSuggestion(next, deterministic)) {
-    next.target = "foyer";
-    if (next.issuer === "foyer") {
-      delete next.issuer;
-      next.warnings.push("Émetteur IA foyer ignoré : déjà utilisé comme cible fiscale.");
-    }
-    if (next.detail === "foyer") {
-      delete next.detail;
-      next.warnings.push("Détail IA foyer ignoré : déjà utilisé comme cible fiscale.");
-    }
-    if (!next.reasons.includes("Cible foyer conservée depuis la proposition V2 fiscale.")) {
-      next.reasons.push("Cible foyer conservée depuis la proposition V2 fiscale.");
-    }
-  }
+  applyGeneratedProposedName(next, extension);
 
   next.reasons = uniqueStrings(next.reasons).slice(0, 8);
   next.warnings = uniqueStrings(next.warnings).slice(0, 8);
   return next;
 }
 
-function isFoyerFiscalSuggestion(
+function applyGeneratedProposedName(
   suggestion: AiClassificationSuggestion,
-  deterministic: AiSuggestionV2Snapshot | null
-): boolean {
-  const documentType = suggestion.documentType ?? deterministic?.documentType ?? "";
-  if (!FISCAL_DOCUMENT_TYPES.has(documentType)) {
-    return false;
+  extension: string
+): void {
+  const namingTarget = suggestion.target?.trim() || suggestion.subject?.trim() || "";
+  if (!suggestion.dateToken || !namingTarget || !suggestion.documentType) {
+    delete suggestion.proposedName;
+    return;
   }
 
-  return deterministic?.target === "foyer" || suggestion.target === undefined || suggestion.target === "foyer";
+  const generated = generateDocumentNameV2({
+    dateToken: suggestion.dateToken,
+    target: namingTarget,
+    documentType: suggestion.documentType,
+    ...(suggestion.issuer ? { issuer: suggestion.issuer } : {}),
+    ...(suggestion.detail ? { detail: suggestion.detail } : {}),
+    extension
+  });
+  if (!generated.isValid) {
+    delete suggestion.proposedName;
+    suggestion.warnings.push("Nom proposé IA non généré : champs IA incomplets ou invalides.");
+    return;
+  }
+
+  suggestion.proposedName = generated.filename;
 }
 
 function findQueuedDocument(
@@ -318,10 +297,8 @@ function buildAiInput(options: {
   documentName: string;
   extension: string;
   textContext: AiDocumentTextContext;
-  deterministicSuggestion: SuggestionV2DocumentSuggestion;
   knownRelativeFolders: string[];
 }): AiClassificationInput {
-  const dateToken = options.deterministicSuggestion.draft.dateToken ?? "";
   return {
     filename: path.basename(options.documentName),
     extension: options.extension,
@@ -329,51 +306,12 @@ function buildAiInput(options: {
       options.textContext.source === "pdf-native" ? options.textContext.excerpt : "",
     ocrTextExcerpt:
       options.textContext.source === "tesseract-cli" ? options.textContext.excerpt : "",
-    currentSuggestionV2: toAiSuggestionV2Snapshot(options.deterministicSuggestion),
     knownRelativeFolders: options.knownRelativeFolders,
     availableRootFolders: rootFoldersFromRelativeFolders(options.knownRelativeFolders),
     namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
-    detectedDate: dateToken,
-    detectedYear: dateToken.match(/^(19|20)\d{2}/)?.[0] ?? ""
+    detectedDate: "",
+    detectedYear: ""
   };
-}
-
-function toAiSuggestionV2Snapshot(
-  suggestion: SuggestionV2DocumentSuggestion
-): AiSuggestionV2Snapshot | null {
-  const targetFolder = getDeterministicTargetFolder(suggestion);
-  if (
-    !suggestion.draft.dateToken &&
-    !suggestion.draft.target &&
-    !suggestion.draft.documentType &&
-    !suggestion.draft.issuer &&
-    !suggestion.draft.detail &&
-    !targetFolder
-  ) {
-    return null;
-  }
-
-  return {
-    dateToken: suggestion.draft.dateToken ?? null,
-    target: suggestion.draft.target ?? null,
-    documentType: suggestion.draft.documentType ?? null,
-    issuer: suggestion.draft.issuer ?? null,
-    detail: suggestion.draft.detail ?? null,
-    targetFolder: targetFolder || null,
-    proposedName: suggestion.draft.proposedName ?? null,
-    missingFields: suggestion.missingFields,
-    confidence: suggestion.draft.confidence,
-    reasons: suggestion.draft.reasons,
-    warnings: suggestion.draft.warnings
-  };
-}
-
-function getDeterministicTargetFolder(suggestion: SuggestionV2DocumentSuggestion): string {
-  return (
-    suggestion.targetFolderSuggestion.recommended?.relativePath ??
-    suggestion.folderPlacement?.relativePath ??
-    ""
-  ).trim();
 }
 
 function rootFoldersFromRelativeFolders(folders: string[]): string[] {
@@ -392,28 +330,6 @@ function parseOllamaJson(value: string): AiSettingsResult<unknown> {
   } catch {
     return aiFailure("AI_OUTPUT_INVALID", "Suggestion IA invalide.");
   }
-}
-
-function differsFromDeterministicSuggestion(
-  suggestion: AiClassificationSuggestion,
-  deterministic: AiSuggestionV2Snapshot | null
-): boolean {
-  if (!deterministic) {
-    return false;
-  }
-
-  return (
-    differs(suggestion.dateToken, deterministic.dateToken) ||
-    differs(suggestion.target, deterministic.target) ||
-    differs(suggestion.documentType, deterministic.documentType) ||
-    differs(suggestion.issuer, deterministic.issuer) ||
-    differs(suggestion.detail, deterministic.detail) ||
-    differs(suggestion.targetFolder, deterministic.targetFolder)
-  );
-}
-
-function differs(left: string | undefined, right: string | null | undefined): boolean {
-  return Boolean(left && right && left.trim().toLowerCase() !== right.trim().toLowerCase());
 }
 
 function uniqueStrings(values: string[]): string[] {

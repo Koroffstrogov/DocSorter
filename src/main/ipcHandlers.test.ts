@@ -502,26 +502,18 @@ describe("registerIpcHandlers", () => {
       source: "pdf-native",
       excerpt: "texte extrait"
     };
-    const legacyDraft: NamingDraft = {
-      documentDate: "",
-      subject: "",
-      documentType: "",
-      keywords: ""
-    };
-
     await harness.invoke(
       IPC_CHANNELS.aiRunSuggestion,
       DOCUMENT_PATH,
-      textContext,
-      legacyDraft
+      textContext
     );
 
     expect(services.loadMergedNamingRulesCatalog).not.toHaveBeenCalled();
+    expect(services.buildSuggestionV2ForDocument).not.toHaveBeenCalled();
     expect(services.listTargetSubdirectories).toHaveBeenCalledWith(TARGET_PATH);
     expect(services.runAiSuggestionForDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       textContext,
-      legacyDraft,
       queuedDocuments: appState.queuedDocuments,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
@@ -645,7 +637,6 @@ describe("registerIpcHandlers", () => {
     expect(services.runAiSuggestionForDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       textContext,
-      legacyDraft: null,
       queuedDocuments: appState.queuedDocuments,
       queuedDocumentPaths: appState.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH,
@@ -1196,20 +1187,19 @@ function createAiDocumentSuggestion(): AiDocumentSuggestion {
       extension: ".pdf",
       extractedTextExcerpt: "texte extrait",
       ocrTextExcerpt: "",
-      currentSuggestionV2: null,
       availableRootFolders: ["Vehicules"],
       knownRelativeFolders: [TARGET_FOLDER],
       namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
       detectedDate: "",
       detectedYear: ""
     },
-    deterministicSuggestion: createSuggestionV2Result().value,
     suggestion: {
       dateToken: "2024-03-05",
       target: "captur",
       documentType: "facture-entretien",
       issuer: "renault",
       detail: "entretien",
+      proposedName: "2024-03-05_captur_facture-entretien_renault_entretien.pdf",
       targetFolder: TARGET_FOLDER,
       confidence: 70,
       reasons: ["Analyse locale Ollama."],
@@ -1217,8 +1207,7 @@ function createAiDocumentSuggestion(): AiDocumentSuggestion {
       source: "ollama"
     },
     promptCharacterCount: 1200,
-    differsFromSuggestionV2: false,
-    message: "Suggestion IA V2 prête."
+    message: "Suggestion IA autonome prête."
   };
 }
 

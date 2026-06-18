@@ -639,10 +639,12 @@ interface AiSettingsDraft {
 
 interface RendererAiClassificationSuggestion {
   dateToken?: string;
+  subject?: string;
   target?: string;
   documentType?: string;
   issuer?: string;
   detail?: string;
+  proposedName?: string;
   targetFolder?: string;
   confidence: number;
   reasons: string[];
@@ -658,10 +660,8 @@ interface RendererAiDocumentSuggestion {
   suggestedAt: string;
   textSource: "pdf-native" | "tesseract-cli";
   modelStatus: RendererAiModelStatus;
-  deterministicSuggestion: RendererSuggestionV2DocumentSuggestion;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;
-  differsFromSuggestionV2: boolean;
   message: string;
 }
 

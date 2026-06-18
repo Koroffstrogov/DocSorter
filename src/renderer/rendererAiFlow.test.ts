@@ -86,6 +86,35 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(result.appliedFields).toEqual([]);
   });
 
+  it("uses AI subject before target for the rename subject field", async () => {
+    const context = await loadAiFlow();
+    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+      draft: Record<string, string>,
+      origins: Record<string, string>,
+      suggestion: Record<string, unknown>
+    ) => { draft: Record<string, string>; appliedFields: string[] };
+
+    const result = buildDraft(
+      {
+        documentDate: "",
+        subject: "",
+        documentType: "",
+        keywords: ""
+      },
+      createAutoOrigins("fallback"),
+      {
+        dateToken: "2026",
+        subject: "paul",
+        target: "famille",
+        documentType: "carnet-vaccination",
+        confidence: 80
+      }
+    );
+
+    expect(result.draft.subject).toBe("paul");
+    expect(result.appliedFields).toContain("subject");
+  });
+
   it("never replaces manual fields", async () => {
     const context = await loadAiFlow();
     const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (

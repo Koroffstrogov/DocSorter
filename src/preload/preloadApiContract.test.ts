@@ -125,11 +125,6 @@ describe("preload API surface", () => {
     await api.runAiSuggestionForActiveDocument("C:\\source\\document.pdf", {
       source: "pdf-native",
       excerpt: "texte extrait"
-    }, {
-      documentDate: "",
-      subject: "",
-      documentType: "",
-      keywords: ""
     });
     await api.getRecentHistory(8);
     await api.getRulesStatus();

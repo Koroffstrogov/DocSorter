@@ -365,10 +365,6 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     heading.append(score, meta);
     container.append(heading, createAiSuggestionGrid(state.suggestion));
 
-    if (state.suggestion.differsFromSuggestionV2) {
-      container.append(createWarningLine("Diffère de la proposition V2."));
-    }
-
     if (suggestion.reasons.length > 0) {
       container.append(createList("Raisons", suggestion.reasons));
     }
@@ -385,10 +381,12 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     grid.className = "ai-suggestion-grid";
     grid.append(
       createSuggestionRow("Date", suggestion.suggestion.dateToken),
+      createSuggestionRow("Sujet", suggestion.suggestion.subject),
       createSuggestionRow("Cible", suggestion.suggestion.target),
       createSuggestionRow("Type", suggestion.suggestion.documentType),
       createSuggestionRow("Émetteur", suggestion.suggestion.issuer),
       createSuggestionRow("Détail", suggestion.suggestion.detail),
+      createSuggestionRow("Nom proposé", suggestion.suggestion.proposedName),
       createSuggestionRow("Dossier", suggestion.suggestion.targetFolder)
     );
     return grid;

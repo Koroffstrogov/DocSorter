@@ -11,11 +11,7 @@ export function simulatedAiClassificationProvider(
     [
       input.filename,
       input.extractedTextExcerpt,
-      input.ocrTextExcerpt,
-      input.currentSuggestionV2?.target ?? "",
-      input.currentSuggestionV2?.documentType ?? "",
-      input.currentSuggestionV2?.issuer ?? "",
-      input.currentSuggestionV2?.detail ?? ""
+      input.ocrTextExcerpt
     ].join(" ")
   );
   const date = detectDate(input);
@@ -24,6 +20,7 @@ export function simulatedAiClassificationProvider(
   if (hasAll(search, ["renault", "captur"]) && hasAny(search, ["facture", "garage", "entretien"])) {
     return {
       ...(date ? { dateToken: date } : {}),
+      subject: "captur",
       target: "captur",
       documentType: "facture-entretien",
       issuer: "renault",
@@ -42,6 +39,7 @@ export function simulatedAiClassificationProvider(
   if (hasAll(search, ["avis", "imposition"]) || hasAll(search, ["impot", "revenu"])) {
     return {
       ...(date ? { dateToken: date } : year ? { dateToken: year } : {}),
+      subject: "foyer",
       target: "foyer",
       documentType: "avis-imposition",
       targetFolder: year ? `Fiscalite/Foyer/${year}` : "Fiscalite/Foyer",
@@ -55,6 +53,7 @@ export function simulatedAiClassificationProvider(
   if (hasAll(search, ["assurance", "habitation"])) {
     return {
       ...(date ? { dateToken: date } : {}),
+      subject: "foyer",
       target: "foyer",
       documentType: "assurance-habitation",
       issuer: "assurance",
@@ -70,6 +69,7 @@ export function simulatedAiClassificationProvider(
   if (hasAll(search, ["certificat", "scolarite"])) {
     return {
       ...(date ? { dateToken: date } : {}),
+      subject: "enfants-ecole",
       target: "enfants-ecole",
       documentType: "certificat-scolarite",
       targetFolder: "Enfants/Ecole",

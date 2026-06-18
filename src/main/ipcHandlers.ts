@@ -250,7 +250,6 @@ export interface IpcHandlerServices {
   runAiSuggestionForDocument: (options: {
     documentPath: string;
     textContext: AiDocumentTextContext | null;
-    legacyDraft: unknown;
     queuedDocuments: Iterable<DuplicateSourceDocument>;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
@@ -895,11 +894,10 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   );
   options.ipcMain.handle(
     IPC_CHANNELS.aiRunSuggestion,
-    async (_event, documentPath: unknown, textContext: unknown, legacyDraft: unknown) =>
+    async (_event, documentPath: unknown, textContext: unknown) =>
       services.runAiSuggestionForDocument({
         documentPath: typeof documentPath === "string" ? documentPath : "",
         textContext: readAiDocumentTextContext(textContext),
-        legacyDraft,
         queuedDocuments: state.queuedDocuments,
         queuedDocumentPaths: state.queuedDocumentPaths,
         userDataPath: options.app.getPath("userData"),
@@ -950,7 +948,6 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         ? await services.runAiSuggestionForDocument({
             documentPath: safeDocumentPath,
             textContext: safeTextContext,
-            legacyDraft,
             queuedDocuments: state.queuedDocuments,
             queuedDocumentPaths: state.queuedDocumentPaths,
             userDataPath: options.app.getPath("userData"),

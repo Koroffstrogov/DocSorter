@@ -1,25 +1,10 @@
 export type AiClassificationSource = "simulated-ai" | "ollama";
 
-export interface AiSuggestionV2Snapshot {
-  dateToken?: string | null;
-  target?: string | null;
-  documentType?: string | null;
-  issuer?: string | null;
-  detail?: string | null;
-  targetFolder?: string | null;
-  proposedName?: string | null;
-  missingFields?: string[];
-  confidence?: number;
-  reasons?: string[];
-  warnings?: string[];
-}
-
 export interface AiClassificationInput {
   filename: string;
   extension: string;
   extractedTextExcerpt?: string;
   ocrTextExcerpt?: string;
-  currentSuggestionV2?: AiSuggestionV2Snapshot | null;
   availableRootFolders?: string[];
   knownRelativeFolders?: string[];
   namingConvention?: string;
@@ -30,7 +15,6 @@ export interface AiClassificationInput {
 export interface BoundedAiClassificationInput extends AiClassificationInput {
   extractedTextExcerpt: string;
   ocrTextExcerpt: string;
-  currentSuggestionV2: AiSuggestionV2Snapshot | null;
   availableRootFolders: string[];
   knownRelativeFolders: string[];
   namingConvention: string;
@@ -40,10 +24,12 @@ export interface BoundedAiClassificationInput extends AiClassificationInput {
 
 export interface AiClassificationSuggestion {
   dateToken?: string;
+  subject?: string;
   target?: string;
   documentType?: string;
   issuer?: string;
   detail?: string;
+  proposedName?: string;
   targetFolder?: string;
   confidence: number;
   reasons: string[];

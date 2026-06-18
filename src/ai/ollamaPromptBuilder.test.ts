@@ -8,25 +8,24 @@ describe("buildOllamaClassificationPrompt", () => {
       filename: "document.pdf",
       extension: ".pdf",
       extractedTextExcerpt: "Facture Renault Captur du 05/03/2024",
-      currentSuggestionV2: {
-        documentType: "facture-entretien",
-        target: "captur",
-        issuer: "renault",
-        detail: "vidange",
-        targetFolder: "Vehicules/Renault-Captur/Entretien"
-      },
       knownRelativeFolders: ["Vehicules/Renault-Captur/Entretien"],
       namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext"
     });
 
     expect(result.prompt).toContain("Réponds uniquement avec un objet JSON valide");
     expect(result.prompt).toContain('"dateToken"');
+    expect(result.prompt).toContain('"subject"');
     expect(result.prompt).toContain('"target"');
     expect(result.prompt).toContain('"issuer"');
     expect(result.prompt).toContain('"detail"');
+    expect(result.prompt).toContain('"proposedName"');
     expect(result.prompt).toContain('"source": "ollama"');
     expect(result.prompt).toContain("targetFolder doit être relatif");
-    expect(result.prompt).not.toContain('"subject"');
+    expect(result.prompt).toContain("AAAA-MM-JJ ou AAAA");
+    expect(result.prompt).toContain("AAAA-MM-01");
+    expect(result.prompt).toContain("n'utilise pas date-inconnue");
+    expect(result.prompt).toContain("champ Sujet de Renommage proposé");
+    expect(result.prompt).not.toContain("currentSuggestionV2");
     expect(result.prompt).not.toContain('"keywords"');
     expect(result.input.extractedTextExcerpt).toBe("Facture Renault Captur du 05/03/2024");
   });

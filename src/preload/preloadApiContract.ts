@@ -242,14 +242,12 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.aiUnloadModel) as Promise<AiSettingsResult<OllamaModelStatus>>,
     runAiSuggestionForActiveDocument: (
       documentPath: string,
-      textContext: AiDocumentTextContext,
-      legacyDraft: NamingDraft
+      textContext: AiDocumentTextContext
     ): Promise<AiSettingsResult<AiDocumentSuggestion>> =>
       ipc.invoke(
         IPC_CHANNELS.aiRunSuggestion,
         documentPath,
-        textContext,
-        legacyDraft
+        textContext
       ) as Promise<AiSettingsResult<AiDocumentSuggestion>>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<

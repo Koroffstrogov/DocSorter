@@ -9,10 +9,12 @@ describe("validateAiClassificationSuggestion", () => {
   it("accepts and normalizes a valid V2 AI output", () => {
     const result = validateAiClassificationSuggestion({
       dateToken: "2026-06-16",
+      subject: "Renault Captur",
       target: "Renault Captur",
       documentType: "Facture entretien",
       issuer: "Renault",
       detail: "contrôle technique",
+      proposedName: "2026-06-16_renault-captur_facture-entretien_renault_controle-technique.pdf",
       targetFolder: "Vehicules\\Renault-Captur / Entretien",
       confidence: 82,
       reasons: ["Facture detectee."],
@@ -24,10 +26,12 @@ describe("validateAiClassificationSuggestion", () => {
       status: "valid",
       suggestion: {
         dateToken: "2026-06-16",
+        subject: "renault-captur",
         target: "renault-captur",
         documentType: "facture-entretien",
         issuer: "renault",
         detail: "controle-technique",
+        proposedName: "2026-06-16_renault-captur_facture-entretien_renault_controle-technique.pdf",
         targetFolder: "Vehicules/Renault-Captur/Entretien",
         confidence: 82,
         reasons: ["Facture detectee."],
@@ -59,7 +63,6 @@ describe("validateAiClassificationSuggestion", () => {
   it("rejects old output fields", () => {
     const result = validateAiClassificationSuggestion({
       confidence: 50,
-      subject: "Renault-Captur",
       keywords: [],
       reasons: [],
       warnings: [],
@@ -93,6 +96,38 @@ describe("validateAiClassificationSuggestion", () => {
 
     expect(result.status).toBe("invalid");
     expect(result.status === "invalid" && result.error.code).toBe("AI_DATE_INVALID");
+  });
+
+  it("converts monthly AI dates to the first day of the month", () => {
+    const result = validateAiClassificationSuggestion({
+      dateToken: "2026-05",
+      confidence: 50,
+      reasons: [],
+      warnings: [],
+      source: "simulated-ai"
+    });
+
+    expect(result).toMatchObject({
+      status: "valid",
+      suggestion: {
+        dateToken: "2026-05-01"
+      }
+    });
+  });
+
+  it("rejects legacy V2 fallback date tokens from AI output", () => {
+    for (const dateToken of ["date-inconnue", "2026-env"]) {
+      const result = validateAiClassificationSuggestion({
+        dateToken,
+        confidence: 50,
+        reasons: [],
+        warnings: [],
+        source: "simulated-ai"
+      });
+
+      expect(result.status).toBe("invalid");
+      expect(result.status === "invalid" && result.error.code).toBe("AI_DATE_INVALID");
+    }
   });
 
   it("rejects absolute or traversal target folders", () => {
@@ -148,12 +183,6 @@ describe("boundAiClassificationInput", () => {
       extension: "PDF",
       extractedTextExcerpt: "a".repeat(6_000),
       ocrTextExcerpt: "b".repeat(6_000),
-      currentSuggestionV2: {
-        target: "Renault Captur",
-        documentType: "Facture entretien",
-        targetFolder: "Maison/Assurance",
-        proposedName: "n".repeat(200)
-      },
       knownRelativeFolders: ["Maison/Assurance", "C:\\Secret", "A/B/C/D", "Vehicules/../X"],
       availableRootFolders: ["Maison", "Vehicules/Renault", "C:\\Secret"],
       namingConvention: "n".repeat(600)
@@ -163,11 +192,6 @@ describe("boundAiClassificationInput", () => {
     expect(bounded.extension).toBe(".pdf");
     expect(bounded.extractedTextExcerpt).toHaveLength(6_000);
     expect(bounded.ocrTextExcerpt).toHaveLength(6_000);
-    expect(bounded.currentSuggestionV2).toMatchObject({
-      target: "renault-captur",
-      documentType: "facture-entretien",
-      targetFolder: "Maison/Assurance"
-    });
     expect(bounded.knownRelativeFolders).toEqual(["Maison/Assurance"]);
     expect(bounded.availableRootFolders).toEqual(["Maison"]);
     expect(bounded.namingConvention).toHaveLength(500);

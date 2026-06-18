@@ -103,6 +103,7 @@ describe("simulatedAiClassificationProvider scenarios", () => {
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
       dateToken: "2026-03-10",
+      subject: "captur",
       target: "captur",
       documentType: "facture-entretien",
       issuer: "renault",
@@ -123,6 +124,7 @@ describe("simulatedAiClassificationProvider scenarios", () => {
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
       dateToken: "2025",
+      subject: "foyer",
       target: "foyer",
       documentType: "avis-imposition",
       targetFolder: "Fiscalite/Foyer/2025"
@@ -140,6 +142,7 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
+      subject: "foyer",
       target: "foyer",
       documentType: "assurance-habitation",
       detail: "habitation",
@@ -158,6 +161,7 @@ describe("simulatedAiClassificationProvider scenarios", () => {
 
     expect(result.status).toBe("ready");
     expect(result.status === "ready" && result.suggestion).toMatchObject({
+      subject: "enfants-ecole",
       target: "enfants-ecole",
       documentType: "certificat-scolarite",
       targetFolder: "Enfants/Ecole"
@@ -185,7 +189,6 @@ function createInput(overrides: Partial<AiClassificationInput> = {}): AiClassifi
     extension: ".pdf",
     extractedTextExcerpt: "",
     ocrTextExcerpt: "",
-    currentSuggestionV2: null,
     availableRootFolders: ["Maison", "Vehicules", "Fiscalite", "Enfants"],
     knownRelativeFolders: [
       "Maison/Assurance",

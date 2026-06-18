@@ -220,8 +220,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
 
   const result = await window.docSorter.runAiSuggestionForActiveDocument(
     activeDocument.filePath,
-    textContext,
-    state.naming.draft
+    textContext
   );
   if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
     return;
@@ -440,10 +439,11 @@ function buildNamingDraftFromAiSuggestionV2(
   const nextOrigins: NamingDraftOrigins = { ...origins };
   const appliedFields: Array<keyof NamingDraft> = [];
   const dateToken = normalizeAiV2DateForCurrentDraft(suggestion.dateToken);
+  const subject = suggestion.subject?.trim() || suggestion.target?.trim() || "";
   const keywords = buildAiV2Keywords(suggestion);
 
   applyAiV2Field("documentDate", dateToken);
-  applyAiV2Field("subject", suggestion.target?.trim() ?? "");
+  applyAiV2Field("subject", subject);
   applyAiV2Field("documentType", suggestion.documentType?.trim() ?? "");
   applyAiV2Field("keywords", keywords);
 
@@ -470,10 +470,11 @@ function hasApplicableAiSuggestionField(
   suggestion: RendererAiClassificationSuggestion
 ): boolean {
   const dateToken = normalizeAiV2DateForCurrentDraft(suggestion.dateToken);
+  const subject = suggestion.subject?.trim() || suggestion.target?.trim() || "";
   const keywords = buildAiV2Keywords(suggestion);
   return (
     shouldApplyAiV2Value(draft.documentDate, origins.documentDate, dateToken, suggestion.confidence) ||
-    shouldApplyAiV2Value(draft.subject, origins.subject, suggestion.target?.trim() ?? "", suggestion.confidence) ||
+    shouldApplyAiV2Value(draft.subject, origins.subject, subject, suggestion.confidence) ||
     shouldApplyAiV2Value(
       draft.documentType,
       origins.documentType,
@@ -560,8 +561,8 @@ function createAiApplicationMessage(
   targetFolderApplied: boolean
 ): string {
   if (appliedFields.length === 0 && !targetFolderApplied) {
-    return "Aucun champ modifiable à compléter depuis la suggestion IA V2.";
+    return "Aucun champ modifiable à compléter depuis la suggestion IA.";
   }
 
-  return "Suggestion IA V2 appliquée. Les champs manuels n'ont pas été modifiés.";
+  return "Suggestion IA appliquée. Les champs manuels n'ont pas été modifiés.";
 }
