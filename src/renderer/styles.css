@@ -1192,6 +1192,7 @@ details.detail-section[open] > summary {
 .reference-data-header button,
 .reference-data-file-tab,
 .reference-data-list button {
+  cursor: pointer;
   min-height: 32px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1200,6 +1201,66 @@ details.detail-section[open] > summary {
   background: #ffffff;
   font-size: 12px;
   font-weight: 720;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
+}
+
+.reference-data-actions button:not(:disabled):hover,
+.reference-data-mode-switch button:not(:disabled):hover,
+.reference-data-form-actions button:not(:disabled):hover,
+.reference-data-json-actions button:not(:disabled):hover,
+.reference-data-header button:not(:disabled):hover,
+.reference-data-file-tab:not(:disabled):hover,
+.reference-data-list button:not(:disabled):hover {
+  border-color: #9ab5d3;
+  background: #f0f7ff;
+  box-shadow: 0 1px 5px rgb(15 23 42 / 0.12);
+}
+
+.reference-data-actions button:not(:disabled):active,
+.reference-data-mode-switch button:not(:disabled):active,
+.reference-data-form-actions button:not(:disabled):active,
+.reference-data-json-actions button:not(:disabled):active,
+.reference-data-header button:not(:disabled):active,
+.reference-data-file-tab:not(:disabled):active,
+.reference-data-list button:not(:disabled):active {
+  transform: translateY(1px);
+  border-color: var(--accent);
+  background: #dbeafe;
+  box-shadow: inset 0 1px 3px rgb(15 23 42 / 0.16);
+}
+
+.reference-data-actions button:focus-visible,
+.reference-data-mode-switch button:focus-visible,
+.reference-data-form-actions button:focus-visible,
+.reference-data-json-actions button:focus-visible,
+.reference-data-header button:focus-visible,
+.reference-data-file-tab:focus-visible,
+.reference-data-list button:focus-visible,
+.reference-data-entry:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.reference-data-form-actions .reference-data-primary-action,
+.reference-data-json-actions .reference-data-save-action,
+.reference-data-form-actions .reference-data-save-action {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.reference-data-form-actions .reference-data-save-action:not(:disabled):hover,
+.reference-data-json-actions .reference-data-save-action:not(:disabled):hover,
+.reference-data-form-actions .reference-data-primary-action:not(:disabled):hover {
+  background: #1d4ed8;
+}
+
+.reference-data-form-actions .reference-data-primary-action:disabled,
+.reference-data-form-actions .reference-data-save-action:disabled,
+.reference-data-json-actions .reference-data-save-action:disabled {
+  border-color: var(--border);
+  color: #9aa4b2;
+  background: #f3f5f7;
 }
 
 .reference-data-actions button:disabled,
@@ -1211,6 +1272,8 @@ details.detail-section[open] > summary {
   cursor: not-allowed;
   color: #9aa4b2;
   background: #f3f5f7;
+  box-shadow: none;
+  transform: none;
 }
 
 .reference-data-mode-switch {
@@ -1238,6 +1301,18 @@ details.detail-section[open] > summary {
   border-color: #e7b9b9;
   color: var(--danger);
   background: #fff7f7;
+}
+
+.reference-data-status.success {
+  border-color: #b8dfc5;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.reference-data-status.busy {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 
 .reference-data-files {
@@ -1283,7 +1358,25 @@ details.detail-section[open] > summary {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
+  cursor: pointer;
   background: #fbfcfd;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
+}
+
+.reference-data-entry:hover {
+  border-color: #9ab5d3;
+  background: #f6fbff;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.08);
+}
+
+.reference-data-entry:active {
+  transform: translateY(1px);
+}
+
+.reference-data-entry.selected {
+  border-color: var(--accent);
+  background: #eef6ff;
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .reference-data-entry.disabled {
@@ -1309,6 +1402,36 @@ details.detail-section[open] > summary {
 .reference-data-form {
   display: grid;
   gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.reference-data-form.is-new {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.reference-data-form.is-editing {
+  border-color: #f3c979;
+  background: #fffaf0;
+}
+
+.reference-data-form-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.reference-data-form-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.reference-data-form-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .reference-data-form-grid {
@@ -1326,6 +1449,33 @@ details.detail-section[open] > summary {
   font-weight: 720;
 }
 
+.reference-data-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reference-data-field-info {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #b8c5d6;
+  border-radius: 999px;
+  color: #1f4f7a;
+  background: #eef6ff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.reference-data-field-help {
+  color: #66758a;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .reference-data-form input,
 .reference-data-form textarea,
 .reference-data-json textarea {
@@ -1337,6 +1487,14 @@ details.detail-section[open] > summary {
   background: #ffffff;
   font: inherit;
   font-size: 12px;
+}
+
+.reference-data-form input:focus,
+.reference-data-form textarea:focus,
+.reference-data-json textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgb(37 99 235 / 0.18);
+  outline-offset: 1px;
 }
 
 .reference-data-form textarea {
@@ -1353,6 +1511,46 @@ details.detail-section[open] > summary {
 
 .reference-data-checkbox input {
   min-width: auto;
+}
+
+.reference-data-selected-entry {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #cfe0f4;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fbff;
+}
+
+.reference-data-selected-entry h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.reference-data-selected-entry dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.reference-data-selected-entry dl div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.38fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.reference-data-selected-entry dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.reference-data-selected-entry dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  font-size: 12px;
 }
 
 .reference-data-json {

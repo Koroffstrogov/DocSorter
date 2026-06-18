@@ -123,7 +123,13 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     }
 
     if (elements.status) {
-      elements.status.className = `reference-data-status${state.error ? " error" : ""}`;
+      elements.status.className = [
+        "reference-data-status",
+        state.error ? "error" : "",
+        !state.error && isReferenceDataSuccessState(state) ? "success" : "",
+        state.status === "saving" || state.status === "validating" ? "busy" : ""
+      ].filter(Boolean).join(" ");
+      elements.status.setAttribute("aria-live", "polite");
       elements.status.textContent = referenceDataStatusText(state);
     }
 
@@ -186,11 +192,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const validateButton = document.createElement("button");
     const saveButton = document.createElement("button");
     const content = currentDraftContent(state, file);
-    const canSave = Boolean(
-      state.validation?.ok &&
-        state.lastValidatedFileKey === file.key &&
-        state.lastValidatedContent === content
-    );
+    const canSave = canSaveReferenceDataContent(state, file, content);
 
     container.className = "reference-data-json";
     labelText.textContent = `${file.relativePath} (${referenceDataFileStatusLabel(file.status)})`;
@@ -206,6 +208,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     validateButton.disabled = busy;
     validateButton.addEventListener("click", () => options.onValidateJson(file.key));
     saveButton.type = "button";
+    saveButton.className = "reference-data-save-action";
     saveButton.textContent = "Sauvegarder";
     saveButton.disabled = busy || !canSave;
     saveButton.addEventListener("click", () => options.onSaveJson(file.key));
@@ -225,6 +228,9 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const entries = parseReferenceEntries(currentDraftContent(state, file));
     const list = document.createElement("div");
     const form = createSimpleForm(state, file, busy, options);
+    const selectedEntry = typeof state.simpleDraft.editingIndex === "number"
+      ? entries[state.simpleDraft.editingIndex]
+      : null;
 
     container.className = "reference-data-simple-layout";
     list.className = "reference-data-list";
@@ -233,7 +239,12 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       empty.textContent = "Aucune entrée dans ce référentiel.";
       list.append(empty);
     } else {
-      list.replaceChildren(...entries.map((entry, index) => createEntryCard(entry, index, busy, options)));
+      list.replaceChildren(...entries.map((entry, index) =>
+        createEntryCard(entry, index, state.simpleDraft.editingIndex === index, busy, options)
+      ));
+    }
+    if (selectedEntry) {
+      list.append(createSelectedEntryDetails(selectedEntry));
     }
 
     container.append(list, form);
@@ -253,8 +264,12 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const applyButton = document.createElement("button");
     const saveButton = document.createElement("button");
     const draft = state.simpleDraft;
+    const content = currentDraftContent(state, file);
+    const canSave = canSaveReferenceDataContent(state, file, content);
+    const isEditing = draft.editingIndex !== null;
+    const heading = createSimpleFormHeading(draft, isEditing);
 
-    form.className = "reference-data-form";
+    form.className = `reference-data-form ${isEditing ? "is-editing" : "is-new"}`;
     grid.className = "reference-data-form-grid";
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -280,20 +295,44 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
 
     actions.className = "reference-data-form-actions";
     newButton.type = "button";
+    newButton.className = "reference-data-secondary-action";
     newButton.textContent = "Nouvelle entrée";
     newButton.disabled = busy;
     newButton.addEventListener("click", options.onSimpleNew);
     applyButton.type = "submit";
+    applyButton.className = "reference-data-primary-action";
     applyButton.textContent = draft.editingIndex === null ? "Ajouter" : "Mettre à jour";
     applyButton.disabled = busy;
     saveButton.type = "button";
+    saveButton.className = "reference-data-save-action";
     saveButton.textContent = "Sauvegarder";
-    saveButton.disabled = busy;
+    saveButton.disabled = busy || !canSave;
+    saveButton.title = canSave
+      ? "Écrire le JSON validé du référentiel."
+      : "Validez l'entrée ou le JSON avant de sauvegarder.";
     saveButton.addEventListener("click", () => options.onSaveJson(file.key));
     actions.append(newButton, applyButton, saveButton);
 
-    form.append(grid, actions, createValidationBlock(state, file));
+    form.append(heading, grid, actions, createValidationBlock(state, file));
     return form;
+  }
+
+  function createSimpleFormHeading(
+    draft: ReferenceDataSimpleDraft,
+    isEditing: boolean
+  ): HTMLDivElement {
+    const header = document.createElement("div");
+    const title = document.createElement("h3");
+    const description = document.createElement("p");
+    header.className = "reference-data-form-heading";
+    title.textContent = isEditing
+      ? `Modification de ${draft.label.trim() || draft.fileAlias.trim() || "l'entrée"}`
+      : "Nouvelle entrée";
+    description.textContent = isEditing
+      ? "Les champs ci-dessous modifient l'entrée sélectionnée. Sauvegardez ensuite le référentiel."
+      : "Remplissez les champs obligatoires, ajoutez l'entrée, puis sauvegardez le référentiel.";
+    header.append(title, description);
+    return header;
   }
 
   function createTextField(
@@ -304,15 +343,16 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     hidden = false
   ): HTMLLabelElement {
     const label = document.createElement("label");
-    const span = document.createElement("span");
     const input = document.createElement("input");
+    const help = getReferenceDataFieldHelp(field);
     label.hidden = hidden;
-    span.textContent = labelText;
+    label.className = "reference-data-field";
     input.setAttribute("data-reference-field", field);
     input.value = value;
     input.autocomplete = "off";
+    input.placeholder = help.placeholder;
     input.addEventListener("input", () => options.onSimpleFieldChange(field, input.value));
-    label.append(span, input);
+    label.append(createFieldLabel(labelText, help), input, createFieldHelp(help));
     return label;
   }
 
@@ -324,14 +364,15 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     hidden = false
   ): HTMLLabelElement {
     const label = document.createElement("label");
-    const span = document.createElement("span");
     const textarea = document.createElement("textarea");
+    const help = getReferenceDataFieldHelp(field);
     label.hidden = hidden;
-    span.textContent = labelText;
+    label.className = "reference-data-field";
     textarea.setAttribute("data-reference-field", field);
     textarea.value = value;
+    textarea.placeholder = help.placeholder;
     textarea.addEventListener("input", () => options.onSimpleFieldChange(field, textarea.value));
-    label.append(span, textarea);
+    label.append(createFieldLabel(labelText, help), textarea, createFieldHelp(help));
     return label;
   }
 
@@ -345,6 +386,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const label = document.createElement("label");
     const input = document.createElement("input");
     const span = document.createElement("span");
+    const help = getReferenceDataFieldHelp(field);
     label.className = "reference-data-checkbox";
     label.hidden = hidden;
     input.type = "checkbox";
@@ -352,13 +394,43 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     input.checked = value;
     input.addEventListener("change", () => options.onSimpleFieldChange(field, input.checked));
     span.textContent = labelText;
-    label.append(input, span);
+    span.title = help.text;
+    label.append(input, span, createFieldInfo(help));
     return label;
+  }
+
+  function createFieldLabel(
+    labelText: string,
+    help: ReferenceDataFieldHelp
+  ): HTMLSpanElement {
+    const header = document.createElement("span");
+    const text = document.createElement("span");
+    header.className = "reference-data-field-label";
+    text.textContent = labelText;
+    header.append(text, createFieldInfo(help));
+    return header;
+  }
+
+  function createFieldInfo(help: ReferenceDataFieldHelp): HTMLSpanElement {
+    const info = document.createElement("span");
+    info.className = "reference-data-field-info";
+    info.textContent = "i";
+    info.title = help.text;
+    info.setAttribute("aria-label", help.text);
+    return info;
+  }
+
+  function createFieldHelp(help: ReferenceDataFieldHelp): HTMLElement {
+    const description = document.createElement("small");
+    description.className = "reference-data-field-help";
+    description.textContent = help.text;
+    return description;
   }
 
   function createEntryCard(
     entry: Record<string, unknown>,
     index: number,
+    selected: boolean,
     busy: boolean,
     options: ReferenceDataPanelOptions
   ): HTMLDivElement {
@@ -370,7 +442,28 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const disable = document.createElement("button");
     const enabled = entry.enabled !== false;
 
-    card.className = `reference-data-entry${enabled ? "" : " disabled"}`;
+    card.className = [
+      "reference-data-entry",
+      enabled ? "" : "disabled",
+      selected ? "selected" : ""
+    ].filter(Boolean).join(" ");
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", busy ? "-1" : "0");
+    card.setAttribute("aria-current", selected ? "true" : "false");
+    card.title = "Cliquer pour afficher et modifier cette entrée.";
+    card.addEventListener("click", () => {
+      if (!busy) {
+        options.onSimpleEdit(index);
+      }
+    });
+    card.addEventListener("keydown", (event) => {
+      if (busy || (event.key !== "Enter" && event.key !== " ")) {
+        return;
+      }
+
+      event.preventDefault();
+      options.onSimpleEdit(index);
+    });
     label.textContent = stringValue(entry.label) || stringValue(entry.id) || `Entrée ${index + 1}`;
     alias.textContent = [
       stringValue(entry.fileAlias),
@@ -381,14 +474,52 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     edit.type = "button";
     edit.textContent = "Modifier";
     edit.disabled = busy;
-    edit.addEventListener("click", () => options.onSimpleEdit(index));
+    edit.addEventListener("click", (event) => {
+      event.stopPropagation();
+      options.onSimpleEdit(index);
+    });
     disable.type = "button";
     disable.textContent = enabled ? "Désactiver" : "Réactiver";
     disable.disabled = busy;
-    disable.addEventListener("click", () => options.onSimpleDisable(index));
+    disable.addEventListener("click", (event) => {
+      event.stopPropagation();
+      options.onSimpleDisable(index);
+    });
     actions.append(edit, disable);
     card.append(label, alias, actions);
     return card;
+  }
+
+  function createSelectedEntryDetails(entry: Record<string, unknown>): HTMLElement {
+    const container = document.createElement("section");
+    const title = document.createElement("h3");
+    const details = document.createElement("dl");
+    container.className = "reference-data-selected-entry";
+    title.textContent = "Valeurs sauvegardées";
+    details.replaceChildren(
+      ...[
+        ["Nom lisible", stringValue(entry.label)],
+        ["ID", stringValue(entry.id)],
+        ["Alias fichier", stringValue(entry.fileAlias)],
+        ["Alias dossier", stringValue(entry.folderAlias)],
+        ["Alias de détection", arrayValue(entry.aliases).join(", ")],
+        ["Date de naissance", stringValue(entry.birthDate)],
+        ["Domaines", arrayValue(entry.domains).join(", ")],
+        ["Actif", entry.enabled === false ? "Non" : "Oui"]
+      ].map(([label, value]) => createSelectedEntryDetail(label, value))
+    );
+    container.append(title, details);
+    return container;
+  }
+
+  function createSelectedEntryDetail(label: string, value: string): HTMLElement {
+    const row = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value || "Non renseigné";
+    row.append(term, description);
+    return row;
   }
 
   function createValidationBlock(
@@ -530,6 +661,12 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     return typeof value === "string" ? value : "";
   }
 
+  function arrayValue(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  }
+
   function referenceDataStatusText(state: ReferenceDataState): string {
     if (state.error) {
       return state.error.message;
@@ -550,6 +687,22 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const missingCount = files.filter((file) => file.status === "absent").length;
     const catalog = state.overview?.catalogStatus === "blocked" ? " Catalogue bloqué." : "";
     return `${state.message}${missingCount > 0 ? ` ${missingCount} fichier(s) absent(s).` : ""}${invalidCount > 0 ? ` ${invalidCount} fichier(s) invalide(s).` : ""}${catalog}`;
+  }
+
+  function isReferenceDataSuccessState(state: ReferenceDataState): boolean {
+    return /sauvegardé|chargés|rechargés|créés|ouvert/i.test(state.message);
+  }
+
+  function canSaveReferenceDataContent(
+    state: ReferenceDataState,
+    file: ReferenceDataFileInfo,
+    content: string
+  ): boolean {
+    return Boolean(
+      state.validation?.ok &&
+        state.lastValidatedFileKey === file.key &&
+        state.lastValidatedContent === content
+    );
   }
 
   function referenceDataFileStatusLabel(status: ReferenceDataFileStatus): string {
@@ -573,6 +726,62 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       error.field,
       error.message
     ].filter(Boolean).join(" · ");
+  }
+
+  interface ReferenceDataFieldHelp {
+    text: string;
+    placeholder: string;
+  }
+
+  function getReferenceDataFieldHelp(field: keyof ReferenceDataSimpleDraft): ReferenceDataFieldHelp {
+    switch (field) {
+      case "label":
+        return {
+          text: "Obligatoire. Nom humain lisible, par exemple Paul Martin.",
+          placeholder: "Paul Martin"
+        };
+      case "fileAlias":
+        return {
+          text: "Obligatoire. Bloc court en kebab-case utilisé dans le nom de fichier, par exemple paul.",
+          placeholder: "paul"
+        };
+      case "folderAlias":
+        return {
+          text: "Optionnel. Chemin relatif lisible pour le dossier cible, par exemple Sante/Paul.",
+          placeholder: "Sante/Paul"
+        };
+      case "aliases":
+        return {
+          text: "Obligatoire. Alias de détection séparés par des virgules, par exemple Paul, Paul Martin.",
+          placeholder: "Paul, Paul Martin"
+        };
+      case "birthDate":
+        return {
+          text: "Optionnel, personnes uniquement. Format AAAA-MM-JJ, utilisé seulement pour détecter.",
+          placeholder: "2014-03-12"
+        };
+      case "domains":
+        return {
+          text: "Optionnel, fournisseurs uniquement. Domaines sans protocole séparés par des virgules.",
+          placeholder: "exemple.fr, portail.exemple.fr"
+        };
+      case "useBirthDateForDetectionOnly":
+        return {
+          text: "La date de naissance sert uniquement d'indice de détection et n'est jamais injectée dans le nom.",
+          placeholder: ""
+        };
+      case "enabled":
+        return {
+          text: "Si désactivé, l'entrée est conservée mais ignorée par la détection.",
+          placeholder: ""
+        };
+      case "editingIndex":
+      default:
+        return {
+          text: "Champ interne de sélection de l'entrée.",
+          placeholder: ""
+        };
+    }
   }
 
   DocSorterReferenceDataPanel = {

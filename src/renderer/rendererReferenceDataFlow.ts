@@ -184,7 +184,7 @@ async function saveReferenceDataFileFromPanel(fileKey: ReferenceDataFileKey): Pr
     validation: null,
     lastValidatedFileKey: null,
     lastValidatedContent: "",
-    message: "Référentiel sauvegardé.",
+    message: `Référentiel sauvegardé à ${formatReferenceDataTime(new Date())}.`,
     error: null
   };
   renderReferenceDataPanel();
@@ -297,7 +297,7 @@ function applyReferenceDataSimpleDraft(): void {
     entries[index] = entry;
   }
 
-  updateReferenceDataEntries(entries, "Entrée prête. Validez puis sauvegardez le référentiel.");
+  updateReferenceDataEntries(entries, "Entrée prête. Sauvegarde encore nécessaire.");
   state.referenceData = {
     ...state.referenceData,
     simpleDraft: createEmptyReferenceDataSimpleDraft()
@@ -487,4 +487,12 @@ function arrayField(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string")
     : [];
+}
+
+function formatReferenceDataTime(date: Date): string {
+  return date.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
 }

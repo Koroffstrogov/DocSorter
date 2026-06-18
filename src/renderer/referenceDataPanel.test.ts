@@ -25,12 +25,96 @@ describe("referenceDataPanel", () => {
     expect(focused?.selectionStart).toBe(1);
     expect(focused?.selectionEnd).toBe(1);
   });
+
+  it("selects an entry by clicking its card and shows saved values", async () => {
+    const harness = await createPanelHarness({
+      entries: [
+        {
+          id: "paul",
+          label: "Paul Martin",
+          fileAlias: "paul",
+          folderAlias: "Sante/Paul",
+          aliases: ["Paul", "Paul Martin"],
+          birthDate: "2014-03-12"
+        }
+      ],
+      editingIndex: 0
+    });
+
+    harness.api.render();
+    const card = harness.document.querySelector<FakeElement>(".reference-data-entry");
+    expect(card).not.toBeNull();
+    expect(card?.getAttribute("aria-current")).toBe("true");
+    card!.dispatch("click");
+    expect(harness.calls.simpleEdit).toEqual([0]);
+
+    const details = harness.document.querySelector<FakeElement>(".reference-data-selected-entry");
+    expect(details?.text()).toContain("Valeurs sauvegardées");
+    expect(details?.text()).toContain("Sante/Paul");
+    expect(details?.text()).toContain("2014-03-12");
+  });
+
+  it("shows creation/editing headings and field help", async () => {
+    const harness = await createPanelHarness();
+
+    harness.api.render();
+    expect(harness.document.querySelector<FakeElement>(".reference-data-form-heading")?.text()).toContain(
+      "Nouvelle entrée"
+    );
+    expect(harness.document.querySelector<FakeElement>(".reference-data-field-help")?.text()).toContain(
+      "Obligatoire"
+    );
+
+    harness.state.simpleDraft = {
+      ...harness.state.simpleDraft,
+      editingIndex: 0,
+      label: "Paul Martin",
+      fileAlias: "paul"
+    };
+    harness.api.render();
+    expect(harness.document.querySelector<FakeElement>(".reference-data-form-heading")?.text()).toContain(
+      "Modification de Paul Martin"
+    );
+  });
+
+  it("keeps assistant save disabled until the current content is validated", async () => {
+    const harness = await createPanelHarness({
+      entries: [
+        {
+          id: "paul",
+          label: "Paul Martin",
+          fileAlias: "paul",
+          aliases: ["Paul"]
+        }
+      ]
+    });
+
+    harness.api.render();
+    expect(harness.document.querySelector<FakeElement>(".reference-data-save-action")?.disabled).toBe(true);
+
+    const content = harness.state.jsonDrafts.people ?? "";
+    harness.state.validation = {
+      ok: true,
+      value: harness.state.overview!.files[0]
+    };
+    harness.state.lastValidatedFileKey = "people";
+    harness.state.lastValidatedContent = content;
+    harness.api.render();
+
+    expect(harness.document.querySelector<FakeElement>(".reference-data-save-action")?.disabled).toBe(false);
+  });
 });
 
-async function createPanelHarness(): Promise<{
+async function createPanelHarness(options: {
+  entries?: Array<Record<string, unknown>>;
+  editingIndex?: number | null;
+} = {}): Promise<{
   api: ReferenceDataPanelApi;
   document: FakeDocument;
+  state: ReferenceDataState;
+  calls: { simpleEdit: number[] };
 }> {
+  const content = `${JSON.stringify(options.entries ?? [], null, 2)}\n`;
   const state: ReferenceDataState = {
     isOpen: true,
     status: "ready",
@@ -46,22 +130,39 @@ async function createPanelHarness(): Promise<{
           label: "Personnes",
           relativePath: "entities/people.json",
           status: "valid",
-          content: "[]\n",
-          entryCount: 0,
+          content,
+          entryCount: options.entries?.length ?? 0,
           errors: [],
           warnings: []
         }
       ]
     },
     jsonDrafts: {
-      people: "[]\n"
+      people: content
     },
-    simpleDraft: createSimpleDraft(),
+    simpleDraft: {
+      ...createSimpleDraft(),
+      editingIndex: options.editingIndex ?? null,
+      ...(typeof options.editingIndex === "number" && options.entries?.[options.editingIndex]
+        ? {
+            label: String(options.entries[options.editingIndex].label ?? ""),
+            fileAlias: String(options.entries[options.editingIndex].fileAlias ?? ""),
+            folderAlias: String(options.entries[options.editingIndex].folderAlias ?? ""),
+            aliases: Array.isArray(options.entries[options.editingIndex].aliases)
+              ? (options.entries[options.editingIndex].aliases as string[]).join(", ")
+              : "",
+            birthDate: String(options.entries[options.editingIndex].birthDate ?? "")
+          }
+        : {})
+    },
     lastValidatedFileKey: null,
     lastValidatedContent: "",
     validation: null,
     message: "Référentiels chargés.",
     error: null
+  };
+  const calls = {
+    simpleEdit: [] as number[]
   };
   const document = FakeDocument.createReferenceDataDialog();
   const context: Record<string, unknown> = {
@@ -103,12 +204,14 @@ async function createPanelHarness(): Promise<{
       api.render();
     },
     onSimpleNew: () => undefined,
-    onSimpleEdit: () => undefined,
+    onSimpleEdit: (index) => {
+      calls.simpleEdit.push(index);
+    },
     onSimpleDisable: () => undefined,
     onSimpleApply: () => undefined
   });
 
-  return { api, document };
+  return { api, document, state, calls };
 }
 
 function createSimpleDraft(): ReferenceDataSimpleDraft {
@@ -172,6 +275,7 @@ class FakeElement {
   public value = "";
   public checked = false;
   public autocomplete = "";
+  public placeholder = "";
   public spellcheck = true;
   public selectionStart: number | null = null;
   public selectionEnd: number | null = null;
@@ -198,7 +302,12 @@ class FakeElement {
   }
 
   dispatch(eventName: string): void {
-    (this.listeners.get(eventName) ?? []).forEach((listener) => listener());
+    const event = {
+      key: eventName === "keydown" ? "Enter" : "",
+      stopPropagation: () => undefined,
+      preventDefault: () => undefined
+    };
+    (this.listeners.get(eventName) ?? []).forEach((listener) => listener(event));
   }
 
   focus(): void {
@@ -242,11 +351,24 @@ class FakeElement {
 
     return null;
   }
+
+  text(): string {
+    return [
+      this.textContent,
+      ...this.children.map((child) => child instanceof FakeElement ? child.text() : child)
+    ].join("");
+  }
 }
 
 function matchesSelector(element: FakeElement, selector: string): boolean {
   if (selector.startsWith("#")) {
     return element.id === selector.slice(1);
+  }
+
+  if (selector.startsWith(".")) {
+    const requiredClasses = selector.slice(1).split(".");
+    const classes = new Set(element.className.split(/\s+/).filter(Boolean));
+    return requiredClasses.every((className) => classes.has(className));
   }
 
   const attributeMatch = selector.match(/^\[([^=]+)="([^"]+)"\]$/);
