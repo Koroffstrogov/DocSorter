@@ -136,6 +136,52 @@ describe("runOllamaSuggestionForDocument", () => {
     });
   });
 
+  it("sanitizes inverted fiscal AI output without applying target equal to document type", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+    const documentPath = path.join(workspace.sourcePath, "T05-avis_imposition_foyer_2025.pdf");
+    await writeFile(documentPath, "contenu original", "utf8");
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Avis d'imposition 2025"
+      }),
+      documentPath,
+      queuedDocuments: [{ filePath: documentPath, name: "T05-avis_imposition_foyer_2025.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      legacyDraft: {
+        documentDate: "2025",
+        subject: "T05-avis-imposition-foyer",
+        documentType: "avis-imposition",
+        keywords: ""
+      },
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          dateToken: "2025",
+          target: "avis-imposition",
+          documentType: "avis-imposition",
+          detail: "foyer",
+          confidence: 82,
+          reasons: ["Avis fiscal détecté."],
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.input.currentSuggestionV2?.target).toBe("foyer");
+    expect(result.value.input.currentSuggestionV2?.documentType).toBe("avis-imposition");
+    expect(result.value.suggestion.target).toBe("foyer");
+    expect(result.value.suggestion.documentType).toBe("avis-imposition");
+    expect(result.value.suggestion.detail).toBeUndefined();
+    expect(result.value.suggestion.warnings.join(" ")).toContain("Cible IA ignorée");
+  });
+
   it("refuses invalid JSON without crashing", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);

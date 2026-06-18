@@ -113,16 +113,16 @@ describe("buildSuggestionDraftV2", () => {
 
   it("does not generate a final name if target is missing", () => {
     const draft = buildSuggestionDraftV2({
-      fileName: "avis.pdf",
+      fileName: "certificat.pdf",
       referenceData: {
         targetCandidates: [],
-        documentTypeCandidates: [createCandidate("documentType", "avis-imposition", 85)],
+        documentTypeCandidates: [createCandidate("documentType", "certificat-scolarite", 85)],
         issuerCandidates: [],
         warnings: []
       }
     });
 
-    expect(draft.documentType).toBe("avis-imposition");
+    expect(draft.documentType).toBe("certificat-scolarite");
     expect(draft.target).toBeUndefined();
     expect(draft.proposedName).toBeUndefined();
     expect(draft.warnings).toContain("Cible absente : nom v2 final non généré.");
@@ -199,13 +199,13 @@ describe("buildSuggestionDraftV2", () => {
       fileName: "document.pdf",
       legacyDraft: {
         documentDate: "2026",
-        subject: "ABCD1234EFGH5678IJKL",
+        subject: "lea",
         documentType: "attestation",
-        keywords: ""
+        keywords: "ABCD1234EFGH5678IJKL"
       }
     });
 
-    expect(draft.proposedName).toBe("2026_abcd1234efgh5678ijkl_attestation.pdf");
+    expect(draft.proposedName).toBe("2026_lea_attestation_abcd1234efgh5678ijkl.pdf");
     expect(draft.warnings).toContain("Identifiant long probable détecté.");
   });
 
@@ -250,10 +250,10 @@ describe("buildSuggestionDraftV2", () => {
       proposedName: "2024-03-05_renault-captur_facture-entretien_vidange.pdf"
     });
     expect(draft.source).toMatchObject({
-      dateToken: "legacy",
-      target: "legacy",
-      documentType: "legacy",
-      detail: "legacy"
+      dateToken: "legacy-filename",
+      target: "legacy-filename",
+      documentType: "legacy-filename",
+      detail: "legacy-filename"
     });
   });
 
@@ -292,7 +292,7 @@ describe("buildSuggestionDraftV2", () => {
     expect(JSON.stringify(draft)).not.toContain("2012-06-16");
   });
 
-  it("handles avis-imposition without an explicit target", () => {
+  it("handles avis-imposition with foyer as default target", () => {
     const draft = buildSuggestionDraftV2({
       fileName: "avis.pdf",
       extractedText: "Avis d'imposition 2025",
@@ -306,9 +306,38 @@ describe("buildSuggestionDraftV2", () => {
 
     expect(draft.documentType).toBe("avis-imposition");
     expect(draft.dateToken).toBe("2025");
-    expect(draft.target).toBeUndefined();
-    expect(draft.proposedName).toBeUndefined();
-    expect(draft.warnings).toContain("Cible absente : nom v2 final non généré.");
+    expect(draft.target).toBe("foyer");
+    expect(draft.proposedName).toBe("2025_foyer_avis-imposition.pdf");
+    expect(draft.source.target).toBe("reference-data");
+    expect(draft.reasons).toContain("Cible foyer appliquée depuis le type documentaire fiscal.");
+  });
+
+  it("fixes T05 by rejecting filename-like legacy target and selecting fiscal year", () => {
+    const draft = buildSuggestionDraftV2({
+      fileName: "T05-avis_imposition_foyer_2025.pdf",
+      extractedText: "Avis d'imposition 2025",
+      legacyDraft: {
+        documentDate: "2025",
+        subject: "T05-avis-imposition-foyer",
+        documentType: "avis-imposition",
+        keywords: ""
+      },
+      referenceData: {
+        targetCandidates: [],
+        documentTypeCandidates: [createCandidate("documentType", "avis-imposition", 85)],
+        issuerCandidates: [],
+        warnings: []
+      }
+    });
+
+    expect(draft.dateToken).toBe("2025");
+    expect(draft.dateSelection?.selected?.token).toBe("2025");
+    expect(draft.source.dateToken).toBe("date-engine");
+    expect(draft.target).toBe("foyer");
+    expect(draft.documentType).toBe("avis-imposition");
+    expect(draft.proposedName).toBe("2025_foyer_avis-imposition.pdf");
+    expect(draft.reasons).toContain("Ancienne valeur ignorée : ressemble à un nom de fichier.");
+    expect(draft.proposedName).not.toContain("t05");
   });
 
   it("keeps the selected date candidate for folder suggestions", () => {

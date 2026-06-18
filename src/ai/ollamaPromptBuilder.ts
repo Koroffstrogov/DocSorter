@@ -58,6 +58,8 @@ export function buildOllamaClassificationPrompt(
       "- source doit valoir \"ollama\".",
       "- targetFolder doit être relatif, sans chemin absolu, sans lettre de lecteur, sans \"..\".",
       "- target, documentType, issuer et detail doivent être des blocs courts compatibles nom de fichier.",
+      "- target ne doit jamais être égal à documentType.",
+      "- le nom de fichier source ou son basename ne doit jamais devenir target.",
       "- n'utilise jamais de chemin absolu dans target, documentType, issuer, detail ou targetFolder.",
       "- dateToken doit suivre le contrat V2 ou rester absent.",
       "- confidence est un nombre entre 0 et 100.",

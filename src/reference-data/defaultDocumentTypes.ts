@@ -27,6 +27,24 @@ export const defaultDocumentTypes: DocumentTypeReference[] = [
     defaultDateRule: "period-year"
   },
   {
+    id: "declaration-revenus",
+    label: "Déclaration de revenus",
+    fileAlias: "declaration-revenus",
+    aliases: ["déclaration de revenus", "declaration revenus", "revenus"],
+    domain: "fiscal",
+    defaultTargetKind: "foyer",
+    defaultDateRule: "period-year"
+  },
+  {
+    id: "taxe-fonciere",
+    label: "Taxe foncière",
+    fileAlias: "taxe-fonciere",
+    aliases: ["taxe foncière", "taxe fonciere", "avis de taxe foncière"],
+    domain: "fiscal",
+    defaultTargetKind: "foyer",
+    defaultDateRule: "period-year"
+  },
+  {
     id: "certificat-scolarite",
     label: "Certificat de scolarité",
     fileAlias: "certificat-scolarite",

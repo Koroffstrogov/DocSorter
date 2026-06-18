@@ -59,7 +59,7 @@ describe("buildSuggestionV2ForDocument", () => {
     expect(result.value.builtAt).toBe("2026-06-17T10:00:00.000Z");
   });
 
-  it("returns an incomplete suggestion when reference entities are absent", async () => {
+  it("uses foyer as default fiscal target when reference entities are absent", async () => {
     const workspace = await createWorkspace();
     const documentPath = path.join(workspace.sourcePath, "avis.pdf");
 
@@ -86,9 +86,60 @@ describe("buildSuggestionV2ForDocument", () => {
     }
 
     expect(result.value.draft.documentType).toBe("avis-imposition");
-    expect(result.value.draft.proposedName).toBeUndefined();
-    expect(result.value.missingFields).toContain("target");
+    expect(result.value.draft.target).toBe("foyer");
+    expect(result.value.draft.proposedName).toBe("2025_foyer_avis-imposition.pdf");
+    expect(result.value.missingFields).not.toContain("target");
     expect(result.value.referenceDataWarnings.length).toBeGreaterThan(0);
+  });
+
+  it("keeps Divers as weak fallback for T05 and recommends Fiscalite/Foyer/2025", async () => {
+    const workspace = await createWorkspace();
+    const targetRootPath = path.join(workspace.root, "target");
+    await mkdir(path.join(targetRootPath, "Divers", "A-traiter-manuellement"), { recursive: true });
+    const documentPath = path.join(workspace.sourcePath, "T05-avis_imposition_foyer_2025.pdf");
+    await writeFile(documentPath, "source", "utf8");
+    const before = await readdir(targetRootPath);
+
+    const result = await buildSuggestionV2ForDocument({
+      documentPath,
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Avis d'imposition 2025"
+      },
+      legacyDraft: {
+        documentDate: "2025",
+        subject: "T05-avis-imposition-foyer",
+        documentType: "avis-imposition",
+        keywords: ""
+      },
+      queuedDocuments: [{ filePath: documentPath, name: "T05-avis_imposition_foyer_2025.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      userDataPath: workspace.userDataPath,
+      targetRootPath
+    });
+
+    const after = await readdir(targetRootPath);
+    expect(after).toEqual(before);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.draft).toMatchObject({
+      dateToken: "2025",
+      target: "foyer",
+      documentType: "avis-imposition",
+      proposedName: "2025_foyer_avis-imposition.pdf"
+    });
+    expect(result.value.draft.dateSelection?.selected?.token).toBe("2025");
+    expect(result.value.draft.proposedName).not.toContain("t05");
+    expect(result.value.targetFolderSuggestion.recommended).toMatchObject({
+      relativePath: "Fiscalite/Foyer/2025",
+      requiresCreation: true
+    });
+    expect(result.value.targetFolderSuggestion.recommended?.relativePath).not.toBe(
+      "Divers/A-traiter-manuellement"
+    );
   });
 
   it("uses the existing target tree as a read-only placement signal", async () => {

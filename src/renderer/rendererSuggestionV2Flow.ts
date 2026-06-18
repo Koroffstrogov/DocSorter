@@ -109,11 +109,7 @@ function applySuggestionV2ToEmptyFields(): void {
 
   if (draftApplication.appliedFields.length > 0) {
     state.naming.draft = draftApplication.draft;
-    state.naming.origins = applyNamingDraftOrigin(
-      state.naming.origins,
-      draftApplication.appliedFields,
-      "suggestion-v2"
-    );
+    state.naming.origins = applyNamingDraftOrigins(state.naming.origins, draftApplication.appliedOrigins);
     state.naming.overrideFilename = null;
     state.naming.isLoading = true;
     resetClassificationState();
@@ -139,7 +135,7 @@ function applySuggestionV2ToEmptyFields(): void {
   }
 
   if (shouldApplyTargetFolder && targetFolder) {
-    void updateTargetFolderFromInput(targetFolder, "suggestion-v2");
+    void updateTargetFolderFromInput(targetFolder, getSuggestionV2TargetFolderOrigin(suggestion));
   }
 }
 
@@ -316,25 +312,33 @@ function buildNamingDraftFromSuggestionV2(
   draft: NamingDraft,
   suggestion: RendererSuggestionV2DocumentSuggestion,
   sourceDocumentName = ""
-): { draft: NamingDraft; appliedFields: Array<keyof NamingDraft> } {
+): {
+  draft: NamingDraft;
+  appliedFields: Array<keyof NamingDraft>;
+  appliedOrigins: Partial<NamingDraftOrigins>;
+} {
   const nextDraft: NamingDraft = { ...draft };
   const appliedFields: Array<keyof NamingDraft> = [];
+  const appliedOrigins: Partial<NamingDraftOrigins> = {};
   const dateToken = normalizeSuggestionV2DateForCurrentDraft(suggestion.draft.dateToken);
   const target = suggestion.draft.target?.trim() ?? "";
 
   if (!nextDraft.documentDate.trim() && dateToken) {
     nextDraft.documentDate = dateToken;
     appliedFields.push("documentDate");
+    appliedOrigins.documentDate = getSuggestionV2FieldOrigin(suggestion, "dateToken");
   }
 
   if (target && shouldApplySuggestionV2Subject(nextDraft.subject, target, sourceDocumentName)) {
     nextDraft.subject = target;
     appliedFields.push("subject");
+    appliedOrigins.subject = getSuggestionV2FieldOrigin(suggestion, "target");
   }
 
   if (!nextDraft.documentType.trim() && suggestion.draft.documentType?.trim()) {
     nextDraft.documentType = suggestion.draft.documentType.trim();
     appliedFields.push("documentType");
+    appliedOrigins.documentType = getSuggestionV2FieldOrigin(suggestion, "documentType");
   }
 
   const keywords = uniqueStrings([
@@ -344,24 +348,76 @@ function buildNamingDraftFromSuggestionV2(
   if (!nextDraft.keywords.trim() && keywords) {
     nextDraft.keywords = keywords;
     appliedFields.push("keywords");
+    appliedOrigins.keywords =
+      getSuggestionV2FieldOrigin(suggestion, suggestion.draft.issuer ? "issuer" : "detail");
   }
 
   return {
     draft: nextDraft,
-    appliedFields
+    appliedFields,
+    appliedOrigins
   };
 }
 
-function applyNamingDraftOrigin(
+function applyNamingDraftOrigins(
   origins: NamingDraftOrigins,
-  fields: Array<keyof NamingDraft>,
-  origin: NamingFieldOrigin
+  appliedOrigins: Partial<NamingDraftOrigins>
 ): NamingDraftOrigins {
   const nextOrigins = { ...origins };
-  for (const field of fields) {
-    nextOrigins[field] = origin;
+  for (const field of Object.keys(appliedOrigins) as Array<keyof NamingDraftOrigins>) {
+    const origin = appliedOrigins[field];
+    if (origin) {
+      nextOrigins[field] = origin;
+    }
   }
   return nextOrigins;
+}
+
+function getSuggestionV2FieldOrigin(
+  suggestion: RendererSuggestionV2DocumentSuggestion,
+  field: "dateToken" | "target" | "documentType" | "issuer" | "detail"
+): NamingFieldOrigin {
+  const source = suggestion.draft.source as Record<string, string> | undefined;
+  const value = source?.[field] ?? "";
+
+  switch (value) {
+    case "reference-data":
+      return "reference-data";
+    case "date-engine":
+      return "date-engine";
+    case "legacy":
+    case "legacy-filename":
+      return "legacy-filename";
+    case "manual":
+      return "manual";
+    case "rule":
+      return "rule";
+    case "fallback":
+    default:
+      return "fallback";
+  }
+}
+
+function getSuggestionV2TargetFolderOrigin(
+  suggestion: RendererSuggestionV2DocumentSuggestion
+): NamingFieldOrigin {
+  const folder =
+    suggestion.targetFolderSuggestion.recommended ??
+    suggestion.folderPlacement ??
+    null;
+
+  switch (folder?.source) {
+    case "inventory":
+    case "existing-folder":
+      return "folder-inventory";
+    case "fallback":
+      return "fallback";
+    case "preference":
+      return "rule";
+    case "rules-v2":
+    default:
+      return "reference-data";
+  }
 }
 
 function hasEmptyNamingFieldForSuggestionV2(
@@ -390,8 +446,8 @@ function getSuggestionV2RecommendedFolder(
   suggestion: RendererSuggestionV2DocumentSuggestion
 ): string {
   return (
-    suggestion.folderPlacement?.relativePath ??
     suggestion.targetFolderSuggestion.recommended?.relativePath ??
+    suggestion.folderPlacement?.relativePath ??
     ""
   ).trim();
 }

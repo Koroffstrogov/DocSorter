@@ -13,7 +13,7 @@ async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> 
 
   state.naming = {
     draft,
-    origins: createAutoNamingDraftOrigins(),
+    origins: createLegacyFilenameNamingDraftOrigins(),
     proposal: null,
     overrideFilename: null,
     isLoading: true

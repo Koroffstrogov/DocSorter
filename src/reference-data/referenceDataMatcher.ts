@@ -140,6 +140,8 @@ function createDocumentTypeCandidate(
     id: entry.id,
     label: entry.label,
     fileAlias: entry.fileAlias,
+    ...(entry.defaultTargetKind ? { defaultTargetKind: entry.defaultTargetKind } : {}),
+    ...(entry.defaultDateRule ? { defaultDateRule: entry.defaultDateRule } : {}),
     confidence: aliasMatch.confidence,
     reasons: aliasMatch.reasons,
     matchedAliases: aliasMatch.matchedAliases

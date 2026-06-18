@@ -15,6 +15,7 @@ import type {
   ReferenceDataCatalog,
   ReferenceDetectionResult
 } from "../reference-data/referenceDataTypes";
+import { isFilenameLikeTarget } from "./filenameLikeTarget";
 import type { SuggestionDraftV2, SuggestionDraftV2Source } from "./suggestionDraftV2";
 
 export interface BuildSuggestionDraftV2Input {
@@ -53,6 +54,7 @@ export type ReferenceCandidateSelectionResult =
 
 const DEFAULT_MINIMUM_CONFIDENCE = 60;
 const DEFAULT_AMBIGUITY_DELTA = 5;
+const FISCAL_DOCUMENT_TYPES = new Set(["avis-imposition", "declaration-revenus", "taxe-fonciere"]);
 
 export function buildSuggestionDraftV2(input: BuildSuggestionDraftV2Input): SuggestionDraftV2 {
   const warnings: string[] = [];
@@ -71,7 +73,7 @@ export function buildSuggestionDraftV2(input: BuildSuggestionDraftV2Input): Sugg
   };
 
   applyReferenceFields(draft, referenceData, confidenceParts);
-  applyLegacyFallbackFields(draft, legacyDraft, confidenceParts);
+  applyLegacyFallbackFields(draft, legacyDraft, confidenceParts, input.fileName);
   applyDateToken(draft, input, legacyDraft, confidenceParts);
   applySemanticNameDeduplication(draft);
 
@@ -180,15 +182,6 @@ function applyDateToken(
   legacyDraft: NamingDraft | null,
   confidenceParts: number[]
 ): void {
-  const legacyDate = legacyDraft?.documentDate.trim() || "";
-  if (legacyDate) {
-    draft.dateToken = legacyDate.toLowerCase();
-    draft.source.dateToken = "legacy";
-    draft.reasons.push("Date reprise du brouillon existant.");
-    confidenceParts.push(70);
-    return;
-  }
-
   const selectedDate = buildSelectedDateToken({
     fileName: input.fileName,
     extractedText: input.extractedText,
@@ -204,14 +197,29 @@ function applyDateToken(
   });
 
   draft.dateSelection = selectedDate;
+  if (selectedDate.selected) {
+    draft.dateToken = selectedDate.dateToken;
+    draft.source.dateToken = "date-engine";
+    draft.reasons.push(...selectedDate.reasons);
+    draft.warnings.push(...selectedDate.warnings);
+    confidenceParts.push(selectedDate.confidence);
+    return;
+  }
+
+  const legacyDate = legacyDraft?.documentDate.trim() || "";
+  if (legacyDate) {
+    draft.dateToken = legacyDate.toLowerCase();
+    draft.source.dateToken = "legacy-filename";
+    draft.reasons.push("Date reprise du brouillon existant après contrôle du moteur dates.");
+    draft.warnings.push(...selectedDate.warnings);
+    confidenceParts.push(55);
+    return;
+  }
+
   draft.dateToken = selectedDate.dateToken;
-  draft.source.dateToken = selectedDate.selected?.source ?? "fallback";
+  draft.source.dateToken = "fallback";
   draft.reasons.push(...selectedDate.reasons);
   draft.warnings.push(...selectedDate.warnings);
-
-  if (selectedDate.selected) {
-    confidenceParts.push(selectedDate.confidence);
-  }
 }
 
 function applyReferenceFields(
@@ -226,8 +234,29 @@ function applyReferenceFields(
   applyCandidateField(draft, "target", target, confidenceParts);
   applyCandidateField(draft, "documentType", documentType, confidenceParts);
   applyCandidateField(draft, "issuer", issuer, confidenceParts, true);
+  applyDefaultTargetFromDocumentType(draft, documentType, confidenceParts);
 
   draft.warnings.push(...referenceData.warnings);
+}
+
+function applyDefaultTargetFromDocumentType(
+  draft: SuggestionDraftV2,
+  documentTypeSelection: ReferenceCandidateSelectionResult,
+  confidenceParts: number[]
+): void {
+  if (draft.target || documentTypeSelection.status !== "selected") {
+    return;
+  }
+
+  const documentType = documentTypeSelection.candidate;
+  if (!isFiscalDocumentType(documentType.fileAlias)) {
+    return;
+  }
+
+  draft.target = "foyer";
+  draft.source.target = "reference-data";
+  draft.reasons.push("Cible foyer appliquée depuis le type documentaire fiscal.");
+  confidenceParts.push(Math.min(80, documentType.confidence));
 }
 
 function applyCandidateField(
@@ -253,14 +282,15 @@ function applyCandidateField(
 function applyLegacyFallbackFields(
   draft: SuggestionDraftV2,
   legacyDraft: NamingDraft | null,
-  confidenceParts: number[]
+  confidenceParts: number[],
+  fileName: string
 ): void {
   if (!legacyDraft) {
     return;
   }
 
   const legacyInput = namingInputV2FromLegacyDraft(legacyDraft, "");
-  applyLegacyField(draft, "target", legacyInput.target, confidenceParts);
+  applyLegacyField(draft, "target", legacyInput.target, confidenceParts, fileName);
   applyLegacyField(draft, "documentType", legacyInput.documentType, confidenceParts);
   applyLegacyField(draft, "detail", legacyInput.detail, confidenceParts);
 }
@@ -269,7 +299,8 @@ function applyLegacyField(
   draft: SuggestionDraftV2,
   field: "target" | "documentType" | "detail",
   value: string | undefined,
-  confidenceParts: number[]
+  confidenceParts: number[],
+  fileName = ""
 ): void {
   if (draft[field] || !value?.trim()) {
     if (draft[field] && value && looksLikeFilenameOrLongIdentifier(value)) {
@@ -283,10 +314,26 @@ function applyLegacyField(
     return;
   }
 
+  if (
+    field === "target" &&
+    isFilenameLikeTarget(normalized, {
+      fileName,
+      documentType: draft.documentType,
+      dateToken: draft.dateToken
+    })
+  ) {
+    draft.reasons.push("Ancienne valeur ignorée : ressemble à un nom de fichier.");
+    return;
+  }
+
   draft[field] = normalized;
-  draft.source[field] = "legacy";
+  draft.source[field] = "legacy-filename";
   confidenceParts.push(50);
   draft.reasons.push("Champ repris du brouillon existant.");
+}
+
+function isFiscalDocumentType(documentType: string | undefined): boolean {
+  return FISCAL_DOCUMENT_TYPES.has(normalizeNameBlock(documentType));
 }
 
 function applySemanticNameDeduplication(draft: SuggestionDraftV2): void {

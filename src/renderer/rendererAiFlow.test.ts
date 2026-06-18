@@ -6,7 +6,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 describe("rendererAiFlow V2 application helpers", () => {
-  it("replaces suggestion-v2 values when AI confidence is at least 70", async () => {
+  it("replaces reference-data values when AI confidence is at least 70", async () => {
     const context = await loadAiFlow();
     const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
       draft: Record<string, string>,
@@ -22,10 +22,10 @@ describe("rendererAiFlow V2 application helpers", () => {
         keywords: "renault"
       },
       {
-        documentDate: "suggestion-v2",
-        subject: "suggestion-v2",
-        documentType: "suggestion-v2",
-        keywords: "suggestion-v2"
+        documentDate: "date-engine",
+        subject: "reference-data",
+        documentType: "reference-data",
+        keywords: "reference-data"
       },
       {
         dateToken: "2026-06-17",
@@ -66,7 +66,7 @@ describe("rendererAiFlow V2 application helpers", () => {
         documentType: "facture-entretien",
         keywords: "renault"
       },
-      createAutoOrigins("suggestion-v2"),
+      createAutoOrigins("reference-data"),
       {
         dateToken: "2026-06-17",
         target: "lea",
@@ -168,7 +168,7 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(canApplyFolder("Scolarite/Lea", 69)).toBe(true);
 
     state.targetFolder.selectedFolder = "Scolarite";
-    state.targetFolder.origin = "suggestion-v2";
+    state.targetFolder.origin = "folder-inventory";
     expect(canApplyFolder("Scolarite/Lea", 70)).toBe(true);
     expect(canApplyFolder("Scolarite/Lea", 69)).toBe(false);
 
@@ -182,7 +182,7 @@ async function loadAiFlow(): Promise<Record<string, unknown>> {
     targetPath: "Z:\\cible",
     targetFolder: {
       selectedFolder: "",
-      origin: "auto"
+      origin: "fallback"
     }
   };
   const context: Record<string, unknown> = {

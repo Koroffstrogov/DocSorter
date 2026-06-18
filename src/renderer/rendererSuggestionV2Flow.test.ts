@@ -137,6 +137,7 @@ describe("rendererSuggestionV2Flow apply to empty fields", () => {
     state.targetPath = "Z:\\cible";
     state.targetFolder.selectedFolder = "";
     state.naming.draft = createEmptyNamingDraft();
+    state.naming.origins = createOrigins("fallback");
     state.suggestionV2.byDocumentPath[document.filePath] = {
       status: "ready",
       result: createSuggestion({
@@ -161,11 +162,19 @@ describe("rendererSuggestionV2Flow apply to empty fields", () => {
       documentType: "certificat-scolarite",
       keywords: "college-monet"
     });
+    expect(state.naming.origins).toEqual({
+      documentDate: "date-engine",
+      subject: "reference-data",
+      documentType: "reference-data",
+      keywords: "reference-data"
+    });
     expect(state.naming.isLoading).toBe(true);
     expect(calls.resetClassification).toBe(1);
     expect(calls.resetDestination).toBe(1);
     expect(calls.updateNamingProposal).toEqual([{ extension: ".pdf", requestId: 1 }]);
-    expect(calls.updateTargetFolderFromInput).toEqual(["Scolarite/Lea"]);
+    expect(calls.updateTargetFolderFromInput).toEqual([
+      { targetFolder: "Scolarite/Lea", origin: "reference-data" }
+    ]);
     expect(calls.createFolder).toBe(0);
     expect(state.suggestionV2.byDocumentPath[document.filePath].result?.message).toContain("Champs v2 appliqués");
   });
@@ -189,6 +198,7 @@ describe("rendererSuggestionV2Flow apply to empty fields", () => {
       documentType: "certificat-scolarite",
       keywords: ""
     };
+    state.naming.origins = createOrigins("legacy-filename");
     state.suggestionV2.byDocumentPath[document.filePath] = {
       status: "ready",
       result: createSuggestion({
@@ -213,7 +223,9 @@ describe("rendererSuggestionV2Flow apply to empty fields", () => {
     });
     expect(state.naming.isLoading).toBe(true);
     expect(calls.updateNamingProposal).toEqual([{ extension: ".pdf", requestId: 1 }]);
-    expect(calls.updateTargetFolderFromInput).toEqual(["Scolarite"]);
+    expect(calls.updateTargetFolderFromInput).toEqual([
+      { targetFolder: "Scolarite", origin: "reference-data" }
+    ]);
   });
 });
 
@@ -236,6 +248,7 @@ async function loadSuggestionV2Flow(
     activeDocumentPath: document.filePath,
     naming: {
       draft: createEmptyNamingDraft(),
+      origins: createOrigins("fallback"),
       overrideFilename: "ancien.pdf",
       proposal: null,
       isLoading: false
@@ -271,8 +284,8 @@ async function loadSuggestionV2Flow(
       calls.updateNamingProposal.push({ extension, requestId });
       return Promise.resolve();
     },
-    updateTargetFolderFromInput: (targetFolder: string) => {
-      calls.updateTargetFolderFromInput.push(targetFolder);
+    updateTargetFolderFromInput: (targetFolder: string, origin: string) => {
+      calls.updateTargetFolderFromInput.push({ targetFolder, origin });
       return Promise.resolve();
     },
     createIdleSuggestionV2DocumentState: () => ({
@@ -303,6 +316,15 @@ function createEmptyNamingDraft(): Record<string, string> {
     subject: "",
     documentType: "",
     keywords: ""
+  };
+}
+
+function createOrigins(origin: string): Record<string, string> {
+  return {
+    documentDate: origin,
+    subject: origin,
+    documentType: origin,
+    keywords: origin
   };
 }
 
@@ -339,7 +361,13 @@ function createSuggestion(options: {
       confidence: 90,
       reasons: [],
       warnings: [],
-      source: {},
+      source: {
+        dateToken: options.dateToken ? "date-engine" : undefined,
+        target: options.target ? "reference-data" : undefined,
+        documentType: options.documentType ? "reference-data" : undefined,
+        issuer: options.issuer ? "reference-data" : undefined,
+        detail: options.detail ? "reference-data" : undefined
+      },
       namingMessages: []
     },
     targetFolderSuggestion: {
@@ -374,7 +402,7 @@ interface TestCalls {
   resetDestination: number;
   render: number;
   updateNamingProposal: Array<{ extension: string; requestId: number }>;
-  updateTargetFolderFromInput: string[];
+  updateTargetFolderFromInput: Array<{ targetFolder: string; origin: string }>;
   createFolder: number;
 }
 
@@ -392,6 +420,7 @@ interface TestRendererState {
   activeDocumentPath: string;
   naming: {
     draft: Record<string, string>;
+    origins: Record<string, string>;
     overrideFilename: string | null;
     proposal: unknown;
     isLoading: boolean;

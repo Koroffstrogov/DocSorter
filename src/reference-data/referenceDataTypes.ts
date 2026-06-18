@@ -59,6 +59,8 @@ export interface ReferenceCandidate {
   label: string;
   fileAlias: string;
   folderAlias?: string;
+  defaultTargetKind?: ReferenceTargetKind;
+  defaultDateRule?: ReferenceDateRule;
   confidence: number;
   reasons: string[];
   matchedAliases: string[];

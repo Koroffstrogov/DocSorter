@@ -28,19 +28,28 @@ function createIdleNamingState(): NamingState {
       documentType: "",
       keywords: ""
     },
-    origins: createAutoNamingDraftOrigins(),
+    origins: createFallbackNamingDraftOrigins(),
     proposal: null,
     overrideFilename: null,
     isLoading: false
   };
 }
 
-function createAutoNamingDraftOrigins(): NamingDraftOrigins {
+function createFallbackNamingDraftOrigins(): NamingDraftOrigins {
   return {
-    documentDate: "auto",
-    subject: "auto",
-    documentType: "auto",
-    keywords: "auto"
+    documentDate: "fallback",
+    subject: "fallback",
+    documentType: "fallback",
+    keywords: "fallback"
+  };
+}
+
+function createLegacyFilenameNamingDraftOrigins(): NamingDraftOrigins {
+  return {
+    documentDate: "legacy-filename",
+    subject: "legacy-filename",
+    documentType: "legacy-filename",
+    keywords: "legacy-filename"
   };
 }
 
@@ -59,7 +68,7 @@ function createIdleTargetFolderState(): TargetFolderState {
     folders: [],
     status: "idle",
     message: "Classement à la racine cible",
-    origin: "auto"
+    origin: "fallback"
   };
 }
 

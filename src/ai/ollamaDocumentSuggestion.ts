@@ -31,6 +31,7 @@ import {
   type SuggestionV2DocumentSuggestion,
   type SuggestionV2TextContext
 } from "../suggestions/buildSuggestionV2ForDocument";
+import { isFilenameLikeTarget } from "../suggestions/filenameLikeTarget";
 
 export type AiDocumentTextSource = "pdf-native" | "tesseract-cli";
 
@@ -75,6 +76,8 @@ export interface RunOllamaSuggestionForDocumentOptions {
   statFile?: (filePath: string) => Promise<Pick<Stats, "isFile">>;
   now?: () => Date;
 }
+
+const FISCAL_DOCUMENT_TYPES = new Set(["avis-imposition", "declaration-revenus", "taxe-fonciere"]);
 
 export async function runOllamaSuggestionForDocument(
   options: RunOllamaSuggestionForDocumentOptions
@@ -161,8 +164,14 @@ export async function runOllamaSuggestionForDocument(
     return aiFailure("AI_OUTPUT_INVALID", "Suggestion IA invalide.");
   }
 
-  const differsFromSuggestionV2 = differsFromDeterministicSuggestion(
+  const sanitizedSuggestion = sanitizeAiSuggestionV2(
     classified.suggestion,
+    prompt.input.currentSuggestionV2,
+    prompt.input.filename
+  );
+
+  const differsFromSuggestionV2 = differsFromDeterministicSuggestion(
+    sanitizedSuggestion,
     prompt.input.currentSuggestionV2
   );
 
@@ -178,7 +187,7 @@ export async function runOllamaSuggestionForDocument(
       modelStatus: modelReady.value,
       input: prompt.input,
       deterministicSuggestion: deterministicSuggestion.value,
-      suggestion: classified.suggestion,
+      suggestion: sanitizedSuggestion,
       promptCharacterCount: prompt.prompt.length,
       differsFromSuggestionV2,
       message: differsFromSuggestionV2
@@ -186,6 +195,62 @@ export async function runOllamaSuggestionForDocument(
         : "Suggestion IA V2 prête."
     }
   };
+}
+
+function sanitizeAiSuggestionV2(
+  suggestion: AiClassificationSuggestion,
+  deterministic: AiSuggestionV2Snapshot | null,
+  fileName: string
+): AiClassificationSuggestion {
+  const next: AiClassificationSuggestion = {
+    ...suggestion,
+    reasons: [...suggestion.reasons],
+    warnings: [...suggestion.warnings]
+  };
+  const documentType = next.documentType?.trim() ?? deterministic?.documentType?.trim() ?? "";
+
+  if (
+    next.target &&
+    isFilenameLikeTarget(next.target, {
+      fileName,
+      documentType,
+      dateToken: next.dateToken ?? deterministic?.dateToken ?? undefined
+    })
+  ) {
+    delete next.target;
+    next.warnings.push("Cible IA ignorée : ressemble à un nom de fichier ou au type documentaire.");
+  }
+
+  if (isFoyerFiscalSuggestion(next, deterministic)) {
+    next.target = "foyer";
+    if (next.issuer === "foyer") {
+      delete next.issuer;
+      next.warnings.push("Émetteur IA foyer ignoré : déjà utilisé comme cible fiscale.");
+    }
+    if (next.detail === "foyer") {
+      delete next.detail;
+      next.warnings.push("Détail IA foyer ignoré : déjà utilisé comme cible fiscale.");
+    }
+    if (!next.reasons.includes("Cible foyer conservée depuis la proposition V2 fiscale.")) {
+      next.reasons.push("Cible foyer conservée depuis la proposition V2 fiscale.");
+    }
+  }
+
+  next.reasons = uniqueStrings(next.reasons).slice(0, 8);
+  next.warnings = uniqueStrings(next.warnings).slice(0, 8);
+  return next;
+}
+
+function isFoyerFiscalSuggestion(
+  suggestion: AiClassificationSuggestion,
+  deterministic: AiSuggestionV2Snapshot | null
+): boolean {
+  const documentType = suggestion.documentType ?? deterministic?.documentType ?? "";
+  if (!FISCAL_DOCUMENT_TYPES.has(documentType)) {
+    return false;
+  }
+
+  return deterministic?.target === "foyer" || suggestion.target === undefined || suggestion.target === "foyer";
 }
 
 function findQueuedDocument(
@@ -305,8 +370,8 @@ function toAiSuggestionV2Snapshot(
 
 function getDeterministicTargetFolder(suggestion: SuggestionV2DocumentSuggestion): string {
   return (
-    suggestion.folderPlacement?.relativePath ??
     suggestion.targetFolderSuggestion.recommended?.relativePath ??
+    suggestion.folderPlacement?.relativePath ??
     ""
   ).trim();
 }
@@ -349,4 +414,19 @@ function differsFromDeterministicSuggestion(
 
 function differs(left: string | undefined, right: string | null | undefined): boolean {
   return Boolean(left && right && left.trim().toLowerCase() !== right.trim().toLowerCase());
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
 }

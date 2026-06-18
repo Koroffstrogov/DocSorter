@@ -9,6 +9,7 @@ import type {
   FolderPlacementRanking
 } from "../folder-inventory/folderInventoryTypes";
 import { buildTargetFolderSuggestionsV2 } from "../folders/buildTargetFolderSuggestionsV2";
+import { getTargetFolderRuleV2 } from "../folders/targetFolderRulesV2";
 import type { TargetFolderSuggestionV2 } from "../folders/folderSuggestionTypes";
 import { generateDocumentNameV2 } from "../naming/documentNameV2";
 import type { DuplicateSourceDocument } from "../duplicates/exactDuplicates";
@@ -19,6 +20,7 @@ import {
   buildSuggestionDraftV2
 } from "./buildSuggestionDraftV2";
 import type { SuggestionDraftV2 } from "./suggestionDraftV2";
+import { isFallbackManualFolder } from "./filenameLikeTarget";
 
 export type SuggestionV2TextSource = "pdf-native" | "tesseract-cli";
 
@@ -168,7 +170,7 @@ export async function buildSuggestionV2ForDocument(
     const targetFolderSuggestion = buildTargetFolderSuggestionsV2({
       draft,
       knownRelativeFolders: getKnownRelativeFolders(options.knownRelativeFolders ?? [], inventory),
-      inventoryRecommendedRelativePath: getInventoryRecommendedRelativePath(placementRanking)
+      inventoryRecommendedRelativePath: getInventoryRecommendedRelativePath(placementRanking, draft)
     });
     mergeFolderPlacementContext(targetFolderSuggestion, placementRanking, inventory);
 
@@ -256,9 +258,15 @@ function mergeFolderPlacementContext(
 }
 
 function getInventoryRecommendedRelativePath(
-  placement: FolderPlacementRanking | null
+  placement: FolderPlacementRanking | null,
+  draft: SuggestionDraftV2
 ): string | undefined {
   if (placement?.recommended.source !== "inventory") {
+    return undefined;
+  }
+
+  const rule = getTargetFolderRuleV2(draft.documentType);
+  if (!rule.unknownFallback && isFallbackManualFolder(placement.recommended.relativePath)) {
     return undefined;
   }
 

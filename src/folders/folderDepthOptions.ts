@@ -5,6 +5,7 @@ import type {
   FolderRuleV2,
   FolderSuggestionSource
 } from "./folderSuggestionTypes";
+import { isFallbackManualFolder } from "../suggestions/filenameLikeTarget";
 import { isPeriodicFolderDocumentType } from "./targetFolderRulesV2";
 import {
   extractYearSegment,
@@ -149,9 +150,13 @@ function applyRecommendation(
     ? validateTargetFolderOptionPath(input.inventoryRecommendedRelativePath)
     : null;
   if (inventoryPath && inventoryPath.ok) {
-    const option = findOrCreateInventoryOption(options, inventoryPath.relativePath);
-    markRecommended(option, "inventory", "Dossier déjà présent dans l'arborescence cible.", reasons);
-    return;
+    if (rule.unknownFallback || !isFallbackManualFolder(inventoryPath.relativePath)) {
+      const option = findOrCreateInventoryOption(options, inventoryPath.relativePath);
+      markRecommended(option, "inventory", "Dossier déjà présent dans l'arborescence cible.", reasons);
+      return;
+    }
+
+    reasons.push("Fallback Divers ignoré au profit d'une règle métier fiable.");
   }
 
   if (input.inventoryRecommendedRelativePath && inventoryPath && !inventoryPath.ok) {

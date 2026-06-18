@@ -3,7 +3,7 @@ import type { SelectedDateToken } from "../dates/dateCandidateTypes";
 
 export type SuggestionDraftV2FieldSource =
   | "reference-data"
-  | "legacy"
+  | "legacy-filename"
   | "manual"
   | "fallback";
 
@@ -12,7 +12,7 @@ export interface SuggestionDraftV2Source {
   documentType?: SuggestionDraftV2FieldSource;
   issuer?: SuggestionDraftV2FieldSource;
   detail?: SuggestionDraftV2FieldSource;
-  dateToken?: "legacy" | "text" | "ocr" | "file-name" | "metadata" | "manual" | "fallback";
+  dateToken?: "legacy-filename" | "date-engine" | "manual" | "fallback";
 }
 
 export interface SuggestionDraftV2 {

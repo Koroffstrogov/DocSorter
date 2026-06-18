@@ -90,7 +90,15 @@ interface NamingDraft {
   keywords: string;
 }
 
-type NamingFieldOrigin = "auto" | "suggestion-v2" | "ai-v2" | "manual";
+type NamingFieldOrigin =
+  | "manual"
+  | "reference-data"
+  | "date-engine"
+  | "folder-inventory"
+  | "legacy-filename"
+  | "fallback"
+  | "rule"
+  | "ai-v2";
 
 interface NamingDraftOrigins {
   documentDate: NamingFieldOrigin;

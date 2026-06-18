@@ -93,6 +93,18 @@ describe("buildTargetFolderSuggestionsV2", () => {
     expect(result.recommended?.relativePath).toBe("Fiscalite/Foyer/2025");
   });
 
+  it("does not let existing Divers beat a reliable tax folder proposal", () => {
+    const result = buildTargetFolderSuggestionsV2({
+      draft: createDraft({ documentType: "avis-imposition", target: "foyer", dateToken: "2025" }),
+      knownRelativeFolders: ["Divers/A-traiter-manuellement"],
+      inventoryRecommendedRelativePath: "Divers/A-traiter-manuellement"
+    });
+
+    expect(result.recommended?.relativePath).toBe("Fiscalite/Foyer/2025");
+    expect(result.recommended?.requiresCreation).toBe(true);
+    expect(result.reasons.join(" ")).toContain("Fallback Divers ignoré");
+  });
+
   it("recommends Vehicules/Captur for Captur maintenance invoice", () => {
     const result = buildTargetFolderSuggestionsV2({
       draft: createDraft({ documentType: "facture-entretien", target: "captur", dateToken: "2024" })
