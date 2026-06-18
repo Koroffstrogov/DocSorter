@@ -446,6 +446,9 @@ function buildNamingDraftFromAiSuggestionV2(
   applyAiV2Field("subject", subject);
   applyAiV2Field("documentType", suggestion.documentType?.trim() ?? "");
   applyAiV2Field("keywords", keywords);
+  cleanCurrentAiArtifactField("subject");
+  cleanCurrentAiArtifactField("documentType");
+  cleanCurrentAiArtifactField("keywords");
 
   return {
     draft: nextDraft,
@@ -461,6 +464,23 @@ function buildNamingDraftFromAiSuggestionV2(
     nextDraft[field] = value;
     nextOrigins[field] = "ai-v2";
     appliedFields.push(field);
+  }
+
+  function cleanCurrentAiArtifactField(field: keyof NamingDraft): void {
+    if (nextOrigins[field] === "manual") {
+      return;
+    }
+
+    const cleaned = removeDocSorterArtifact(nextDraft[field]);
+    if (cleaned === nextDraft[field]) {
+      return;
+    }
+
+    nextDraft[field] = cleaned;
+    nextOrigins[field] = "ai-v2";
+    if (!appliedFields.includes(field)) {
+      appliedFields.push(field);
+    }
   }
 }
 
@@ -539,6 +559,27 @@ function buildAiV2Keywords(suggestion: RendererAiClassificationSuggestion): stri
     suggestion.issuer?.trim() ?? "",
     suggestion.detail?.trim() ?? ""
   ]).join(" ");
+}
+
+function removeDocSorterArtifact(value: string): string {
+  const tokens = normalizeAiV2Block(value).split("-").filter(Boolean);
+  if (!tokens.includes("docsorter")) {
+    return value;
+  }
+
+  return tokens
+    .filter((token) => token !== "docsorter" && token !== "local")
+    .join("-");
+}
+
+function normalizeAiV2Block(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function uniqueAiV2Strings(values: string[]): string[] {

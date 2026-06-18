@@ -25,6 +25,9 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain("AAAA-MM-01");
     expect(result.prompt).toContain("n'utilise pas date-inconnue");
     expect(result.prompt).toContain("champ Sujet de Renommage proposé");
+    expect(result.prompt).toContain("knownRelativeFolders");
+    expect(result.prompt).toContain("subject ne doit pas répéter le type documentaire");
+    expect(result.prompt).toContain("n'utilise jamais DocSorter");
     expect(result.prompt).not.toContain("currentSuggestionV2");
     expect(result.prompt).not.toContain('"keywords"');
     expect(result.input.extractedTextExcerpt).toBe("Facture Renault Captur du 05/03/2024");

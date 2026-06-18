@@ -122,12 +122,12 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2026-06-16",
-      subject: "renault-captur",
+      subject: "captur",
       target: "renault-captur",
       documentType: "facture",
       issuer: "renault",
       detail: "vidange",
-      proposedName: "2026-06-16_renault-captur_facture_renault_vidange.pdf",
+      proposedName: "2026-06-16_captur_facture_renault_vidange.pdf",
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       source: "ollama"
     });
@@ -195,6 +195,55 @@ describe("runOllamaSuggestionForDocument", () => {
       proposedName: "2026_paul_carnet-vaccination.pdf",
       source: "ollama"
     });
+  });
+
+  it("cleans test artifacts, repeated terms and infers a known target folder", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+    const documentPath = path.join(workspace.sourcePath, "T01-scan_renault_captur_facture.pdf");
+    await writeFile(documentPath, "contenu original", "utf8");
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt:
+          "Facture entretien Renault Captur Document de test DocSorter Date de facture 05/03/2024"
+      }),
+      documentPath,
+      queuedDocuments: [{ filePath: documentPath, name: "T01-scan_renault_captur_facture.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      knownRelativeFolders: ["Assurances", "Véhicules", "Scolarité"],
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          dateToken: "2024-03-15",
+          subject: "renault-captur-facture",
+          target: "vehicules",
+          documentType: "facture",
+          issuer: "docsorter-local",
+          confidence: 85,
+          reasons: ["court terme"],
+          warnings: ["signaux faibles"],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.value.suggestion).toMatchObject({
+      dateToken: "2024-03-15",
+      subject: "renault-captur",
+      target: "vehicules",
+      documentType: "facture",
+      targetFolder: "Véhicules",
+      proposedName: "2024-03-15_renault-captur_facture.pdf",
+      source: "ollama"
+    });
+    expect(result.value.suggestion.issuer).toBeUndefined();
+    expect(result.value.suggestion.warnings.join(" ")).toContain("docsorter");
+    expect(result.value.suggestion.warnings.join(" ")).toContain("facture");
   });
 
   it("sanitizes AI output without using deterministic v2 fallback", async () => {

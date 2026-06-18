@@ -115,6 +115,44 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(result.appliedFields).toContain("subject");
   });
 
+  it("removes DocSorter artifacts from non-manual fields when applying AI", async () => {
+    const context = await loadAiFlow();
+    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+      draft: Record<string, string>,
+      origins: Record<string, string>,
+      suggestion: Record<string, unknown>
+    ) => { draft: Record<string, string>; appliedFields: string[] };
+
+    const result = buildDraft(
+      {
+        documentDate: "2024-03-15",
+        subject: "renault-captur-facture",
+        documentType: "facture",
+        keywords: "docsorter-local"
+      },
+      {
+        documentDate: "ai-v2",
+        subject: "ai-v2",
+        documentType: "ai-v2",
+        keywords: "ai-v2"
+      },
+      {
+        dateToken: "2024-03-15",
+        subject: "renault-captur",
+        documentType: "facture",
+        confidence: 85
+      }
+    );
+
+    expect(result.draft).toEqual({
+      documentDate: "2024-03-15",
+      subject: "renault-captur",
+      documentType: "facture",
+      keywords: ""
+    });
+    expect(result.appliedFields).toContain("keywords");
+  });
+
   it("never replaces manual fields", async () => {
     const context = await loadAiFlow();
     const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
