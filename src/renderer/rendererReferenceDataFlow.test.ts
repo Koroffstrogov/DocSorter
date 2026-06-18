@@ -27,6 +27,9 @@ describe("rendererReferenceDataFlow", () => {
         useBirthDateForDetectionOnly: true
       }
     ]);
+    expect(harness.validated).toEqual([]);
+
+    await harness.context.validateReferenceDataFileFromPanel("people");
     expect(harness.validated[0]).toEqual({ fileKey: "people", content });
   });
 
@@ -48,10 +51,62 @@ describe("rendererReferenceDataFlow", () => {
       }
     ]);
   });
+
+  it("edits document types through the assistant while preserving advanced fields", async () => {
+    const harness = await createFlowHarness("documentTypes", [
+      {
+        id: "avis-imposition",
+        label: "Avis imposition",
+        fileAlias: "avis-imposition",
+        aliases: ["avis d'imposition"],
+        domain: "fiscal",
+        defaultTargetKind: "foyer",
+        defaultDateRule: "period-year"
+      }
+    ]);
+
+    harness.context.editReferenceDataSimpleEntry(0);
+    harness.context.updateReferenceDataSimpleField("label", "Avis d'imposition");
+    harness.context.applyReferenceDataSimpleDraft();
+
+    const entries = JSON.parse(harness.context.state.referenceData.jsonDrafts.documentTypes);
+    expect(entries).toEqual([
+      {
+        id: "avis-imposition",
+        label: "Avis d'imposition",
+        fileAlias: "avis-imposition",
+        aliases: ["avis d'imposition", "Avis d'imposition"],
+        domain: "fiscal",
+        defaultTargetKind: "foyer",
+        defaultDateRule: "period-year"
+      }
+    ]);
+  });
+
+  it("deletes an entry only from the JSON draft", async () => {
+    const harness = await createFlowHarness("people", [
+      {
+        id: "paul",
+        label: "Paul",
+        fileAlias: "paul",
+        aliases: ["Paul"]
+      }
+    ]);
+
+    harness.context.deleteReferenceDataSimpleEntry(0);
+
+    expect(JSON.parse(harness.context.state.referenceData.jsonDrafts.people)).toEqual([]);
+    expect(harness.context.state.referenceData.message).toContain("Entrée supprimée du brouillon");
+    expect(harness.validated).toEqual([]);
+  });
 });
 
-async function createFlowHarness(fileKey: ReferenceDataFileKey) {
+async function createFlowHarness(
+  fileKey: ReferenceDataFileKey,
+  entries: Array<Record<string, unknown>> = []
+) {
   const validated: Array<{ fileKey: string; content: string }> = [];
+  const content = `${JSON.stringify(entries, null, 2)}\n`;
   const context: Record<string, any> = {
     referenceDataPanel: {
       render: () => undefined
@@ -93,15 +148,15 @@ async function createFlowHarness(fileKey: ReferenceDataFileKey) {
               label: fileKey,
               relativePath: `${fileKey}.json`,
               status: "valid",
-              content: "[]\n",
-              entryCount: 0,
+              content,
+              entryCount: entries.length,
               errors: [],
               warnings: []
             }
           ]
         },
         jsonDrafts: {
-          [fileKey]: "[]\n"
+          [fileKey]: content
         },
         simpleDraft: createEmptyReferenceDataSimpleDraft(),
         lastValidatedFileKey: null,

@@ -232,6 +232,24 @@ function resetReferenceDataSimpleDraft(): void {
   renderReferenceDataPanel();
 }
 
+function cancelReferenceDataFileChanges(fileKey: ReferenceDataFileKey): void {
+  const file = state.referenceData.overview?.files.find((candidate) => candidate.key === fileKey);
+  state.referenceData = {
+    ...state.referenceData,
+    jsonDrafts: {
+      ...state.referenceData.jsonDrafts,
+      [fileKey]: file?.content ?? "[]\n"
+    },
+    simpleDraft: createEmptyReferenceDataSimpleDraft(),
+    validation: null,
+    lastValidatedFileKey: null,
+    lastValidatedContent: "",
+    message: "Modifications annulées.",
+    error: null
+  };
+  renderReferenceDataPanel();
+}
+
 function editReferenceDataSimpleEntry(index: number): void {
   const entry = getReferenceDataEntries()[index];
   if (!entry) {
@@ -267,16 +285,45 @@ function toggleReferenceDataSimpleEntry(index: number): void {
     ...entry,
     enabled: entry.enabled === false
   };
-  updateReferenceDataEntries(entries, "Entrée mise à jour. Sauvegardez le référentiel.");
+  updateReferenceDataEntries(entries, "Entrée mise à jour. Enregistrez le référentiel.");
+}
+
+function deleteReferenceDataSimpleEntry(index: number): void {
+  const entries = getReferenceDataEntries();
+  const entry = entries[index];
+  if (!entry) {
+    return;
+  }
+
+  const label = stringField(entry.label) || stringField(entry.id) || `entrée ${index + 1}`;
+  const confirmed = window.confirm(
+    `Supprimer "${label}" du brouillon JSON ? Le fichier ne sera modifié qu'après Enregistrer.`
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  entries.splice(index, 1);
+  updateReferenceDataEntries(entries, "Entrée supprimée du brouillon. Enregistrez pour écrire le fichier.");
+  state.referenceData = {
+    ...state.referenceData,
+    simpleDraft: createEmptyReferenceDataSimpleDraft()
+  };
+  renderReferenceDataPanel();
 }
 
 function applyReferenceDataSimpleDraft(): void {
   const fileKey = state.referenceData.selectedFileKey;
-  if (fileKey === "documentTypes") {
-    return;
-  }
-
-  const entry = buildReferenceEntryFromDraft(fileKey, state.referenceData.simpleDraft);
+  const entries = getReferenceDataEntries();
+  const index = state.referenceData.simpleDraft.editingIndex;
+  const previousEntry = index !== null && index >= 0 && index < entries.length
+    ? entries[index]
+    : null;
+  const entry = buildReferenceEntryFromDraft(
+    fileKey,
+    state.referenceData.simpleDraft,
+    previousEntry
+  );
   if (!entry) {
     state.referenceData = {
       ...state.referenceData,
@@ -289,8 +336,6 @@ function applyReferenceDataSimpleDraft(): void {
     return;
   }
 
-  const entries = getReferenceDataEntries();
-  const index = state.referenceData.simpleDraft.editingIndex;
   if (index === null || index < 0 || index >= entries.length) {
     entries.push(entry);
   } else {
@@ -302,7 +347,6 @@ function applyReferenceDataSimpleDraft(): void {
     ...state.referenceData,
     simpleDraft: createEmptyReferenceDataSimpleDraft()
   };
-  void validateReferenceDataFileFromPanel(fileKey);
 }
 
 function applyReferenceDataOverviewResult(
@@ -376,7 +420,8 @@ function updateReferenceDataEntries(entries: Array<Record<string, unknown>>, mes
 
 function buildReferenceEntryFromDraft(
   fileKey: ReferenceDataFileKey,
-  draft: ReferenceDataSimpleDraft
+  draft: ReferenceDataSimpleDraft,
+  previousEntry: Record<string, unknown> | null = null
 ): Record<string, unknown> | null {
   const label = draft.label.trim();
   const fileAlias = normalizeReferenceDataAlias(draft.fileAlias || label);
@@ -397,7 +442,7 @@ function buildReferenceEntryFromDraft(
     ...(draft.enabled === false ? { enabled: false } : {})
   };
 
-  if (fileKey !== "providers") {
+  if (fileKey !== "providers" && fileKey !== "documentTypes") {
     const folderAlias = draft.folderAlias.trim();
     if (folderAlias) {
       entry.folderAlias = folderAlias;
@@ -416,6 +461,15 @@ function buildReferenceEntryFromDraft(
     const domains = splitReferenceDataList(draft.domains).map((domain) => domain.toLowerCase());
     if (domains.length > 0) {
       entry.domains = uniqueReferenceValues(domains);
+    }
+  }
+
+  if (fileKey === "documentTypes" && previousEntry) {
+    for (const field of ["domain", "defaultTargetKind", "defaultDateRule"]) {
+      const value = previousEntry[field];
+      if (typeof value === "string" && value.trim()) {
+        entry[field] = value.trim();
+      }
     }
   }
 

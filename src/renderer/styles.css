@@ -1168,6 +1168,16 @@ details.detail-section[open] > summary {
   gap: 8px;
 }
 
+.reference-data-form-actions,
+.reference-data-json-actions {
+  justify-content: flex-start;
+}
+
+.reference-data-file-actions {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
 .reference-data-header h2 {
   margin: 0;
 }
@@ -1352,6 +1362,11 @@ details.detail-section[open] > summary {
   min-height: 0;
 }
 
+.reference-data-new-entry-action {
+  width: 100%;
+  justify-content: center;
+}
+
 .reference-data-entry {
   display: grid;
   gap: 5px;
@@ -1396,7 +1411,20 @@ details.detail-section[open] > summary {
 
 .reference-data-entry-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+}
+
+.reference-data-entry-actions .reference-data-delete-action {
+  border-color: #efb4b4;
+  color: #991b1b;
+  background: #fff7f7;
+}
+
+.reference-data-entry-actions .reference-data-delete-action:not(:disabled):hover {
+  border-color: #dc2626;
+  color: #7f1d1d;
+  background: #fee2e2;
 }
 
 .reference-data-form {
@@ -1507,6 +1535,13 @@ details.detail-section[open] > summary {
   grid-column: span 2;
   align-items: center;
   gap: 8px;
+}
+
+.reference-data-modal [hidden],
+.reference-data-form [hidden],
+.reference-data-form-grid [hidden],
+.reference-data-checkbox[hidden] {
+  display: none !important;
 }
 
 .reference-data-checkbox input {

@@ -103,32 +103,87 @@ describe("referenceDataPanel", () => {
 
     expect(harness.document.querySelector<FakeElement>(".reference-data-save-action")?.disabled).toBe(false);
   });
+
+  it("shows only fields relevant to the selected reference type", async () => {
+    const people = await createPanelHarness({ selectedFileKey: "people" });
+    people.api.render();
+    expect(people.document.querySelector<FakeElement>('[data-reference-field="birthDate"]')).not.toBeNull();
+    expect(people.document.querySelector<FakeElement>('[data-reference-field="domains"]')).toBeNull();
+
+    const providers = await createPanelHarness({ selectedFileKey: "providers" });
+    providers.api.render();
+    expect(providers.document.querySelector<FakeElement>('[data-reference-field="domains"]')).not.toBeNull();
+    expect(providers.document.querySelector<FakeElement>('[data-reference-field="birthDate"]')).toBeNull();
+    expect(providers.document.querySelector<FakeElement>('[data-reference-field="folderAlias"]')).toBeNull();
+  });
+
+  it("renders document types in assistant mode instead of forcing raw JSON", async () => {
+    const harness = await createPanelHarness({
+      selectedFileKey: "documentTypes",
+      entries: [
+        {
+          id: "avis-imposition",
+          label: "Avis d'imposition",
+          fileAlias: "avis-imposition",
+          aliases: ["avis d'imposition"]
+        }
+      ]
+    });
+
+    harness.api.render();
+    expect(harness.document.querySelector<FakeElement>(".reference-data-form")).not.toBeNull();
+    expect(harness.document.querySelector<FakeElement>(".reference-data-json")).toBeNull();
+    expect(harness.document.querySelector<FakeElement>('[data-reference-field="folderAlias"]')).toBeNull();
+  });
+
+  it("exposes delete only on the selected entry", async () => {
+    const harness = await createPanelHarness({
+      entries: [
+        {
+          id: "paul",
+          label: "Paul Martin",
+          fileAlias: "paul",
+          aliases: ["Paul"]
+        }
+      ],
+      editingIndex: 0
+    });
+
+    harness.api.render();
+    const deleteButton = harness.document.querySelector<FakeElement>(".reference-data-delete-action");
+    expect(deleteButton).not.toBeNull();
+
+    deleteButton!.dispatch("click");
+    expect(harness.calls.simpleDelete).toEqual([0]);
+  });
 });
 
 async function createPanelHarness(options: {
   entries?: Array<Record<string, unknown>>;
   editingIndex?: number | null;
+  selectedFileKey?: ReferenceDataFileKey;
 } = {}): Promise<{
   api: ReferenceDataPanelApi;
   document: FakeDocument;
   state: ReferenceDataState;
-  calls: { simpleEdit: number[] };
+  calls: { simpleEdit: number[]; simpleDelete: number[]; cancelChanges: ReferenceDataFileKey[] };
 }> {
   const content = `${JSON.stringify(options.entries ?? [], null, 2)}\n`;
+  const selectedFileKey = options.selectedFileKey ?? "people";
   const state: ReferenceDataState = {
     isOpen: true,
     status: "ready",
     mode: "simple",
-    selectedFileKey: "people",
+    selectedFileKey,
     overview: {
       basePath: "C:\\user-data\\config\\reference-data",
       catalogStatus: "ready",
       catalogWarnings: [],
       files: [
         {
-          key: "people",
-          label: "Personnes",
-          relativePath: "entities/people.json",
+          key: selectedFileKey,
+          label: referenceDataFileLabel(selectedFileKey),
+          relativePath: referenceDataFilePath(selectedFileKey),
           status: "valid",
           content,
           entryCount: options.entries?.length ?? 0,
@@ -138,7 +193,7 @@ async function createPanelHarness(options: {
       ]
     },
     jsonDrafts: {
-      people: content
+      [selectedFileKey]: content
     },
     simpleDraft: {
       ...createSimpleDraft(),
@@ -162,7 +217,9 @@ async function createPanelHarness(options: {
     error: null
   };
   const calls = {
-    simpleEdit: [] as number[]
+    simpleEdit: [] as number[],
+    simpleDelete: [] as number[],
+    cancelChanges: [] as ReferenceDataFileKey[]
   };
   const document = FakeDocument.createReferenceDataDialog();
   const context: Record<string, unknown> = {
@@ -196,6 +253,9 @@ async function createPanelHarness(options: {
     onJsonDraftChange: () => undefined,
     onValidateJson: () => undefined,
     onSaveJson: () => undefined,
+    onCancelChanges: (fileKey) => {
+      calls.cancelChanges.push(fileKey);
+    },
     onSimpleFieldChange: (field, value) => {
       state.simpleDraft = {
         ...state.simpleDraft,
@@ -208,6 +268,9 @@ async function createPanelHarness(options: {
       calls.simpleEdit.push(index);
     },
     onSimpleDisable: () => undefined,
+    onSimpleDelete: (index) => {
+      calls.simpleDelete.push(index);
+    },
     onSimpleApply: () => undefined
   });
 
@@ -226,6 +289,36 @@ function createSimpleDraft(): ReferenceDataSimpleDraft {
     domains: "",
     enabled: true
   };
+}
+
+function referenceDataFileLabel(fileKey: ReferenceDataFileKey): string {
+  switch (fileKey) {
+    case "people":
+      return "Personnes";
+    case "vehicles":
+      return "Véhicules";
+    case "properties":
+      return "Biens";
+    case "providers":
+      return "Fournisseurs";
+    case "documentTypes":
+      return "Types documentaires";
+  }
+}
+
+function referenceDataFilePath(fileKey: ReferenceDataFileKey): string {
+  switch (fileKey) {
+    case "people":
+      return "entities/people.json";
+    case "vehicles":
+      return "entities/vehicles.json";
+    case "properties":
+      return "entities/properties.json";
+    case "providers":
+      return "entities/providers.json";
+    case "documentTypes":
+      return "document-types.json";
+  }
 }
 
 class FakeDocument {

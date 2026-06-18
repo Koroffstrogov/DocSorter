@@ -10,10 +10,12 @@ interface ReferenceDataPanelOptions {
   onJsonDraftChange: (fileKey: ReferenceDataFileKey, content: string) => void;
   onValidateJson: (fileKey: ReferenceDataFileKey) => void;
   onSaveJson: (fileKey: ReferenceDataFileKey) => void;
+  onCancelChanges: (fileKey: ReferenceDataFileKey) => void;
   onSimpleFieldChange: (field: keyof ReferenceDataSimpleDraft, value: string | boolean) => void;
   onSimpleNew: () => void;
   onSimpleEdit: (index: number) => void;
   onSimpleDisable: (index: number) => void;
+  onSimpleDelete: (index: number) => void;
   onSimpleApply: () => void;
 }
 
@@ -82,7 +84,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       }
 
       const focusState = captureReferenceDataFocus(elements.content);
-      if (state.mode === "json" || selectedFile.key === "documentTypes") {
+      if (state.mode === "json") {
         elements.content.replaceChildren(createJsonView(state, selectedFile, busy, options));
         restoreReferenceDataFocus(elements.content, focusState);
         return;
@@ -189,6 +191,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const labelText = document.createElement("span");
     const textarea = document.createElement("textarea");
     const actions = document.createElement("div");
+    const cancelButton = document.createElement("button");
     const validateButton = document.createElement("button");
     const saveButton = document.createElement("button");
     const content = currentDraftContent(state, file);
@@ -203,16 +206,20 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     label.append(labelText, textarea);
 
     actions.className = "reference-data-json-actions";
+    cancelButton.type = "button";
+    cancelButton.textContent = "Annuler les modifications";
+    cancelButton.disabled = busy;
+    cancelButton.addEventListener("click", () => options.onCancelChanges(file.key));
     validateButton.type = "button";
     validateButton.textContent = "Valider";
     validateButton.disabled = busy;
     validateButton.addEventListener("click", () => options.onValidateJson(file.key));
     saveButton.type = "button";
     saveButton.className = "reference-data-save-action";
-    saveButton.textContent = "Sauvegarder";
+    saveButton.textContent = "Enregistrer";
     saveButton.disabled = busy || !canSave;
     saveButton.addEventListener("click", () => options.onSaveJson(file.key));
-    actions.append(validateButton, saveButton);
+    actions.append(cancelButton, validateButton, saveButton);
 
     container.append(label, actions, createValidationBlock(state, file));
     return container;
@@ -234,6 +241,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
 
     container.className = "reference-data-simple-layout";
     list.className = "reference-data-list";
+    list.append(createNewEntryButton(busy, options));
     if (entries.length === 0) {
       const empty = document.createElement("p");
       empty.textContent = "Aucune entrée dans ce référentiel.";
@@ -244,11 +252,24 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       ));
     }
     if (selectedEntry) {
-      list.append(createSelectedEntryDetails(selectedEntry));
+      list.append(createSelectedEntryDetails(selectedEntry, file.key));
     }
 
     container.append(list, form);
     return container;
+  }
+
+  function createNewEntryButton(
+    busy: boolean,
+    options: ReferenceDataPanelOptions
+  ): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "reference-data-new-entry-action";
+    button.textContent = "Nouvelle entrée";
+    button.disabled = busy;
+    button.addEventListener("click", options.onSimpleNew);
+    return button;
   }
 
   function createSimpleForm(
@@ -259,9 +280,11 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
   ): HTMLFormElement {
     const form = document.createElement("form");
     const grid = document.createElement("div");
-    const actions = document.createElement("div");
-    const newButton = document.createElement("button");
+    const draftActions = document.createElement("div");
+    const fileActions = document.createElement("div");
     const applyButton = document.createElement("button");
+    const cancelButton = document.createElement("button");
+    const validateButton = document.createElement("button");
     const saveButton = document.createElement("button");
     const draft = state.simpleDraft;
     const content = currentDraftContent(state, file);
@@ -276,44 +299,37 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       options.onSimpleApply();
     });
 
-    grid.append(
-      createTextField("Nom lisible", "label", draft.label, options),
-      createTextField("Alias fichier", "fileAlias", draft.fileAlias, options),
-      createTextField("Alias dossier", "folderAlias", draft.folderAlias, options, file.key === "providers"),
-      createTextAreaField("Alias de détection", "aliases", draft.aliases, options),
-      createTextField("Date de naissance", "birthDate", draft.birthDate, options, file.key !== "people"),
-      createTextAreaField("Domaines", "domains", draft.domains, options, file.key !== "providers"),
-      createCheckboxField(
-        "Date de naissance utilisée seulement pour détecter",
-        "useBirthDateForDetectionOnly",
-        draft.useBirthDateForDetectionOnly,
-        options,
-        file.key !== "people"
-      ),
-      createCheckboxField("Actif", "enabled", draft.enabled, options)
-    );
+    grid.append(...getReferenceDataFormFields(file.key).map((field) =>
+      createSimpleField(field, draft, options)
+    ));
 
-    actions.className = "reference-data-form-actions";
-    newButton.type = "button";
-    newButton.className = "reference-data-secondary-action";
-    newButton.textContent = "Nouvelle entrée";
-    newButton.disabled = busy;
-    newButton.addEventListener("click", options.onSimpleNew);
+    draftActions.className = "reference-data-form-actions";
     applyButton.type = "submit";
     applyButton.className = "reference-data-primary-action";
     applyButton.textContent = draft.editingIndex === null ? "Ajouter" : "Mettre à jour";
     applyButton.disabled = busy;
+    draftActions.append(applyButton);
+
+    fileActions.className = "reference-data-form-actions reference-data-file-actions";
+    cancelButton.type = "button";
+    cancelButton.textContent = "Annuler les modifications";
+    cancelButton.disabled = busy;
+    cancelButton.addEventListener("click", () => options.onCancelChanges(file.key));
+    validateButton.type = "button";
+    validateButton.textContent = "Valider";
+    validateButton.disabled = busy;
+    validateButton.addEventListener("click", () => options.onValidateJson(file.key));
     saveButton.type = "button";
     saveButton.className = "reference-data-save-action";
-    saveButton.textContent = "Sauvegarder";
+    saveButton.textContent = "Enregistrer";
     saveButton.disabled = busy || !canSave;
     saveButton.title = canSave
       ? "Écrire le JSON validé du référentiel."
-      : "Validez l'entrée ou le JSON avant de sauvegarder.";
+      : "Validez le référentiel avant d'enregistrer.";
     saveButton.addEventListener("click", () => options.onSaveJson(file.key));
-    actions.append(newButton, applyButton, saveButton);
+    fileActions.append(cancelButton, validateButton, saveButton);
 
-    form.append(heading, grid, actions, createValidationBlock(state, file));
+    form.append(heading, grid, draftActions, createValidationBlock(state, file), fileActions);
     return form;
   }
 
@@ -333,6 +349,107 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       : "Remplissez les champs obligatoires, ajoutez l'entrée, puis sauvegardez le référentiel.";
     header.append(title, description);
     return header;
+  }
+
+  type ReferenceDataSimpleFieldKind = "text" | "textarea" | "checkbox";
+
+  interface ReferenceDataSimpleFieldConfig {
+    field: keyof ReferenceDataSimpleDraft;
+    label: string;
+    kind: ReferenceDataSimpleFieldKind;
+  }
+
+  function getReferenceDataFormFields(
+    fileKey: ReferenceDataFileKey
+  ): ReferenceDataSimpleFieldConfig[] {
+    const common: ReferenceDataSimpleFieldConfig[] = [
+      {
+        field: "label",
+        label: "Nom affiché",
+        kind: "text"
+      },
+      {
+        field: "fileAlias",
+        label: fileKey === "documentTypes"
+          ? "Alias utilisé comme type documentaire"
+          : fileKey === "providers"
+            ? "Alias utilisé comme émetteur"
+            : "Alias utilisé dans les noms de fichiers",
+        kind: "text"
+      },
+      {
+        field: "aliases",
+        label: "Mots reconnus dans les documents",
+        kind: "textarea"
+      }
+    ];
+
+    if (fileKey === "people") {
+      return [
+        ...common,
+        { field: "folderAlias", label: "Segment dossier", kind: "text" },
+        { field: "birthDate", label: "Date de naissance", kind: "text" },
+        {
+          field: "useBirthDateForDetectionOnly",
+          label: "Date de naissance utilisée seulement pour détecter",
+          kind: "checkbox"
+        },
+        { field: "enabled", label: "Utiliser dans les suggestions", kind: "checkbox" }
+      ];
+    }
+
+    if (fileKey === "vehicles" || fileKey === "properties") {
+      return [
+        ...common,
+        { field: "folderAlias", label: "Segment dossier", kind: "text" },
+        { field: "enabled", label: "Utiliser dans les suggestions", kind: "checkbox" }
+      ];
+    }
+
+    if (fileKey === "providers") {
+      return [
+        ...common,
+        { field: "domains", label: "Domaines web du fournisseur", kind: "textarea" },
+        { field: "enabled", label: "Utiliser dans les suggestions", kind: "checkbox" }
+      ];
+    }
+
+    return [
+      ...common,
+      { field: "enabled", label: "Utiliser dans les suggestions", kind: "checkbox" }
+    ];
+  }
+
+  function createSimpleField(
+    field: ReferenceDataSimpleFieldConfig,
+    draft: ReferenceDataSimpleDraft,
+    options: ReferenceDataPanelOptions
+  ): HTMLLabelElement {
+    const value = draft[field.field];
+    if (field.kind === "textarea") {
+      return createTextAreaField(
+        field.label,
+        field.field,
+        typeof value === "string" ? value : "",
+        options
+      );
+    }
+
+    if (field.kind === "checkbox") {
+      return createCheckboxField(
+        field.label,
+        field.field,
+        typeof value === "boolean" ? value : false,
+        options
+      );
+    }
+
+    return createTextField(
+      field.label,
+      field.field,
+      typeof value === "string" ? value : "",
+      options
+    );
   }
 
   function createTextField(
@@ -440,6 +557,7 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
     const actions = document.createElement("div");
     const edit = document.createElement("button");
     const disable = document.createElement("button");
+    const deleteButton = document.createElement("button");
     const enabled = entry.enabled !== false;
 
     card.className = [
@@ -485,31 +603,83 @@ var DocSorterReferenceDataPanel: ReferenceDataPanelFactoryApi;
       event.stopPropagation();
       options.onSimpleDisable(index);
     });
+    deleteButton.type = "button";
+    deleteButton.className = "reference-data-delete-action";
+    deleteButton.textContent = "Supprimer";
+    deleteButton.disabled = busy;
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      options.onSimpleDelete(index);
+    });
     actions.append(edit, disable);
+    if (selected) {
+      actions.append(deleteButton);
+    }
     card.append(label, alias, actions);
     return card;
   }
 
-  function createSelectedEntryDetails(entry: Record<string, unknown>): HTMLElement {
+  function createSelectedEntryDetails(
+    entry: Record<string, unknown>,
+    fileKey: ReferenceDataFileKey
+  ): HTMLElement {
     const container = document.createElement("section");
     const title = document.createElement("h3");
     const details = document.createElement("dl");
     container.className = "reference-data-selected-entry";
     title.textContent = "Valeurs sauvegardées";
     details.replaceChildren(
-      ...[
-        ["Nom lisible", stringValue(entry.label)],
-        ["ID", stringValue(entry.id)],
-        ["Alias fichier", stringValue(entry.fileAlias)],
-        ["Alias dossier", stringValue(entry.folderAlias)],
-        ["Alias de détection", arrayValue(entry.aliases).join(", ")],
-        ["Date de naissance", stringValue(entry.birthDate)],
-        ["Domaines", arrayValue(entry.domains).join(", ")],
-        ["Actif", entry.enabled === false ? "Non" : "Oui"]
-      ].map(([label, value]) => createSelectedEntryDetail(label, value))
+      ...getSelectedEntryDetailValues(entry, fileKey).map(([label, value]) =>
+        createSelectedEntryDetail(label, value)
+      )
     );
     container.append(title, details);
     return container;
+  }
+
+  function getSelectedEntryDetailValues(
+    entry: Record<string, unknown>,
+    fileKey: ReferenceDataFileKey
+  ): Array<[string, string]> {
+    const common: Array<[string, string]> = [
+      ["Nom affiché", stringValue(entry.label)],
+      ["ID", stringValue(entry.id)],
+      ["Alias fichier", stringValue(entry.fileAlias)],
+      ["Mots reconnus", arrayValue(entry.aliases).join(", ")]
+    ];
+
+    if (fileKey === "people") {
+      return [
+        ...common,
+        ["Segment dossier", stringValue(entry.folderAlias)],
+        ["Date de naissance", stringValue(entry.birthDate)],
+        ["Actif", entry.enabled === false ? "Non" : "Oui"]
+      ];
+    }
+
+    if (fileKey === "vehicles" || fileKey === "properties") {
+      return [
+        ...common,
+        ["Segment dossier", stringValue(entry.folderAlias)],
+        ["Actif", entry.enabled === false ? "Non" : "Oui"]
+      ];
+    }
+
+    if (fileKey === "providers") {
+      return [
+        ...common,
+        ["Domaines web", arrayValue(entry.domains).join(", ")],
+        ["Actif", entry.enabled === false ? "Non" : "Oui"]
+      ];
+    }
+
+    return [
+      ...common,
+      ["Domaine", stringValue(entry.domain)],
+      ["Cible par défaut", stringValue(entry.defaultTargetKind)],
+      ["Règle de date", stringValue(entry.defaultDateRule)],
+      ["Actif", entry.enabled === false ? "Non" : "Oui"]
+    ];
   }
 
   function createSelectedEntryDetail(label: string, value: string): HTMLElement {

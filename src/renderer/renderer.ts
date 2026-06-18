@@ -160,10 +160,12 @@ const referenceDataPanel = DocSorterReferenceDataPanel.createReferenceDataPanel(
   onSaveJson: (fileKey) => {
     void saveReferenceDataFileFromPanel(fileKey);
   },
+  onCancelChanges: cancelReferenceDataFileChanges,
   onSimpleFieldChange: updateReferenceDataSimpleField,
   onSimpleNew: resetReferenceDataSimpleDraft,
   onSimpleEdit: editReferenceDataSimpleEntry,
   onSimpleDisable: toggleReferenceDataSimpleEntry,
+  onSimpleDelete: deleteReferenceDataSimpleEntry,
   onSimpleApply: applyReferenceDataSimpleDraft
 });
 
