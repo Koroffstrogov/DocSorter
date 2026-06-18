@@ -238,6 +238,12 @@ describe("rendererAiFlow V2 application helpers", () => {
     state.targetFolder.origin = "folder-inventory";
     expect(canApplyFolder("Scolarite/Lea", 70)).toBe(true);
     expect(canApplyFolder("Scolarite/Lea", 69)).toBe(false);
+    expect(canApplyFolder("Scolarité", 95)).toBe(false);
+
+    state.targetFolder.selectedFolder = "Véhicules";
+    state.targetFolder.origin = "ai-v2";
+    expect(canApplyFolder("Sante/Paul", 40)).toBe(true);
+    expect(canApplyFolder("Vehicules", 95)).toBe(false);
 
     state.targetFolder.origin = "manual";
     expect(canApplyFolder("Scolarite/Lea", 95)).toBe(false);

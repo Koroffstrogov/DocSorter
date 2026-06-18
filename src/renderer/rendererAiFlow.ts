@@ -539,11 +539,28 @@ function canApplyAiSuggestionTargetFolder(targetFolder: string, confidence: numb
     return true;
   }
 
-  return (
-    confidence >= AI_V2_PRIORITY_CONFIDENCE &&
-    state.targetFolder.origin !== "manual" &&
-    currentFolder.toLowerCase() !== trimmedFolder.toLowerCase()
-  );
+  if (normalizeFolderForComparison(currentFolder) === normalizeFolderForComparison(trimmedFolder)) {
+    return false;
+  }
+
+  if (state.targetFolder.origin === "manual") {
+    return false;
+  }
+
+  if (state.targetFolder.origin === "ai-v2") {
+    return true;
+  }
+
+  return confidence >= AI_V2_PRIORITY_CONFIDENCE;
+}
+
+function normalizeFolderForComparison(value: string): string {
+  return value
+    .trim()
+    .replace(/\\/g, "/")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function normalizeAiV2DateForCurrentDraft(dateToken: string | undefined): string {
