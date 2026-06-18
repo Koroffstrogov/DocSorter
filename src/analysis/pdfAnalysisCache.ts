@@ -9,9 +9,6 @@ import {
   type PdfTextExtraction,
   type PdfTextExtractionResult
 } from "../extraction/pdfTextExtraction";
-import "../rules/defaultNamingSuggestionRules";
-import "../rules/namingSuggestionRulesCatalog";
-import "../rules/namingSuggestions";
 
 type PdfTextExtractionError = Extract<PdfTextExtractionResult, { ok: false }>["error"];
 
@@ -27,13 +24,11 @@ export interface PdfAnalysisCacheEntry {
   fingerprint: PdfAnalysisCacheFingerprint;
   analyzedAt: string;
   textExtraction: PdfTextExtraction | null;
-  suggestions: NamingSuggestions | null;
   error: { code: string; message: string } | null;
 }
 
 export interface ExtractPdfTextWithAnalysisCacheOptions extends ExtractTextFromPdfDocumentOptions {
   userDataPath: string;
-  rulesCatalog: NamingSuggestionRulesCatalog;
   extractText?: (options: ExtractTextFromPdfDocumentOptions) => Promise<PdfTextExtractionResult>;
   statDocument?: (filePath: string) => Promise<Pick<Stats, "isFile" | "size" | "mtimeMs">>;
   readCacheFile?: (filePath: string) => Promise<string>;
@@ -72,8 +67,7 @@ export async function extractTextFromPdfDocumentWithAnalysisCache(
           ok: true,
           value: {
             ...cached.textExtraction,
-            fromCache: true,
-            cachedSuggestions: cached.suggestions
+            fromCache: true
           }
         };
       }
@@ -97,7 +91,6 @@ export async function extractTextFromPdfDocumentWithAnalysisCache(
       fingerprint,
       analyzedAt,
       textExtraction: null,
-      suggestions: null,
       error: {
         code: extraction.error.code,
         message: extraction.error.message
@@ -106,13 +99,11 @@ export async function extractTextFromPdfDocumentWithAnalysisCache(
     return extraction;
   }
 
-  const suggestions = buildCachedSuggestions(documentPath, extraction.value, options.rulesCatalog);
   await writeCacheEntry(cacheFilePath, {
     version: 1,
     fingerprint,
     analyzedAt,
     textExtraction: withoutCacheMetadata(extraction.value),
-    suggestions,
     error: null
   }, options);
 
@@ -120,8 +111,7 @@ export async function extractTextFromPdfDocumentWithAnalysisCache(
     ok: true,
     value: {
       ...extraction.value,
-      fromCache: false,
-      cachedSuggestions: suggestions
+      fromCache: false
     }
   };
 }
@@ -180,18 +170,6 @@ async function writeCacheEntry(
   }
 }
 
-function buildCachedSuggestions(
-  documentPath: string,
-  extraction: PdfTextExtraction,
-  rulesCatalog: NamingSuggestionRulesCatalog
-): NamingSuggestions {
-  return globalThis.DocSorterNamingSuggestions.buildNamingSuggestions({
-    filename: path.basename(documentPath),
-    extractedText: extraction.excerpt,
-    rulesCatalog
-  });
-}
-
 function isCacheEligibleDocument(documentPath: string, queuedDocumentPaths: Iterable<string>): boolean {
   if (!documentPath || path.extname(documentPath).toLowerCase() !== ".pdf") {
     return false;
@@ -204,7 +182,7 @@ function isCacheEligibleDocument(documentPath: string, queuedDocumentPaths: Iter
 }
 
 function withoutCacheMetadata(extraction: PdfTextExtraction): PdfTextExtraction {
-  const { fromCache: _fromCache, cachedSuggestions: _cachedSuggestions, ...stored } = extraction;
+  const { fromCache: _fromCache, ...stored } = extraction;
   return stored;
 }
 
@@ -231,7 +209,6 @@ function isCacheEntry(value: unknown): value is PdfAnalysisCacheEntry {
     isFingerprint(candidate.fingerprint) &&
     typeof candidate.analyzedAt === "string" &&
     (candidate.textExtraction === null || isTextExtraction(candidate.textExtraction)) &&
-    (candidate.suggestions === null || typeof candidate.suggestions === "object") &&
     (candidate.error === null || isCachedError(candidate.error))
   );
 }

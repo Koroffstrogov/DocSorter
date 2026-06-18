@@ -41,9 +41,9 @@ import {
   type ExactDuplicateAnalysisResult
 } from "../duplicates/exactDuplicates";
 import {
-  writeSuggestionV2Diagnostic as writeSuggestionV2DiagnosticService,
-  type SuggestionV2DiagnosticResult
-} from "../diagnostics/suggestionV2Diagnostic";
+  writeAiDiagnostic as writeAiDiagnosticService,
+  type AiDiagnosticResult
+} from "../diagnostics/aiDiagnostic";
 import {
   type PdfTextExtractionResult
 } from "../extraction/pdfTextExtraction";
@@ -100,31 +100,6 @@ import type {
   OcrSettingsInput,
   OcrStatus
 } from "../ocr/ocrTypes";
-import {
-  loadMergedNamingRulesCatalog as loadMergedNamingRulesCatalogService,
-  loadUserRulesCatalog as loadUserRulesCatalogService,
-  saveUserRulesCatalog as saveUserRulesCatalogService,
-  type NamingRulesStatus,
-  type UserRulesLoadResult,
-  type UserRulesResult
-} from "../rules/userNamingRulesStore";
-import {
-  createMissingReferenceDataFiles as createMissingReferenceDataFilesService,
-  getReferenceDataOverview as getReferenceDataOverviewService,
-  openReferenceDataDirectory as openReferenceDataDirectoryService,
-  reloadReferenceDataOverview as reloadReferenceDataOverviewService,
-  saveReferenceDataFile as saveReferenceDataFileService,
-  validateReferenceDataFileContent as validateReferenceDataFileContentService,
-  type ReferenceDataFileInfo,
-  type ReferenceDataOverview,
-  type ReferenceDataStoreResult
-} from "../reference-data/referenceDataStore";
-import {
-  buildSuggestionV2ForDocument as buildSuggestionV2ForDocumentService,
-  type SuggestionV2Result,
-  type SuggestionV2TextContext
-} from "../suggestions/buildSuggestionV2ForDocument";
-
 interface DirectorySelection {
   path: string;
 }
@@ -220,7 +195,6 @@ export interface IpcHandlerServices {
     documentPath: string;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
-    rulesCatalog: NamingSuggestionRulesCatalog;
   }) => Promise<PdfTextExtractionResult>;
   getPreviewData: (
     documentPath: string | undefined,
@@ -236,7 +210,6 @@ export interface IpcHandlerServices {
     documentPath: string;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
-    rulesCatalog: NamingSuggestionRulesCatalog;
   }) => Promise<ImageOcrResult>;
   getAiStatus: (userDataPath: string) => Promise<AiSettingsResult<AiStatus>>;
   loadAiSettings: (userDataPath: string) => Promise<AiSettingsResult<AiSettings>>;
@@ -257,59 +230,13 @@ export interface IpcHandlerServices {
     knownRelativeFolders: string[];
     competingRelativePaths?: string[];
   }) => Promise<AiSettingsResult<AiDocumentSuggestion>>;
-  buildSuggestionV2ForDocument: (options: {
-    documentPath: string;
-    textContext: SuggestionV2TextContext | null;
-    legacyDraft: unknown;
-    queuedDocuments: Iterable<DuplicateSourceDocument>;
-    queuedDocumentPaths: Iterable<string>;
-    userDataPath: string;
-    targetRootPath: string | null | undefined;
-    knownRelativeFolders: string[];
-    competingRelativePaths?: string[];
-  }) => Promise<SuggestionV2Result>;
-  writeSuggestionV2Diagnostic: (options: {
+  writeAiDiagnostic: (options: {
     userDataPath: string;
     documentName: string;
     extension: string;
-    diagnosticKind?: "suggestions" | "ai";
-    textContext: SuggestionV2TextContext | null;
-    legacyDraft: unknown;
-    suggestionResult: SuggestionV2Result;
-    aiResult?: AiSettingsResult<AiDocumentSuggestion> | null;
-  }) => Promise<SuggestionV2DiagnosticResult>;
-  loadMergedNamingRulesCatalog: (
-    userDataPath: string
-  ) => Promise<UserRulesResult<NamingRulesStatus>>;
-  loadUserRulesCatalog: (
-    userDataPath: string
-  ) => Promise<UserRulesResult<UserRulesLoadResult>>;
-  saveUserRulesCatalog: (
-    userDataPath: string,
-    catalog: NamingSuggestionRulesCatalog
-  ) => Promise<UserRulesResult<void>>;
-  getReferenceDataOverview: (
-    userDataPath: string
-  ) => Promise<ReferenceDataStoreResult<ReferenceDataOverview>>;
-  openReferenceDataDirectory: (
-    userDataPath: string,
-    openPath: (directoryPath: string) => Promise<string>
-  ) => Promise<ReferenceDataStoreResult<{ path: string }>>;
-  createMissingReferenceDataFiles: (
-    userDataPath: string
-  ) => Promise<ReferenceDataStoreResult<ReferenceDataOverview>>;
-  validateReferenceDataFileContent: (
-    fileKey: unknown,
-    content: unknown
-  ) => Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>;
-  saveReferenceDataFile: (
-    userDataPath: string,
-    fileKey: unknown,
-    content: unknown
-  ) => Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>;
-  reloadReferenceDataOverview: (
-    userDataPath: string
-  ) => Promise<ReferenceDataStoreResult<ReferenceDataOverview>>;
+    textContext: AiDocumentTextContext | null;
+    aiResult: AiSettingsResult<AiDocumentSuggestion> | null;
+  }) => Promise<AiDiagnosticResult>;
 }
 
 export interface RegisterIpcHandlersOptions {
@@ -500,20 +427,12 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "runAiSuggestionForDocument"
   },
   {
-    channel: IPC_CHANNELS.suggestionV2Build,
+    channel: IPC_CHANNELS.aiExportDiagnostic,
     acceptsRendererPath: true,
     usesMainSource: true,
-    usesMainTarget: true,
+    usesMainTarget: false,
     usesUserDataPath: true,
-    serviceName: "buildSuggestionV2ForDocument"
-  },
-  {
-    channel: IPC_CHANNELS.suggestionV2Diagnose,
-    acceptsRendererPath: true,
-    usesMainSource: true,
-    usesMainTarget: true,
-    usesUserDataPath: true,
-    serviceName: "writeSuggestionV2Diagnostic"
+    serviceName: "writeAiDiagnostic"
   },
   {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
@@ -570,86 +489,6 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     usesMainTarget: false,
     usesUserDataPath: true,
     serviceName: "readRecentActions"
-  },
-  {
-    channel: IPC_CHANNELS.rulesGetStatus,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "loadMergedNamingRulesCatalog"
-  },
-  {
-    channel: IPC_CHANNELS.rulesGetUserCatalog,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "loadUserRulesCatalog"
-  },
-  {
-    channel: IPC_CHANNELS.rulesSaveUserCatalog,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "saveUserRulesCatalog"
-  },
-  {
-    channel: IPC_CHANNELS.rulesReload,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "loadMergedNamingRulesCatalog"
-  },
-  {
-    channel: IPC_CHANNELS.referenceDataGetStatus,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "getReferenceDataOverview"
-  },
-  {
-    channel: IPC_CHANNELS.referenceDataOpenFolder,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "openReferenceDataDirectory"
-  },
-  {
-    channel: IPC_CHANNELS.referenceDataCreateMissing,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "createMissingReferenceDataFiles"
-  },
-  {
-    channel: IPC_CHANNELS.referenceDataValidateFile,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "validateReferenceDataFileContent"
-  },
-  {
-    channel: IPC_CHANNELS.referenceDataSaveFile,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "saveReferenceDataFile"
-  },
-  {
-    channel: IPC_CHANNELS.referenceDataReload,
-    acceptsRendererPath: false,
-    usesMainSource: false,
-    usesMainTarget: false,
-    usesUserDataPath: true,
-    serviceName: "reloadReferenceDataOverview"
   }
 ];
 
@@ -683,17 +522,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   getAiModelStatus: getConfiguredOllamaModelStatusService,
   unloadAiModel: unloadConfiguredOllamaModelService,
   runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
-  buildSuggestionV2ForDocument: buildSuggestionV2ForDocumentService,
-  writeSuggestionV2Diagnostic: writeSuggestionV2DiagnosticService,
-  loadMergedNamingRulesCatalog: loadMergedNamingRulesCatalogService,
-  loadUserRulesCatalog: loadUserRulesCatalogService,
-  saveUserRulesCatalog: saveUserRulesCatalogService,
-  getReferenceDataOverview: getReferenceDataOverviewService,
-  openReferenceDataDirectory: openReferenceDataDirectoryService,
-  createMissingReferenceDataFiles: createMissingReferenceDataFilesService,
-  validateReferenceDataFileContent: validateReferenceDataFileContentService,
-  saveReferenceDataFile: saveReferenceDataFileService,
-  reloadReferenceDataOverview: reloadReferenceDataOverviewService
+  writeAiDiagnostic: writeAiDiagnosticService
 };
 
 export function createMainProcessAppState(): MainProcessAppState {
@@ -711,7 +540,6 @@ export function createMainProcessAppState(): MainProcessAppState {
 export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainProcessAppState {
   const state = options.appState ?? createMainProcessAppState();
   const services = options.services ?? defaultIpcHandlerServices;
-  const shell = options.shell ?? { openPath: async () => "" };
 
   options.ipcMain.handle(IPC_CHANNELS.appGetVersion, () => options.app.getVersion());
 
@@ -847,8 +675,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
     services.extractTextFromPdfDocument({
       documentPath: typeof documentPath === "string" ? documentPath : "",
       queuedDocumentPaths: state.queuedDocumentPaths,
-      userDataPath: options.app.getPath("userData"),
-      rulesCatalog: await getRulesCatalogForAnalysis(options.app, services)
+      userDataPath: options.app.getPath("userData")
     })
   );
   options.ipcMain.handle(IPC_CHANNELS.ocrGetStatus, () =>
@@ -870,8 +697,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
     services.runImageOcrForDocument({
       documentPath: typeof documentPath === "string" ? documentPath : "",
       queuedDocumentPaths: state.queuedDocumentPaths,
-      userDataPath: options.app.getPath("userData"),
-      rulesCatalog: await getRulesCatalogForAnalysis(options.app, services)
+      userDataPath: options.app.getPath("userData")
     })
   );
   options.ipcMain.handle(IPC_CHANNELS.aiGetStatus, () =>
@@ -907,65 +733,26 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
       })
   );
   options.ipcMain.handle(
-    IPC_CHANNELS.suggestionV2Build,
-    async (_event, documentPath: unknown, textContext: unknown, legacyDraft: unknown) =>
-      services.buildSuggestionV2ForDocument({
-        documentPath: typeof documentPath === "string" ? documentPath : "",
-        textContext: readSuggestionV2TextContext(textContext),
-        legacyDraft,
-        queuedDocuments: state.queuedDocuments,
-        queuedDocumentPaths: state.queuedDocumentPaths,
-        userDataPath: options.app.getPath("userData"),
-        targetRootPath: state.selectedTargetPath,
-        knownRelativeFolders: await getKnownTargetFoldersForSuggestionV2(state, services),
-        competingRelativePaths: getSelectedTargetFolderCandidates(state)
-      })
-  );
-  options.ipcMain.handle(
-    IPC_CHANNELS.suggestionV2Diagnose,
-    async (
-      _event,
-      documentPath: unknown,
-      textContext: unknown,
-      legacyDraft: unknown,
-      includeAi: unknown
-    ) => {
+    IPC_CHANNELS.aiExportDiagnostic,
+    async (_event, documentPath: unknown, textContext: unknown, aiResult: unknown) => {
       const safeDocumentPath = typeof documentPath === "string" ? documentPath : "";
-      const safeTextContext = readSuggestionV2TextContext(textContext);
-      const knownRelativeFolders = await getKnownTargetFoldersForSuggestionV2(state, services);
-      const suggestionResult = await services.buildSuggestionV2ForDocument({
-        documentPath: safeDocumentPath,
-        textContext: safeTextContext,
-        legacyDraft,
-        queuedDocuments: state.queuedDocuments,
-        queuedDocumentPaths: state.queuedDocumentPaths,
-        userDataPath: options.app.getPath("userData"),
-        targetRootPath: state.selectedTargetPath,
-        knownRelativeFolders,
-        competingRelativePaths: getSelectedTargetFolderCandidates(state)
-      });
-      const aiResult = includeAi === true
-        ? await services.runAiSuggestionForDocument({
-            documentPath: safeDocumentPath,
-            textContext: safeTextContext,
-            queuedDocuments: state.queuedDocuments,
-            queuedDocumentPaths: state.queuedDocumentPaths,
-            userDataPath: options.app.getPath("userData"),
-            targetRootPath: state.selectedTargetPath,
-            knownRelativeFolders,
-            competingRelativePaths: getSelectedTargetFolderCandidates(state)
-          })
-        : null;
 
-      return services.writeSuggestionV2Diagnostic({
+      if (!isQueuedDocumentPath(state, safeDocumentPath)) {
+        return {
+          ok: false,
+          error: {
+            code: "DIAGNOSTIC_DOCUMENT_NOT_IN_QUEUE",
+            message: "Diagnostic IA refusé : document absent de la dernière file scannée."
+          }
+        } satisfies AiDiagnosticResult;
+      }
+
+      return services.writeAiDiagnostic({
         userDataPath: options.app.getPath("userData"),
         documentName: getQueuedDocumentName(state, safeDocumentPath),
         extension: path.extname(safeDocumentPath).toLowerCase(),
-        diagnosticKind: includeAi === true ? "ai" : "suggestions",
-        textContext: safeTextContext,
-        legacyDraft,
-        suggestionResult,
-        aiResult
+        textContext: readAiDocumentTextContext(textContext),
+        aiResult: readAiDiagnosticResult(aiResult)
       });
     }
   );
@@ -975,53 +762,6 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
       typeof limit === "number" && Number.isFinite(limit) ? limit : 8
     )
   );
-  options.ipcMain.handle(IPC_CHANNELS.rulesGetStatus, () =>
-    services.loadMergedNamingRulesCatalog(options.app.getPath("userData"))
-  );
-  options.ipcMain.handle(IPC_CHANNELS.rulesGetUserCatalog, () =>
-    services.loadUserRulesCatalog(options.app.getPath("userData"))
-  );
-  options.ipcMain.handle(IPC_CHANNELS.rulesReload, () =>
-    services.loadMergedNamingRulesCatalog(options.app.getPath("userData"))
-  );
-  options.ipcMain.handle(IPC_CHANNELS.rulesSaveUserCatalog, async (_event, catalog: unknown) => {
-    const result = await services.saveUserRulesCatalog(
-      options.app.getPath("userData"),
-      catalog as NamingSuggestionRulesCatalog
-    );
-
-    if (!result.ok) {
-      return result;
-    }
-
-    return services.loadMergedNamingRulesCatalog(options.app.getPath("userData"));
-  });
-  options.ipcMain.handle(IPC_CHANNELS.referenceDataGetStatus, () =>
-    services.getReferenceDataOverview(options.app.getPath("userData"))
-  );
-  options.ipcMain.handle(IPC_CHANNELS.referenceDataOpenFolder, () =>
-    services.openReferenceDataDirectory(
-      options.app.getPath("userData"),
-      shell.openPath
-    )
-  );
-  options.ipcMain.handle(IPC_CHANNELS.referenceDataCreateMissing, () =>
-    services.createMissingReferenceDataFiles(options.app.getPath("userData"))
-  );
-  options.ipcMain.handle(
-    IPC_CHANNELS.referenceDataValidateFile,
-    (_event, fileKey: unknown, content: unknown) =>
-      services.validateReferenceDataFileContent(fileKey, content)
-  );
-  options.ipcMain.handle(
-    IPC_CHANNELS.referenceDataSaveFile,
-    (_event, fileKey: unknown, content: unknown) =>
-      services.saveReferenceDataFile(options.app.getPath("userData"), fileKey, content)
-  );
-  options.ipcMain.handle(IPC_CHANNELS.referenceDataReload, () =>
-    services.reloadReferenceDataOverview(options.app.getPath("userData"))
-  );
-
   options.ipcMain.handle(IPC_CHANNELS.previewGetData, (_event, documentPath: unknown) => {
     if (typeof documentPath !== "string") {
       return services.getPreviewData(undefined, {
@@ -1155,26 +895,7 @@ function getJournalFilePath(app: AppLike, services: IpcHandlerServices): string 
   return services.getActionJournalFilePath(app.getPath("userData"));
 }
 
-async function getRulesCatalogForAnalysis(
-  app: AppLike,
-  services: IpcHandlerServices
-): Promise<NamingSuggestionRulesCatalog> {
-  const status = await services.loadMergedNamingRulesCatalog(app.getPath("userData"));
-  if (status.ok) {
-    return status.value.mergedCatalog;
-  }
-
-  return globalThis.DocSorterNamingSuggestionRulesCatalog.getDefaultNamingSuggestionRulesCatalog();
-}
-
 async function getKnownTargetFoldersForAi(
-  state: MainProcessAppState,
-  services: IpcHandlerServices
-): Promise<string[]> {
-  return getKnownTargetFoldersForSuggestionV2(state, services);
-}
-
-async function getKnownTargetFoldersForSuggestionV2(
   state: MainProcessAppState,
   services: IpcHandlerServices
 ): Promise<string[]> {
@@ -1202,6 +923,15 @@ function getQueuedDocumentName(state: MainProcessAppState, documentPath: string)
   return queuedDocument?.name ?? path.basename(documentPath);
 }
 
+function isQueuedDocumentPath(state: MainProcessAppState, documentPath: string): boolean {
+  if (!documentPath) {
+    return false;
+  }
+
+  const resolvedPath = path.resolve(documentPath);
+  return state.queuedDocumentPaths.has(resolvedPath);
+}
+
 function getSelectedTargetFolderCandidates(state: MainProcessAppState): string[] {
   return state.selectedTargetFolder ? [state.selectedTargetFolder] : [];
 }
@@ -1225,23 +955,37 @@ function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null
   };
 }
 
-function readSuggestionV2TextContext(value: unknown): SuggestionV2TextContext | null {
+function readAiDiagnosticResult(value: unknown): AiSettingsResult<AiDocumentSuggestion> | null {
   if (!value || typeof value !== "object") {
     return null;
   }
 
-  const candidate = value as Partial<SuggestionV2TextContext>;
-  if (
-    (candidate.source !== "pdf-native" && candidate.source !== "tesseract-cli") ||
-    typeof candidate.excerpt !== "string"
-  ) {
-    return null;
+  const candidate = value as {
+    ok?: unknown;
+    value?: unknown;
+    error?: unknown;
+  };
+  if (candidate.ok === true && candidate.value && typeof candidate.value === "object") {
+    return {
+      ok: true,
+      value: candidate.value as AiDocumentSuggestion
+    };
   }
 
-  return {
-    source: candidate.source,
-    excerpt: candidate.excerpt
-  };
+  if (candidate.ok === false && candidate.error && typeof candidate.error === "object") {
+    const error = candidate.error as { code?: unknown; message?: unknown };
+    if (typeof error.code === "string" && typeof error.message === "string") {
+      return {
+        ok: false,
+        error: {
+          code: error.code,
+          message: error.message
+        }
+      } as AiSettingsResult<AiDocumentSuggestion>;
+    }
+  }
+
+  return null;
 }
 
 async function selectDirectory(

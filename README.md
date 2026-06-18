@@ -4,7 +4,7 @@ Application desktop locale pour trier, prévisualiser, renommer et déplacer des
 
 ## Statut
 
-Lot 7 + 8A + OCR-2 + IA-2.5 + Nommage v2 Lot B : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, proposition de tri v2, règles utilisateur locales avec éditeur minimal, création explicite de sous-dossier cible, cache local minimal d'analyse, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif, gestion du chargement/libération du modèle Ollama, générateur pur de nommage v2 et référentiels locaux simples en lecture seule.
+Lot 7 + 8A + OCR-2 + IA seule : source, racine cible avec sous-dossier relatif, file d'attente réelle, prévisualisation locale PDF/image, classement réel sécurisé, journal local, historique récent, annulation persistante, doublons exacts, recherche/tri/navigation, raccourcis clavier sûrs, extraction locale du texte PDF natif, création explicite de sous-dossier cible, cache local minimal d'extraction, configuration locale de Tesseract CLI, OCR manuel des images JPG/JPEG/PNG, contrat de classification IA, configuration/test Ollama local optionnel désactivé par défaut, suggestion IA locale explicite sur document actif et gestion du chargement/libération du modèle Ollama.
 
 ## Commandes
 
@@ -82,24 +82,12 @@ npm run dev
 - affichage d'un extrait limité, du nombre de caractères et du nombre de pages analysées ;
 - message clair si aucun texte exploitable n'est détecté dans un PDF scanné ;
 - texte extrait conservé uniquement en mémoire pendant la session ;
-- bouton explicite `Analyser le document` après extraction texte d'un PDF ou OCR image ;
-- proposition de tri v2 depuis l'extrait local borné, le nom de fichier, les référentiels locaux et l'inventaire cible disponible ;
-- bouton `Appliquer aux champs vides` dans `Proposition de tri`, sans remplacement des valeurs déjà saisies ;
-- application manuelle du dossier recommandé v2 au champ sous-dossier cible, sans création automatique ;
 - message `Dossier inexistant` et bouton `Créer ce dossier` si le sous-dossier choisi n'existe pas ;
 - création du sous-dossier cible uniquement après confirmation explicite, sous la racine cible ;
-- règles de suggestion par défaut externalisées dans un catalogue typé ;
-- moteur de suggestions capable de consommer un catalogue de règles injecté ;
-- fichier local de règles utilisateur créé automatiquement si absent ;
-- validation, sauvegarde prudente et fusion règles par défaut + règles utilisateur ;
-- panneau `Règles de suggestion` pour ajouter, modifier, désactiver ou supprimer une règle utilisateur simple ;
-- score indicatif et raisons sobres pour contrôler les suggestions ;
-- bouton `Appliquer aux champs vides` qui ne remplace jamais une saisie déjà présente ;
-- recalcul du nom proposé et du contrôle cible après application des suggestions ;
 - cache local minimal d'analyse sous `app.getPath("userData")/cache` ;
-- cache utilisé pour éviter de refaire l'extraction texte et les suggestions si taille et date de modification du PDF n'ont pas changé ;
+- cache utilisé pour éviter de refaire l'extraction texte si taille et date de modification du PDF n'ont pas changé ;
 - indication `issu du cache` quand un texte PDF est restauré depuis le cache ;
-- tests légers des handlers IPC sensibles côté main process pour vérifier source, cible, journal, file scannée et règles utilisateur contrôlés côté main.
+- tests légers des handlers IPC sensibles côté main process pour vérifier source, cible, journal, file scannée, extraction, OCR et IA contrôlés côté main.
 - panneau `OCR local` pour configurer `tesseract.exe`, le dossier `tessdata`, la langue par défaut `fra` et le mode PSM ;
 - sauvegarde de la configuration OCR uniquement sous `app.getPath("userData")/config/ocr-settings.json` ;
 - détection locale prudente de Tesseract depuis la configuration, un futur dossier embarqué `resources/tesseract/tesseract.exe`, puis le `PATH` ;
@@ -109,7 +97,7 @@ npm run dev
 - OCR image via Tesseract CLI uniquement après configuration et test du moteur local ;
 - commande OCR limitée à `tesseract <imagePath> stdout -l <lang> --psm <psm>` avec timeout et sorties bornées ;
 - refus des images trop volumineuses pour OCR ;
-- affichage borné du texte OCR et réutilisation manuelle pour la proposition de tri v2 ;
+- affichage borné du texte OCR et réutilisation manuelle pour la suggestion IA ;
 - cache local des résultats OCR image sous `userData/cache/analysis`, invalidé par chemin, taille, date de modification, moteur, version Tesseract, langue et PSM.
 - contrat IA local strict aligné sur le nommage v2 pour proposer `dateToken`, `target`, `documentType`, `issuer`, `detail`, dossier, score et raisons ;
 - provider IA simulé déterministe, sans modèle réel, sans réseau et sans prompt modèle ;
@@ -128,12 +116,13 @@ npm run dev
 - statut discret du modèle IA : prêt, chargement, absent, Ollama indisponible ou erreur locale ;
 - bouton avancé `Libérer le modèle IA`, sans effet sur les documents ;
 - tentative sobre de libération du modèle à la fermeture de l'application avec timeout court ;
-- prompt Ollama borné à partir du nom de fichier, de l'extension, de l'extrait PDF/OCR, de la proposition v2 déterministe courante et des dossiers relatifs connus, sans chemin Windows complet, sans journal, sans cache complet, sans autres documents et sans texte intégral ;
+- prompt Ollama borné à partir du nom de fichier, de l'extension, de l'extrait PDF/OCR et des dossiers relatifs connus, sans chemin Windows complet, sans journal, sans cache complet, sans autres documents et sans texte intégral ;
 - génération Ollama locale via `/api/generate` avec sortie JSON demandée strictement ;
 - validation IA-0 obligatoire de toute réponse Ollama, avec refus sobre des JSON invalides et des dossiers cible dangereux ;
-- affichage séparé de la suggestion IA : date, cible, type, émetteur, détail, dossier, score, raisons, avertissements et conflit avec la proposition v2 ;
+- affichage de la suggestion IA : date, sujet/cible, type, émetteur, détail, dossier, score, raisons et avertissements ;
 - bouton `Appliquer aux champs vides` pour la suggestion IA, sans remplacement des champs saisis manuellement ;
 - application éventuelle du dossier IA uniquement avec racine cible sélectionnée et sans écraser un dossier saisi manuellement, puis relance des contrôles dossier/collision existants ;
+- export explicite d'un diagnostic IA expurgé ou complet pour les fichiers de test `TXX-...`, sans prompt brut ni réponse brute non validée ;
 - action `Ignorer` pour masquer la suggestion IA courante, sans mutation fichier.
 
 ## Convention de nommage
@@ -223,40 +212,19 @@ Garde-fous MVP :
 - l'extraction texte PDF analyse au maximum les 50 premières pages ;
 - l'extrait affiché reste limité à 5 000 caractères.
 
-## Proposition de tri v2 et règles locales
+## Suggestion IA seule
 
-L'affichage et l'application de la proposition de tri v2 restent déclenchés manuellement après extraction du texte PDF natif ou OCR image. La proposition utilise uniquement l'extrait local borné, le nom du fichier actif, les référentiels locaux et l'inventaire cible disponible.
+La proposition de tri déterministe n'est plus appelée par le runtime ni affichée dans l'interface. Après extraction PDF native ou OCR image, le panneau `IA locale` est l'unique source de proposition pour les champs `Renommage proposé`, le nom proposé et le sous-dossier cible.
 
-Le bouton `Appliquer aux champs vides` du panneau `Proposition de tri` peut remplir les champs actuels depuis la suggestion v2 : date compatible, sujet, type, mots-clés et sous-dossier cible recommandé. Il relance ensuite le calcul du nom proposé et les contrôles cible existants. Les champs déjà saisis par l'utilisateur ne sont pas remplacés.
+Le bouton `Analyser avec IA locale` reste explicite : aucun document n'est envoyé au modèle au changement de sélection, au scan ou à l'extraction. L'entrée IA est bornée à l'extrait local disponible, au nom de fichier sans chemin complet, à l'extension et aux dossiers relatifs connus côté main process.
 
-Le dossier recommandé v2 ne crée jamais de dossier automatiquement et ne déclenche aucun classement réel.
+Le bouton `Appliquer aux champs vides` du panneau IA peut remplir date, sujet, type, mots-clés et sous-dossier cible. Il ne remplace jamais une saisie manuelle et relance ensuite les contrôles existants : génération du nom, collision, sous-dossier cible et plan de classement.
 
-L'ancien moteur de suggestions locales reste conservé en interne pour les dépendances cache et OCR qui l'utilisent encore, mais il n'est plus exposé comme panneau `Suggestions locales` dans l'interface. La suggestion IA documentaire s'appuie désormais sur la proposition v2 déterministe, pas sur ce contrat historique.
+L'export `Diagnostic IA` écrit uniquement un diagnostic IA validé/expurgé sous `userData/diagnostics`, sans prompt brut ni réponse brute non validée. Les diagnostics de suggestions déterministes ne sont plus exposés.
 
-Les règles par défaut sont structurées dans un catalogue local : types de documents, sujets, alias de mots-clés et stop words. Le format historique est documenté dans [docs/naming-suggestion-rules.md](docs/naming-suggestion-rules.md).
+## Référentiels locaux hérités
 
-Les règles utilisateur sont stockées localement dans :
-
-```text
-app.getPath("userData")/config/naming-suggestion-rules.json
-```
-
-L'application crée ce fichier s'il est absent avec un catalogue vide. Le renderer ne reçoit pas d'accès `fs` et ne fournit jamais le chemin du fichier au main process.
-
-Ces règles restent prudentes : elles n'écrivent pas dans le journal, ne modifient aucun fichier et ne lancent ni OCR, ni IA, ni appel réseau.
-
-## Référentiels locaux
-
-Les référentiels locaux contrôlés alimentent le nommage v2 : personnes, véhicules, biens, fournisseurs et types documentaires. Ils sont séparés des règles de suggestion historiques et de l'IA.
-
-Lot K ajoute une UI locale `Référentiels` accessible depuis l'en-tête de l'application. Elle permet de :
-
-- ouvrir le dossier des référentiels ;
-- créer explicitement les fichiers JSON manquants ;
-- recharger les référentiels ;
-- éditer personnes, véhicules, biens et fournisseurs en mode assistant ;
-- éditer chaque fichier en JSON direct ;
-- valider avant sauvegarde.
+Les anciens référentiels locaux et règles de suggestion restent sur disque utilisateur s'ils existent déjà, mais ils ne sont plus appelés par le runtime de proposition et ne sont plus éditables dans l'interface. Ils ne sont pas supprimés automatiquement.
 
 Emplacement prévu sous le dossier utilisateur Electron :
 
@@ -264,7 +232,7 @@ Emplacement prévu sous le dossier utilisateur Electron :
 app.getPath("userData")/config/reference-data/
 ```
 
-Fichiers gérés :
+Fichiers historiques possibles :
 
 ```text
 entities/people.json
@@ -274,13 +242,11 @@ entities/providers.json
 document-types.json
 ```
 
-Le loader ne crée pas ces fichiers automatiquement au démarrage. L'UI peut les créer uniquement après action explicite `Créer les fichiers manquants`, avec des tableaux JSON vides. Si les fichiers d'entités sont absents, les listes restent vides. Si `document-types.json` est absent ou vide, DocSorter utilise des types documentaires par défaut embarqués comme `facture-entretien`, `avis-imposition`, `certificat-scolarite` et `carnet-vaccination`.
-
-La détection est locale et déterministe : elle cherche des alias normalisés dans le nom du fichier et dans un texte déjà extrait. Elle retourne des candidats avec score et raisons sobres pour `target`, `documentType` et `issuer`. Elle ne fait pas de fuzzy matching, n'apprend rien, n'appelle pas l'IA, ne lit aucun document et ne modifie aucun fichier.
+Le runtime de proposition IA seule ne crée pas ces fichiers, ne les charge pas pour proposer un tri et n'expose plus d'UI de gestion. Les modules historiques restent dans le code pour un éventuel lot de suppression physique séparé.
 
 Pour les personnes, une date de naissance configurée peut servir uniquement d'indice de détection. Elle n'est jamais injectée dans un alias de nommage, un dossier, un détail ou un nom de fichier.
 
-Les seules mutations disque autorisées par cette UI sont la création et l'écriture des JSON de référentiels sous `app.getPath("userData")/config/reference-data/`. Aucun document source ou cible n'est renommé, déplacé ou supprimé par cette UI.
+Aucun document source ou cible n'est renommé, déplacé ou supprimé par ces fichiers historiques.
 
 ## Cache local d'analyse
 
@@ -290,7 +256,7 @@ Le cache d'analyse est stocké localement dans :
 app.getPath("userData")/cache/analysis
 ```
 
-Il sert uniquement à éviter de relire un PDF déjà analysé si son chemin résolu, sa taille et sa date de modification n'ont pas changé. Il peut contenir l'extrait texte borné déjà affichable, les suggestions locales calculées, la date d'analyse et des erreurs sobres. Il ne contient pas d'OCR, n'est pas écrit dans la source ou la cible et n'est pas ajouté au journal.
+Il sert uniquement à éviter de relire un PDF déjà analysé si son chemin résolu, sa taille et sa date de modification n'ont pas changé. Il peut contenir l'extrait texte borné déjà affichable, la date d'analyse et des erreurs sobres. Il ne contient pas de suggestions locales, n'est pas écrit dans la source ou la cible et n'est pas ajouté au journal.
 
 Si le cache est absent, illisible, invalide ou obsolète, DocSorter relance simplement l'analyse locale.
 
@@ -310,7 +276,7 @@ Les erreurs OCR principales sont volontairement explicites : moteur non configur
 
 OCR-2 ajoute l'OCR manuel du document image actif uniquement pour `.jpg`, `.jpeg` et `.png`. L'action passe par le main process, vérifie que le document appartient à la dernière file scannée, que le fichier existe encore, qu'il ne dépasse pas 20 Mo et que Tesseract a été testé.
 
-Le texte OCR est borné à 20 000 caractères et l'extrait affiché à 5 000 caractères. Il peut être utilisé pour `Analyser les suggestions`, puis `Appliquer aux champs vides`, sans application automatique.
+Le texte OCR est borné à 20 000 caractères et l'extrait affiché à 5 000 caractères. Il peut être utilisé pour `Analyser avec IA locale`, puis `Appliquer aux champs vides`, sans application automatique.
 
 Le cache OCR image utilise le dossier existant :
 
@@ -318,7 +284,7 @@ Le cache OCR image utilise le dossier existant :
 app.getPath("userData")/cache/analysis
 ```
 
-Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli`, la version Tesseract détectée, la langue, le PSM, le texte OCR borné, l'extrait affichable, les suggestions locales calculées et la date d'analyse. Elle n'est pas écrite dans la source, la cible ou le journal. Si le cache est corrompu, il est ignoré et l'OCR est relancé.
+Une entrée OCR image contient l'empreinte du document, le moteur `tesseract-cli`, la version Tesseract détectée, la langue, le PSM, le texte OCR borné, l'extrait affichable et la date d'analyse. Elle n'est pas écrite dans la source, la cible ou le journal. Si le cache est corrompu, il est ignoré et l'OCR est relancé.
 
 ## IA locale
 
@@ -326,7 +292,7 @@ IA-0 prépare un contrat de classification pour une IA locale. IA-1 ajoute la co
 
 Aucune analyse IA n'est lancée automatiquement au changement de document, au scan, à l'extraction texte ou à l'OCR. L'IA propose seulement : elle ne renomme pas, ne déplace pas, ne classe pas, ne crée pas de dossier et ne remplace pas les champs déjà saisis.
 
-L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, la proposition v2 déterministe courante, les dossiers relatifs connus, la convention de nommage v2 et une date ou année détectée.
+L'entrée IA est volontairement bornée et ne contient pas de chemins Windows complets, pas de journal, pas de cache complet, pas d'autres documents et pas de texte intégral. Elle peut contenir seulement le nom de fichier, l'extension, des extraits texte/OCR bornés, les dossiers relatifs connus, la convention de nommage et une date ou année détectée.
 
 La sortie IA validée peut proposer uniquement :
 
@@ -336,7 +302,7 @@ dateToken?, target?, documentType?, issuer?, detail?, targetFolder?, confidence,
 
 Le validateur refuse les objets non JSON, les champs inconnus, les scores hors `0..100`, les `dateToken` invalides et les dossiers absolus, trop profonds ou avec traversée `..`. Les champs `target`, `documentType`, `issuer` et `detail` sont normalisés avec la logique de nommage v2.
 
-Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Les suggestions IA restent séparées de la proposition v2 déterministe, ne modifient aucun fichier et ne déclenchent jamais de classement.
+Le provider simulé est déterministe et sert aux tests : Renault Captur, avis d'imposition, assurance habitation, certificat de scolarité, puis suggestion faible pour les cas inconnus. Les suggestions IA ne modifient aucun fichier et ne déclenchent jamais de classement.
 
 La configuration Ollama est stockée localement dans :
 
@@ -356,7 +322,7 @@ Avant l'envoi du prompt, DocSorter vérifie que le modèle configuré est dispon
 
 La conservation utilise `keep_alive: "30m"`. L'action avancée `Libérer le modèle IA` envoie une requête de déchargement `keep_alive: 0`. À la fermeture, l'application tente aussi de libérer le modèle avec un timeout court, sans bloquer indéfiniment.
 
-Le bouton `Appliquer aux champs vides` peut recopier `dateToken`, `target`, `documentType`, `issuer` et `detail` vers les champs historiques encore utilisés par le panneau de renommage. L'IA peut remplacer une valeur automatique ou issue de la proposition v2 uniquement si le score est au moins `70`; elle ne remplace jamais une saisie manuelle. Si le dossier cible IA est appliqué, l'application relance les contrôles existants de dossier et de collision.
+Le bouton `Appliquer aux champs vides` peut recopier `dateToken`, `target`, `documentType`, `issuer` et `detail` vers les champs historiques encore utilisés par le panneau de renommage. L'IA peut remplacer une valeur automatique non manuelle uniquement si le score est au moins `70`; elle ne remplace jamais une saisie manuelle. Si le dossier cible IA est appliqué, l'application relance les contrôles existants de dossier et de collision.
 
 ## Raccourcis clavier
 
@@ -487,19 +453,13 @@ Un prochain lot pourra ajouter :
 - cliquer sur `Extraire le texte PDF` affiche un extrait lisible pour un PDF contenant du texte natif ;
 - l'extrait PDF affiche le nombre de caractères et de pages analysées ;
 - un PDF scanné sans texte affiche `Aucun texte exploitable détecté — OCR nécessaire plus tard` ;
-- après extraction texte, le bouton `Analyser les suggestions` devient disponible ;
-- cliquer sur `Analyser les suggestions` affiche date, sujet, type, mots-clés, score et raisons sobres si des signaux sont trouvés ;
-- le panneau `Règles de suggestion` affiche le nombre de règles par défaut et utilisateur ;
-- si le fichier de règles utilisateur est absent, il est créé dans `userData/config` ;
-- ajouter une règle utilisateur simple, sauvegarder, puis relancer les suggestions permet à la règle de contribuer ;
-- désactiver ou supprimer une règle utilisateur puis sauvegarder retire sa contribution ;
-- si le JSON utilisateur est invalide, l'application revient aux règles par défaut avec un avertissement sobre ;
-- un PDF sans texte exploitable n'affiche aucune suggestion ;
-- `Appliquer aux champs vides` remplit seulement les champs vides du panneau `Renommage proposé` ;
-- les champs déjà saisis manuellement ne sont pas remplacés par une suggestion ;
+- après extraction texte ou OCR image, le bouton `Analyser avec IA locale` peut devenir disponible si Ollama est configuré ;
+- cliquer sur `Analyser avec IA locale` affiche date, sujet/cible, type, émetteur, détail, dossier, score et raisons sobres si le modèle répond correctement ;
+- un PDF sans texte exploitable ne permet pas d'analyse IA tant qu'aucun OCR image n'a fourni de texte ;
+- `Appliquer aux champs vides` remplit seulement les champs vides ou non manuels du panneau `Renommage proposé` ;
+- les champs déjà saisis manuellement ne sont pas remplacés par la suggestion IA ;
 - après application, le nom proposé et le contrôle cible sont recalculés ;
-- les suggestions peuvent être relues depuis le cache local, ne modifient pas le journal et ne modifient aucun fichier ;
-- le fichier de règles utilisateur ne contient pas de texte extrait, pas de chemins documentaires et pas de contenu OCR ;
+- les suggestions IA ne sont pas relues depuis le cache local, ne modifient pas le journal et ne modifient aucun fichier ;
 - une image sélectionnée ne permet pas l'extraction texte PDF ;
 - supprimer ou déplacer un PDF après scan puis lancer l'extraction affiche une erreur propre ;
 - l'extraction texte peut alimenter le cache local d'analyse, ne modifie pas le journal et ne modifie aucun fichier source ou cible ;
@@ -514,7 +474,7 @@ Un prochain lot pourra ajouter :
 - une image trop volumineuse affiche une erreur sobre et ne lance pas Tesseract ;
 - une image sans texte affiche `Aucun texte exploitable détecté` ;
 - un PDF ne déclenche pas l'OCR image et garde l'extraction texte native ;
-- après OCR image réussi, `Analyser les suggestions` puis `Appliquer aux champs vides` fonctionnent sans remplacer les champs déjà saisis ;
+- après OCR image réussi, `Analyser avec IA locale` puis `Appliquer aux champs vides` fonctionnent sans remplacer les champs déjà saisis ;
 - aucun OCR batch, aucune conversion PDF/image et aucune écriture source/cible ne sont déclenchés depuis OCR-2 ;
 - le panneau `IA locale` est visible et reste désactivé par défaut ;
 - au premier démarrage, l'IA locale est désactivée par défaut ;

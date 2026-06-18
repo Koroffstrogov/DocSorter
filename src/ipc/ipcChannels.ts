@@ -10,8 +10,6 @@ export const IPC_CHANNELS = {
   namingCreateInitialDraft: "naming:createInitialDraft",
   namingBuildProposal: "naming:buildProposal",
   namingCheckDestinationAvailability: "naming:checkDestinationAvailability",
-  suggestionV2Build: "suggestion-v2:build",
-  suggestionV2Diagnose: "suggestion-v2:diagnose",
   classificationPreparePlan: "classification:preparePlan",
   classificationExecute: "classification:execute",
   classificationUndoLast: "classification:undoLast",
@@ -31,17 +29,8 @@ export const IPC_CHANNELS = {
   aiGetModelStatus: "ai:getModelStatus",
   aiUnloadModel: "ai:unloadModel",
   aiRunSuggestion: "ai:runSuggestion",
-  historyGetRecent: "history:getRecent",
-  rulesGetStatus: "rules:getStatus",
-  rulesGetUserCatalog: "rules:getUserCatalog",
-  rulesSaveUserCatalog: "rules:saveUserCatalog",
-  rulesReload: "rules:reload",
-  referenceDataGetStatus: "reference-data:getStatus",
-  referenceDataOpenFolder: "reference-data:openFolder",
-  referenceDataCreateMissing: "reference-data:createMissing",
-  referenceDataValidateFile: "reference-data:validateFile",
-  referenceDataSaveFile: "reference-data:saveFile",
-  referenceDataReload: "reference-data:reload"
+  aiExportDiagnostic: "ai:exportDiagnostic",
+  historyGetRecent: "history:getRecent"
 } as const;
 
 export const ALLOWED_IPC_CHANNELS = Object.values(IPC_CHANNELS);

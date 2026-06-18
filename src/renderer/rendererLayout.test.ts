@@ -4,31 +4,58 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("renderer right panel layout", () => {
-  it("shows text extraction before sorting proposal and advanced panels", async () => {
+  it("keeps text extraction before IA and naming controls", async () => {
     const html = await readRendererHtml();
 
     expect(indexOf(html, 'id="text-extraction-panel"')).toBeLessThan(
-      indexOf(html, 'id="suggestion-v2-panel"')
+      indexOf(html, 'id="ai-suggestion-panel"')
     );
-    expect(indexOf(html, 'id="suggestion-v2-panel"')).toBeLessThan(
-      indexOf(html, 'id="ocr-panel"')
-    );
-    expect(indexOf(html, 'id="suggestion-v2-panel"')).toBeLessThan(
-      indexOf(html, 'class="detail-section history-panel"')
+    expect(indexOf(html, 'id="ai-suggestion-panel"')).toBeLessThan(
+      indexOf(html, 'id="naming-panel"')
     );
     expect(html).toContain("<h3>Texte extrait</h3>");
-    expect(html).toContain("<h3>Proposition de tri</h3>");
-    expect(html).toContain("Analyser le document");
-    expect(html).toContain('id="apply-suggestion-v2-empty"');
+    expect(html).toContain("<h3>IA locale</h3>");
+    expect(html).toContain("Analyser avec IA locale");
   });
 
-  it("removes the old local suggestions panel from the renderer UI", async () => {
+  it("removes deterministic suggestion panels and scripts from the UI", async () => {
     const html = await readRendererHtml();
 
-    expect(html).not.toContain('id="suggestions-panel"');
-    expect(html).not.toContain("Suggestions locales");
-    expect(html).not.toContain("namingSuggestionsPanel.js");
-    expect(html).toContain("../rules/namingSuggestions.js");
+    expect(html).not.toContain('id="suggestion-v2-panel"');
+    expect(html).not.toContain("Proposition de tri");
+    expect(html).not.toContain("Analyser le document");
+    expect(html).not.toContain('id="apply-suggestion-v2-empty"');
+    expect(html).not.toContain('id="suggestion-v2-diagnostic-panel"');
+    expect(html).not.toContain("Diagnostic suggestions");
+    expect(html).not.toContain('id="rules-panel"');
+    expect(html).not.toContain("Règles de suggestion");
+    expect(html).not.toContain('id="reference-data-dialog"');
+    expect(html).not.toContain('id="open-reference-data"');
+    expect(html).not.toContain("rendererSuggestionV2Flow.js");
+    expect(html).not.toContain("rendererRulesFlow.js");
+    expect(html).not.toContain("rendererReferenceDataFlow.js");
+    expect(html).not.toContain("suggestionV2Panel.js");
+    expect(html).not.toContain("rulesPanel.js");
+    expect(html).not.toContain("referenceDataPanel.js");
+    expect(html).not.toContain("../rules/namingSuggestions.js");
+  });
+
+  it("keeps IA actions visible and advanced IA settings collapsed", async () => {
+    const html = await readRendererHtml();
+
+    expect(html).toContain('id="ai-suggestion-panel"');
+    expect(html).toContain('id="run-ai-suggestion"');
+    expect(html).toContain('id="apply-ai-suggestion-empty"');
+    expect(html).toContain('id="export-ai-diagnostic"');
+    expect(html).toContain('id="ignore-ai-suggestion"');
+    expect(html).toContain('<details id="ai-panel"');
+    expect(html).toContain("Réglages IA avancés");
+    expect(html).not.toMatch(/<details id="ai-panel"[^>]*\sopen[\s>]/);
+
+    const advancedAiPanel = extractElementBlock(html, '<details id="ai-panel"', "</details>");
+    expect(advancedAiPanel).not.toContain('id="run-ai-suggestion"');
+    expect(advancedAiPanel).toContain("Tester Ollama");
+    expect(advancedAiPanel).toContain("Libérer le modèle IA");
   });
 
   it("keeps document metadata folded in the right panel header", async () => {
@@ -43,73 +70,11 @@ describe("renderer right panel layout", () => {
     expect(html).not.toMatch(/<details class="document-header-details"[^>]*\sopen[\s>]/);
   });
 
-  it("keeps diagnostic, OCR, IA and history as collapsed or compact blocks", async () => {
-    const html = await readRendererHtml();
-
-    expect(html).toContain('id="suggestion-v2-diagnostic-panel"');
-    expect(html).toContain("Le diagnostic ne classe rien. Il génère un fichier JSON pour comprendre les choix.");
-    expect(html).toContain("Mode : expurgé");
-    expect(html).toContain("Diagnostic suggestions");
-    expect(html).toContain("Diagnostic IA");
-    expect(html).toContain('id="ai-suggestion-panel"');
-    expect(html).toContain('id="run-ai-suggestion"');
-    expect(html).toContain('<details id="ocr-panel"');
-    expect(html).toContain("Réglages OCR avancés");
-    expect(html).toContain('<details id="ai-panel"');
-    expect(html).toContain("Réglages IA avancés");
-    expect(html).toContain('<details class="detail-section history-panel"');
-    expect(html).not.toMatch(/<details id="ocr-panel"[^>]*\sopen[\s>]/);
-    expect(html).not.toMatch(/<details id="ai-panel"[^>]*\sopen[\s>]/);
-    expect(html).not.toMatch(/<details id="suggestion-v2-diagnostic-panel"[^>]*\sopen[\s>]/);
-    expect(indexOf(html, 'id="run-ai-suggestion"')).toBeLessThan(indexOf(html, '<details id="ai-panel"'));
-    const advancedAiPanel = extractElementBlock(html, '<details id="ai-panel"', "</details>");
-    expect(advancedAiPanel).not.toContain('id="run-ai-suggestion"');
-    expect(advancedAiPanel).toContain("Tester Ollama");
-    expect(advancedAiPanel).toContain("Libérer le modèle IA");
-    expect(indexOf(html, 'class="detail-section history-panel"')).toBeLessThan(
-      indexOf(html, 'id="suggestion-v2-diagnostic-panel"')
-    );
-  });
-
-  it("exposes reference-data editing in a separate dialog", async () => {
-    const html = await readRendererHtml();
-
-    expect(html).toContain('id="open-reference-data"');
-    expect(html).toContain('id="reference-data-dialog"');
-    expect(html).toContain("Référentiels locaux");
-    expect(html).toContain("Créer les fichiers manquants");
-    expect(html).toContain("JSON direct");
-    expect(html).toContain('<script src="./referenceDataPanel.js"></script>');
-    expect(html).toContain('<script src="./rendererReferenceDataFlow.js"></script>');
-  });
-
-  it("keeps reference-data UI isolated from classification, OCR and AI actions", async () => {
-    const flow = await readFile(path.join(process.cwd(), "src", "renderer", "rendererReferenceDataFlow.ts"), "utf8");
-    const panel = await readFile(path.join(process.cwd(), "src", "renderer", "referenceDataPanel.ts"), "utf8");
-    const combined = `${flow}\n${panel}`;
-
-    expect(combined).not.toContain("executeClassification");
-    expect(combined).not.toContain("prepareClassificationPlan");
-    expect(combined).not.toContain("runOcr");
-    expect(combined).not.toContain("runAi");
-    expect(combined).not.toContain("extractTextFromActivePdf");
-  });
-
   it("keeps real classification labels unchanged", async () => {
     const html = await readRendererHtml();
 
     expect(html).toContain("Vérifier avant classement (V)");
     expect(html).toContain("Valider et classer (Ctrl+Entrée)");
-  });
-
-  it("does not launch OCR or IA implicitly from v2 analysis", async () => {
-    const flow = await readFile(path.join(process.cwd(), "src", "renderer", "rendererSuggestionV2Flow.ts"), "utf8");
-
-    expect(flow).not.toContain("runOcrForActiveImage");
-    expect(flow).not.toContain("runImageOcr");
-    expect(flow).not.toContain("runAiSuggestionForActiveDocument");
-    expect(flow).toContain("Extrais le texte PDF avant l'analyse du document.");
-    expect(flow).toContain("Lance l'OCR image avant l'analyse du document.");
   });
 
   it("limits visible history items in the right panel renderer", async () => {

@@ -167,7 +167,6 @@ async function extractTextFromActivePdf(): Promise<void> {
     error: null
   });
   render();
-  refreshSuggestionV2ForActiveDocument();
 }
 
 async function runOcrForActiveImage(): Promise<void> {
@@ -212,7 +211,6 @@ async function runOcrForActiveImage(): Promise<void> {
     error: null
   });
   render();
-  refreshSuggestionV2ForActiveDocument();
 }
 
 function extractTextFromActiveDocument(): Promise<void> {
@@ -294,15 +292,12 @@ function updateExtractedTextForDocument(documentItem: DocumentItem, text: string
       characterCount: editedText.length,
       excerptCharacterCount: editedText.length,
       truncated: false,
-      fromCache: false,
-      cachedSuggestions: null
+      fromCache: false
     },
     error: null
   });
 
-  clearSuggestionV2StateForDocument(documentItem.filePath);
   resetAiSuggestionState();
-  renderSuggestionV2Panel();
   renderAiPanel();
 }
 

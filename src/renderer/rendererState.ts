@@ -106,45 +106,6 @@ function createIdleTextExtractionState(): TextExtractionState {
   };
 }
 
-function createIdleNamingRulesState(): NamingRulesState {
-  const defaultCatalog =
-    globalThis.DocSorterNamingSuggestionRulesCatalog?.getDefaultNamingSuggestionRulesCatalog() ??
-    createEmptyRulesCatalog();
-
-  return {
-    panelStatus: "loading",
-    panelOpen: false,
-    userRulesPath: "",
-    userCatalog: createEmptyRulesCatalog(),
-    mergedCatalog: defaultCatalog,
-    defaultRuleCount: countRules(defaultCatalog),
-    userRuleCount: 0,
-    message: "Chargement des règles...",
-    warning: null,
-    draft: DocSorterUserRuleEditor.createEmptyUserRuleDraft(),
-    editingTarget: null,
-    draftErrors: [],
-    dirty: false
-  };
-}
-
-function createIdleSuggestionV2State(): SuggestionV2State {
-  return {
-    byDocumentPath: {}
-  };
-}
-
-function createIdleSuggestionV2DocumentState(): SuggestionV2DocumentState {
-  return {
-    status: "idle",
-    result: null,
-    error: null,
-    diagnosticStatus: "idle",
-    diagnosticResult: null,
-    diagnosticError: null
-  };
-}
-
 function createIdleOcrState(): OcrState {
   return {
     panelStatus: "loading",
@@ -180,95 +141,10 @@ function createIdleAiState(): AiState {
   };
 }
 
-function createIdleReferenceDataState(): ReferenceDataState {
-  return {
-    isOpen: false,
-    status: "idle",
-    mode: "simple",
-    selectedFileKey: "people",
-    overview: null,
-    jsonDrafts: {},
-    simpleDraft: createEmptyReferenceDataSimpleDraft(),
-    lastValidatedFileKey: null,
-    lastValidatedContent: "",
-    validation: null,
-    message: "Référentiels non chargés.",
-    error: null
-  };
-}
-
-function createEmptyReferenceDataSimpleDraft(): ReferenceDataSimpleDraft {
-  return {
-    editingIndex: null,
-    label: "",
-    fileAlias: "",
-    folderAlias: "",
-    aliases: "",
-    birthDate: "",
-    useBirthDateForDetectionOnly: true,
-    domains: "",
-    enabled: true
-  };
-}
-
 function createIdleTextExtractionDocumentState(): TextExtractionDocumentState {
   return {
     status: "idle",
     result: null,
     error: null
-  };
-}
-
-function cloneRulesCatalog(catalog: NamingSuggestionRulesCatalog): NamingSuggestionRulesCatalog {
-  return {
-    version: 1,
-    documentTypeRules: catalog.documentTypeRules.map((rule) => ({
-      ...rule,
-      match: cloneRuleMatch(rule.match),
-      output: {
-        ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
-        ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
-        ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
-      }
-    })),
-    subjectRules: catalog.subjectRules.map((rule) => ({
-      ...rule,
-      match: cloneRuleMatch(rule.match),
-      output: {
-        ...(rule.output.documentType ? { documentType: rule.output.documentType } : {}),
-        ...(rule.output.subject ? { subject: rule.output.subject } : {}),
-        ...(rule.output.keywords ? { keywords: [...rule.output.keywords] } : {}),
-        ...(rule.output.targetFolder ? { targetFolder: rule.output.targetFolder } : {})
-      }
-    })),
-    keywordRules: catalog.keywordRules.map((rule) => ({
-      ...rule,
-      aliases: [...rule.aliases],
-      ...(rule.match ? { match: cloneRuleMatch(rule.match) } : {})
-    })),
-    stopWords: [...catalog.stopWords]
-  };
-}
-
-function cloneRuleMatch(match: SuggestionRuleMatch): SuggestionRuleMatch {
-  return {
-    ...(match.allOf ? { allOf: [...match.allOf] } : {}),
-    ...(match.anyOf ? { anyOf: [...match.anyOf] } : {}),
-    ...(match.noneOf ? { noneOf: [...match.noneOf] } : {})
-  };
-}
-
-function countRules(catalog: NamingSuggestionRulesCatalog): number {
-  return catalog.documentTypeRules.length + catalog.subjectRules.length + catalog.keywordRules.length;
-}
-
-function createEmptyRulesCatalog(): NamingSuggestionRulesCatalog {
-  return {
-    version: 1,
-    documentTypeRules: [],
-    subjectRules: [],
-    keywordRules: [],
-    stopWords: []
   };
 }

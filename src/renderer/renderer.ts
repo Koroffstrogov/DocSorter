@@ -15,11 +15,8 @@ const state: AppState = {
   history: createIdleHistoryState(),
   duplicates: createIdleDuplicateAnalysisState(),
   textExtraction: createIdleTextExtractionState(),
-  suggestionV2: createIdleSuggestionV2State(),
-  namingRules: createIdleNamingRulesState(),
   ocr: createIdleOcrState(),
   ai: createIdleAiState(),
-  referenceData: createIdleReferenceDataState(),
   shortcutsHelpVisible: false
 };
 
@@ -29,7 +26,6 @@ let destinationRequestId = 0;
 let classificationRequestId = 0;
 let duplicateAnalysisRequestId = 0;
 let textExtractionRequestId = 0;
-let suggestionV2RequestId = 0;
 let targetFolderRequestId = 0;
 let ocrRequestId = 0;
 let aiRequestId = 0;
@@ -41,7 +37,6 @@ const selectSourceButton = document.querySelector<HTMLButtonElement>("#select-so
 const refreshSourceButton = document.querySelector<HTMLButtonElement>("#refresh-source");
 const selectTargetButton = document.querySelector<HTMLButtonElement>("#select-target");
 const shortcutHelpToggleButton = document.querySelector<HTMLButtonElement>("#shortcut-help-toggle");
-const openReferenceDataButton = document.querySelector<HTMLButtonElement>("#open-reference-data");
 const shortcutHelpPanel = document.querySelector<HTMLElement>("#shortcut-help");
 const analyzeDuplicatesButton = document.querySelector<HTMLButtonElement>("#analyze-duplicates");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
@@ -139,36 +134,6 @@ const historyPanel = DocSorterHistoryPanel.createHistoryPanel({
   maxEntries: 3
 });
 
-const referenceDataPanel = DocSorterReferenceDataPanel.createReferenceDataPanel({
-  getState: () => state.referenceData,
-  onClose: closeReferenceDataPanel,
-  onOpenFolder: () => {
-    void openReferenceDataFolderFromPanel();
-  },
-  onCreateMissing: () => {
-    void createMissingReferenceDataFilesFromPanel();
-  },
-  onReload: () => {
-    void reloadReferenceDataFromPanel();
-  },
-  onSelectFile: selectReferenceDataFile,
-  onModeChange: setReferenceDataPanelMode,
-  onJsonDraftChange: updateReferenceDataJsonDraft,
-  onValidateJson: (fileKey) => {
-    void validateReferenceDataFileFromPanel(fileKey);
-  },
-  onSaveJson: (fileKey) => {
-    void saveReferenceDataFileFromPanel(fileKey);
-  },
-  onCancelChanges: cancelReferenceDataFileChanges,
-  onSimpleFieldChange: updateReferenceDataSimpleField,
-  onSimpleNew: resetReferenceDataSimpleDraft,
-  onSimpleEdit: editReferenceDataSimpleEntry,
-  onSimpleDisable: toggleReferenceDataSimpleEntry,
-  onSimpleDelete: deleteReferenceDataSimpleEntry,
-  onSimpleApply: applyReferenceDataSimpleDraft
-});
-
 const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPanel({
   getState: () => ({
     activeDocument: getActiveDocument(),
@@ -180,29 +145,6 @@ const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPan
   },
   onTextChange: updateExtractedTextForDocument,
   formatDate
-});
-
-const suggestionV2Panel = DocSorterSuggestionV2Panel.createSuggestionV2Panel({
-  getState: () => {
-    const activeDocument = getActiveDocument();
-    return {
-      activeDocument,
-      suggestionState: activeDocument ? getSuggestionV2State(activeDocument.filePath) : null
-    };
-  },
-  onAnalyzeDocument: () => {
-    runSuggestionV2AnalysisForActiveDocument();
-  },
-  onApplySuggestionToEmptyFields: applySuggestionV2ToEmptyFields,
-  onRunDiagnostic: () => {
-    runSuggestionV2DiagnosticForActiveDocument(false);
-  },
-  onRunAiDiagnostic: () => {
-    runSuggestionV2DiagnosticForActiveDocument(true);
-  },
-  isAiDiagnosticAvailable: () => canRunAiSuggestion(),
-  isAnalyzeDisabled: () => isClassificationBusy(),
-  canApplySuggestionToEmptyFields: canApplySuggestionV2ToEmptyFields
 });
 
 const namingPanelView = DocSorterNamingPanel.createNamingPanel({
@@ -237,25 +179,6 @@ const classificationPanel = DocSorterClassificationPanel.createClassificationPan
   }),
   hasVisibleDuplicate: documentHasVisibleDuplicate,
   formatDate
-});
-
-const rulesPanel = DocSorterRulesPanel.createRulesPanel({
-  getState: () => state.namingRules,
-  onTogglePanel: () => {
-    state.namingRules.panelOpen = !state.namingRules.panelOpen;
-    renderRulesPanel();
-  },
-  onSubmitDraft: upsertUserRuleDraft,
-  onDraftChange: updateUserRuleDraft,
-  onResetDraft: resetUserRuleDraft,
-  onSaveRules: () => {
-    void saveUserRules();
-  },
-  onReloadRules: () => {
-    void reloadNamingRules();
-  },
-  onEditRule: editUserRule,
-  onDeleteRule: deleteUserRule
 });
 
 const ocrPanel = DocSorterOcrPanel.createOcrPanel({
@@ -299,11 +222,15 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
     void runAiSuggestionForActiveDocument();
   },
   onApplySuggestionToEmptyFields: applyAiSuggestionToEmptyFields,
+  onExportDiagnostic: () => {
+    void exportAiDiagnosticForActiveDocument();
+  },
   onIgnoreSuggestion: ignoreAiSuggestion,
   isActionsDisabled: isClassificationBusy,
   canRunSuggestion: canRunAiSuggestion,
   canUnloadModel: canUnloadAiModel,
   canApplySuggestionToEmptyFields: canApplyAiSuggestionToEmptyFields,
+  canExportDiagnostic: canExportAiDiagnostic,
   formatDate
 });
 
@@ -315,7 +242,6 @@ void window.docSorter.getVersion().then((value) => {
 
 void refreshLastUndoableAction();
 void refreshRecentHistory();
-void refreshNamingRulesStatus();
 void refreshOcrStatus();
 void refreshAiStatus();
 
@@ -336,10 +262,6 @@ selectTargetButton?.addEventListener("click", () => {
 
 shortcutHelpToggleButton?.addEventListener("click", () => {
   toggleShortcutHelp();
-});
-
-openReferenceDataButton?.addEventListener("click", () => {
-  openReferenceDataPanel();
 });
 
 analyzeDuplicatesButton?.addEventListener("click", () => {
@@ -381,11 +303,9 @@ function render(): void {
   renderQueue();
   renderPreview();
   renderDetails();
-  renderRulesPanel();
   renderOcrPanel();
   renderAiPanel();
   renderHistory();
-  renderReferenceDataPanel();
   renderShortcutHelp();
 }
 

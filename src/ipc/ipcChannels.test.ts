@@ -14,8 +14,6 @@ const REVIEWED_IPC_CHANNELS = [
   "naming:createInitialDraft",
   "naming:buildProposal",
   "naming:checkDestinationAvailability",
-  "suggestion-v2:build",
-  "suggestion-v2:diagnose",
   "classification:preparePlan",
   "classification:execute",
   "classification:undoLast",
@@ -35,17 +33,8 @@ const REVIEWED_IPC_CHANNELS = [
   "ai:getModelStatus",
   "ai:unloadModel",
   "ai:runSuggestion",
-  "history:getRecent",
-  "rules:getStatus",
-  "rules:getUserCatalog",
-  "rules:saveUserCatalog",
-  "rules:reload",
-  "reference-data:getStatus",
-  "reference-data:openFolder",
-  "reference-data:createMissing",
-  "reference-data:validateFile",
-  "reference-data:saveFile",
-  "reference-data:reload"
+  "ai:exportDiagnostic",
+  "history:getRecent"
 ] as const;
 
 describe("IPC channel contract", () => {

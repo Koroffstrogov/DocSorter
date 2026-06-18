@@ -311,7 +311,6 @@ interface PdfTextExtraction {
   durationMs?: number;
   extractedAt: string;
   fromCache?: boolean;
-  cachedSuggestions?: NamingSuggestions | null;
   warnings?: string[];
 }
 
@@ -811,11 +810,8 @@ interface AppState {
   history: HistoryState;
   duplicates: DuplicateAnalysisState;
   textExtraction: TextExtractionState;
-  suggestionV2: SuggestionV2State;
-  namingRules: NamingRulesState;
   ocr: OcrState;
   ai: AiState;
-  referenceData: ReferenceDataState;
   shortcutsHelpVisible: boolean;
 }
 

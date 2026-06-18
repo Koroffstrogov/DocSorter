@@ -27,9 +27,6 @@
         <button id="shortcut-help-toggle" class="shortcut-help-toggle" type="button" aria-pressed="false">
           Raccourcis (?)
         </button>
-        <button id="open-reference-data" class="shortcut-help-toggle" type="button">
-          Référentiels
-        </button>
       </div>
     </header>
 
@@ -150,22 +147,6 @@
             <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
           </section>
 
-          <section
-            id="suggestion-v2-panel"
-            class="detail-section suggestion-v2-panel"
-            aria-label="Proposition de tri"
-            hidden
-          >
-            <div class="section-heading">
-              <h3>Proposition de tri</h3>
-              <div class="section-actions">
-                <button id="analyze-document-v2" type="button" disabled>Analyser le document</button>
-                <button id="apply-suggestion-v2-empty" type="button" disabled>Appliquer aux champs vides</button>
-              </div>
-            </div>
-            <div id="suggestion-v2-details" class="suggestion-v2-details">Proposition en attente.</div>
-          </section>
-
           <section id="duplicate-panel" class="detail-section duplicate-panel" aria-label="Doublons exacts" hidden>
             <h3>Doublons exacts</h3>
             <div id="duplicate-details" class="duplicate-details"></div>
@@ -188,111 +169,8 @@
               <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
                 Appliquer aux champs vides
               </button>
+              <button id="export-ai-diagnostic" type="button" disabled hidden>Exporter diagnostic IA</button>
               <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer</button>
-            </div>
-          </section>
-
-          <section id="rules-panel" class="detail-section rules-panel" aria-label="Règles de suggestion">
-            <div class="section-heading">
-              <h3>Règles de suggestion</h3>
-              <button id="toggle-rules-panel" type="button" aria-expanded="false">Règles</button>
-            </div>
-            <div id="rules-status" class="rules-status">Chargement des règles...</div>
-            <div id="rules-editor" class="rules-editor" hidden>
-              <p class="rules-warning">
-                N'enregistrez pas de contenu complet de documents dans les règles. Utilisez seulement des mots-clés ou expressions courtes.
-              </p>
-              <ol id="user-rules-list" class="user-rules-list"></ol>
-              <form id="user-rule-form" class="user-rule-form">
-                <label>
-                  <span class="field-label">
-                    Catégorie
-                    <span class="field-help" tabindex="0" title="Choisir ce que la règle doit produire : un type de document, un sujet ou un mot-clé.">i</span>
-                  </span>
-                  <select id="user-rule-category" name="category">
-                    <option value="documentType">Type de document</option>
-                    <option value="subject">Sujet</option>
-                    <option value="keyword">Mot-clé</option>
-                  </select>
-                </label>
-                <label>
-                  <span class="field-label">
-                    Identifiant
-                    <span class="field-help" tabindex="0" title="Nom technique unique de la règle. Un préfixe user: sera ajouté automatiquement si besoin. Exemple : garage-maintenance.">i</span>
-                  </span>
-                  <input id="user-rule-id" name="id" autocomplete="off" placeholder="garage-maintenance" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Libellé
-                    <span class="field-help" tabindex="0" title="Nom lisible affiché dans la liste des règles et dans les raisons de suggestion.">i</span>
-                  </span>
-                  <input id="user-rule-label" name="label" autocomplete="off" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Tous les mots requis
-                    <span class="field-help" tabindex="0" title="Tous ces termes doivent être présents pour que la règle s'applique. Séparer plusieurs termes par des virgules.">i</span>
-                  </span>
-                  <input id="user-rule-all-of" name="allOf" autocomplete="off" placeholder="facture" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Au moins un mot
-                    <span class="field-help" tabindex="0" title="Au moins un de ces termes doit être présent. Séparer plusieurs termes par des virgules.">i</span>
-                  </span>
-                  <input id="user-rule-any-of" name="anyOf" autocomplete="off" placeholder="garage, vidange" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Mots interdits
-                    <span class="field-help" tabindex="0" title="Si un de ces termes est présent, la règle ne s'applique pas. Champ optionnel.">i</span>
-                  </span>
-                  <input id="user-rule-none-of" name="noneOf" autocomplete="off" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Sortie type
-                    <span class="field-help" tabindex="0" title="Type de document proposé par une règle de catégorie Type. Exemple : facture-entretien.">i</span>
-                  </span>
-                  <input id="user-rule-document-type" name="documentType" autocomplete="off" placeholder="facture-entretien" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Sortie sujet
-                    <span class="field-help" tabindex="0" title="Sujet proposé par une règle de catégorie Sujet. Exemple générique : Garage.">i</span>
-                  </span>
-                  <input id="user-rule-subject" name="subject" autocomplete="off" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Mots-clés de sortie
-                    <span class="field-help" tabindex="0" title="Mots-clés ajoutés à la suggestion. Séparer plusieurs mots-clés par des virgules.">i</span>
-                  </span>
-                  <input id="user-rule-keywords" name="keywords" autocomplete="off" placeholder="entretien" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    Confiance
-                    <span class="field-help" tabindex="0" title="Score indicatif entre 0 et 100. Plus il est élevé, plus la règle pèse dans la suggestion.">i</span>
-                  </span>
-                  <input id="user-rule-confidence" name="confidence" type="number" min="0" max="100" step="1" value="70" />
-                </label>
-                <label class="rules-checkbox">
-                  <input id="user-rule-enabled" name="enabled" type="checkbox" checked />
-                  <span class="field-label">
-                    Actif
-                    <span class="field-help" tabindex="0" title="Décochez pour conserver la règle dans le fichier utilisateur sans l'utiliser dans les suggestions.">i</span>
-                  </span>
-                </label>
-                <ul id="user-rule-errors" class="user-rule-errors"></ul>
-                <div class="rules-actions">
-                  <button id="reset-user-rule-form" type="button">Nouvelle règle</button>
-                  <button id="save-user-rule-draft" type="submit">Ajouter la règle</button>
-                  <button id="save-user-rules" type="button">Sauvegarder</button>
-                  <button id="reload-user-rules" type="button">Recharger</button>
-                </div>
-              </form>
             </div>
           </section>
 
@@ -473,54 +351,9 @@
             <ol id="history-list" class="history-list"></ol>
           </details>
 
-          <details id="suggestion-v2-diagnostic-panel" class="detail-section suggestion-v2-diagnostic-panel">
-            <summary>Diagnostic</summary>
-            <p>Le diagnostic ne classe rien. Il génère un fichier JSON pour comprendre les choix.</p>
-            <p id="suggestion-v2-diagnostic-mode">Mode : expurgé</p>
-            <div class="suggestion-v2-diagnostic-actions">
-              <button id="run-suggestion-v2-diagnostic" type="button" disabled>
-                Diagnostic suggestions
-              </button>
-              <button id="run-suggestion-v2-ai-diagnostic" type="button" disabled>
-                Diagnostic IA
-              </button>
-            </div>
-            <div id="suggestion-v2-diagnostic-result" class="suggestion-v2-diagnostic-result"></div>
-          </details>
         </div>
       </aside>
     </main>
-
-    <section
-      id="reference-data-dialog"
-      class="reference-data-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Référentiels locaux"
-      hidden
-    >
-      <div class="reference-data-modal">
-        <div class="reference-data-header">
-          <div>
-            <h2>Référentiels locaux</h2>
-            <small id="reference-data-base-path">Configuration locale</small>
-          </div>
-          <button id="close-reference-data" type="button">Fermer</button>
-        </div>
-        <div class="reference-data-actions">
-          <button id="reference-data-open-folder" type="button">Ouvrir le dossier</button>
-          <button id="reference-data-create-missing" type="button">Créer les fichiers manquants</button>
-          <button id="reference-data-reload" type="button">Recharger</button>
-        </div>
-        <div id="reference-data-status" class="reference-data-status">Référentiels non chargés.</div>
-        <div id="reference-data-files" class="reference-data-files"></div>
-        <div class="reference-data-mode-switch" role="group" aria-label="Mode d'édition">
-          <button id="reference-data-mode-simple" type="button" aria-pressed="true">Assistant</button>
-          <button id="reference-data-mode-json" type="button" aria-pressed="false">JSON direct</button>
-        </div>
-        <div id="reference-data-content" class="reference-data-content"></div>
-      </div>
-    </section>
 
     <script src="./imagePreview.js"></script>
     <script src="./pdfPreview.js"></script>
@@ -531,28 +364,18 @@
     <script src="./documentDetailsPanel.js"></script>
     <script src="./historyPanel.js"></script>
     <script src="./textExtractionPanel.js"></script>
-    <script src="./suggestionV2Panel.js"></script>
     <script src="./namingPanel.js"></script>
     <script src="./classificationPanel.js"></script>
-    <script src="./rulesPanel.js"></script>
     <script src="./ocrPanel.js"></script>
     <script src="./aiPanel.js"></script>
-    <script src="./referenceDataPanel.js"></script>
-    <script src="../rules/defaultNamingSuggestionRules.js"></script>
-    <script src="../rules/namingSuggestionRulesCatalog.js"></script>
-    <script src="../rules/namingSuggestions.js"></script>
-    <script src="../rules/userRuleEditor.js"></script>
     <script src="./rendererState.js"></script>
     <script src="./keyboardShortcuts.js"></script>
     <script src="./rendererResetFlow.js"></script>
     <script src="./rendererDocumentFlow.js"></script>
     <script src="./rendererQueueFlow.js"></script>
     <script src="./rendererDuplicateTextSuggestionsFlow.js"></script>
-    <script src="./rendererSuggestionV2Flow.js"></script>
-    <script src="./rendererRulesFlow.js"></script>
     <script src="./rendererOcrFlow.js"></script>
     <script src="./rendererAiFlow.js"></script>
-    <script src="./rendererReferenceDataFlow.js"></script>
     <script src="./rendererNamingDestinationFlow.js"></script>
     <script src="./rendererClassificationFlow.js"></script>
     <script src="./rendererShortcutFlow.js"></script>

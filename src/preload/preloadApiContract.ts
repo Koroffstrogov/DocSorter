@@ -3,6 +3,7 @@ import type {
   AiDocumentSuggestion,
   AiDocumentTextContext
 } from "../ai/ollamaDocumentSuggestion";
+import type { AiDiagnosticResult } from "../diagnostics/aiDiagnostic";
 import type { OllamaModelStatus } from "../ai/ollamaModelManager";
 import type { AiConnectionTestStatus } from "../ai/ollamaProvider";
 import type {
@@ -32,28 +33,10 @@ import type {
 } from "../ocr/ocrTypes";
 import type { PreviewData } from "../preview/previewTypes";
 import type {
-  SuggestionV2Result,
-  SuggestionV2TextContext
-} from "../suggestions/buildSuggestionV2ForDocument";
-import type {
-  SuggestionV2DiagnosticResult
-} from "../diagnostics/suggestionV2Diagnostic";
-import type {
   TargetFolderCreation,
   TargetFolderList,
   TargetFolderResult
 } from "../naming/targetFolder";
-import type {
-  NamingRulesStatus,
-  UserRulesLoadResult,
-  UserRulesResult
-} from "../rules/userNamingRulesStore";
-import type {
-  ReferenceDataFileInfo,
-  ReferenceDataFileKey,
-  ReferenceDataOverview,
-  ReferenceDataStoreResult
-} from "../reference-data/referenceDataStore";
 
 interface DirectorySelection {
   path: string;
@@ -75,8 +58,6 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "createInitialNamingDraft",
   "buildNamingProposal",
   "checkDestinationAvailability",
-  "buildSuggestionV2",
-  "runSuggestionV2Diagnostic",
   "prepareClassificationPlan",
   "executeClassification",
   "undoLastClassification",
@@ -96,17 +77,8 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "getAiModelStatus",
   "unloadAiModel",
   "runAiSuggestionForActiveDocument",
-  "getRecentHistory",
-  "getRulesStatus",
-  "getUserRulesCatalog",
-  "saveUserRulesCatalog",
-  "reloadNamingRules",
-  "getReferenceDataStatus",
-  "openReferenceDataFolder",
-  "createMissingReferenceDataFiles",
-  "validateReferenceDataFile",
-  "saveReferenceDataFile",
-  "reloadReferenceData"
+  "exportAiDiagnostic",
+  "getRecentHistory"
 ] as const;
 
 export type PreloadApiMethod = (typeof ALLOWED_PRELOAD_API_METHODS)[number];
@@ -155,30 +127,6 @@ export function createPreloadApi(ipc: IpcInvoker) {
         IPC_CHANNELS.namingCheckDestinationAvailability,
         proposedFilename
       ) as Promise<DestinationAvailabilityResult>,
-    buildSuggestionV2: (
-      documentPath: string,
-      textContext: SuggestionV2TextContext | null,
-      legacyDraft: NamingDraft
-    ): Promise<SuggestionV2Result> =>
-      ipc.invoke(
-        IPC_CHANNELS.suggestionV2Build,
-        documentPath,
-        textContext,
-        legacyDraft
-      ) as Promise<SuggestionV2Result>,
-    runSuggestionV2Diagnostic: (
-      documentPath: string,
-      textContext: SuggestionV2TextContext | null,
-      legacyDraft: NamingDraft,
-      includeAi: boolean
-    ): Promise<SuggestionV2DiagnosticResult> =>
-      ipc.invoke(
-        IPC_CHANNELS.suggestionV2Diagnose,
-        documentPath,
-        textContext,
-        legacyDraft,
-        includeAi
-      ) as Promise<SuggestionV2DiagnosticResult>,
     prepareClassificationPlan: (
       documentPath: string,
       proposedFilename: string
@@ -249,58 +197,20 @@ export function createPreloadApi(ipc: IpcInvoker) {
         documentPath,
         textContext
       ) as Promise<AiSettingsResult<AiDocumentSuggestion>>,
+    exportAiDiagnostic: (
+      documentPath: string,
+      textContext: AiDocumentTextContext | null,
+      aiResult: unknown
+    ): Promise<AiDiagnosticResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.aiExportDiagnostic,
+        documentPath,
+        textContext,
+        aiResult
+      ) as Promise<AiDiagnosticResult>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
         ActionJournalReadResult<ActionJournalEntry[]>
-      >,
-    getRulesStatus: (): Promise<UserRulesResult<NamingRulesStatus>> =>
-      ipc.invoke(IPC_CHANNELS.rulesGetStatus) as Promise<UserRulesResult<NamingRulesStatus>>,
-    getUserRulesCatalog: (): Promise<UserRulesResult<UserRulesLoadResult>> =>
-      ipc.invoke(IPC_CHANNELS.rulesGetUserCatalog) as Promise<
-        UserRulesResult<UserRulesLoadResult>
-      >,
-    saveUserRulesCatalog: (
-      catalog: NamingSuggestionRulesCatalog
-    ): Promise<UserRulesResult<NamingRulesStatus>> =>
-      ipc.invoke(
-        IPC_CHANNELS.rulesSaveUserCatalog,
-        catalog
-      ) as Promise<UserRulesResult<NamingRulesStatus>>,
-    reloadNamingRules: (): Promise<UserRulesResult<NamingRulesStatus>> =>
-      ipc.invoke(IPC_CHANNELS.rulesReload) as Promise<UserRulesResult<NamingRulesStatus>>,
-    getReferenceDataStatus: (): Promise<ReferenceDataStoreResult<ReferenceDataOverview>> =>
-      ipc.invoke(IPC_CHANNELS.referenceDataGetStatus) as Promise<
-        ReferenceDataStoreResult<ReferenceDataOverview>
-      >,
-    openReferenceDataFolder: (): Promise<ReferenceDataStoreResult<{ path: string }>> =>
-      ipc.invoke(IPC_CHANNELS.referenceDataOpenFolder) as Promise<
-        ReferenceDataStoreResult<{ path: string }>
-      >,
-    createMissingReferenceDataFiles: (): Promise<ReferenceDataStoreResult<ReferenceDataOverview>> =>
-      ipc.invoke(IPC_CHANNELS.referenceDataCreateMissing) as Promise<
-        ReferenceDataStoreResult<ReferenceDataOverview>
-      >,
-    validateReferenceDataFile: (
-      fileKey: ReferenceDataFileKey,
-      content: string
-    ): Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>> =>
-      ipc.invoke(
-        IPC_CHANNELS.referenceDataValidateFile,
-        fileKey,
-        content
-      ) as Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>,
-    saveReferenceDataFile: (
-      fileKey: ReferenceDataFileKey,
-      content: string
-    ): Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>> =>
-      ipc.invoke(
-        IPC_CHANNELS.referenceDataSaveFile,
-        fileKey,
-        content
-      ) as Promise<ReferenceDataStoreResult<ReferenceDataFileInfo>>,
-    reloadReferenceData: (): Promise<ReferenceDataStoreResult<ReferenceDataOverview>> =>
-      ipc.invoke(IPC_CHANNELS.referenceDataReload) as Promise<
-        ReferenceDataStoreResult<ReferenceDataOverview>
       >
   };
 }

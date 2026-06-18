@@ -8,11 +8,13 @@ interface AiPanelOptions {
   onUnloadModel: () => void;
   onRunSuggestion: () => void;
   onApplySuggestionToEmptyFields: () => void;
+  onExportDiagnostic: () => void;
   onIgnoreSuggestion: () => void;
   isActionsDisabled: () => boolean;
   canRunSuggestion: () => boolean;
   canUnloadModel: () => boolean;
   canApplySuggestionToEmptyFields: () => boolean;
+  canExportDiagnostic: () => boolean;
   formatDate: (isoDate: string) => string;
 }
 
@@ -34,6 +36,7 @@ interface AiPanelElements {
   runSuggestionButton: HTMLButtonElement | null;
   suggestionDetails: HTMLElement | null;
   applySuggestionButton: HTMLButtonElement | null;
+  exportDiagnosticButton: HTMLButtonElement | null;
   ignoreSuggestionButton: HTMLButtonElement | null;
 }
 
@@ -84,6 +87,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
 
     elements.applySuggestionButton?.addEventListener("click", () => {
       options.onApplySuggestionToEmptyFields();
+    });
+
+    elements.exportDiagnosticButton?.addEventListener("click", () => {
+      options.onExportDiagnostic();
     });
 
     elements.ignoreSuggestionButton?.addEventListener("click", () => {
@@ -162,6 +169,11 @@ var DocSorterAiPanel: AiPanelFactoryApi;
         elements.ignoreSuggestionButton.disabled = disabled || !state.suggestion;
         elements.ignoreSuggestionButton.hidden = !state.suggestion;
       }
+
+      if (elements.exportDiagnosticButton) {
+        elements.exportDiagnosticButton.disabled = disabled || !options.canExportDiagnostic();
+        elements.exportDiagnosticButton.hidden = !options.canExportDiagnostic();
+      }
     }
 
     return {
@@ -184,6 +196,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       runSuggestionButton: root.querySelector<HTMLButtonElement>("#run-ai-suggestion"),
       suggestionDetails: root.querySelector<HTMLElement>("#ai-suggestion-details"),
       applySuggestionButton: root.querySelector<HTMLButtonElement>("#apply-ai-suggestion-empty"),
+      exportDiagnosticButton: root.querySelector<HTMLButtonElement>("#export-ai-diagnostic"),
       ignoreSuggestionButton: root.querySelector<HTMLButtonElement>("#ignore-ai-suggestion")
     };
   }

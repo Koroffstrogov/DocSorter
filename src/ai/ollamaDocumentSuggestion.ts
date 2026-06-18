@@ -29,7 +29,7 @@ import {
   generateDocumentNameV2,
   normalizeNameBlock
 } from "../naming/documentNameV2";
-import { isFilenameLikeTarget } from "../suggestions/filenameLikeTarget";
+import { isFilenameLikeTarget } from "./aiSuggestionSafety";
 
 export type AiDocumentTextSource = "pdf-native" | "tesseract-cli";
 

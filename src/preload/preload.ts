@@ -17,10 +17,6 @@ const api: DocSorterApi = {
     ipcRenderer.invoke("naming:buildProposal", draft, originalExtension),
   checkDestinationAvailability: (proposedFilename) =>
     ipcRenderer.invoke("naming:checkDestinationAvailability", proposedFilename),
-  buildSuggestionV2: (documentPath, textContext, legacyDraft) =>
-    ipcRenderer.invoke("suggestion-v2:build", documentPath, textContext, legacyDraft),
-  runSuggestionV2Diagnostic: (documentPath, textContext, legacyDraft, includeAi) =>
-    ipcRenderer.invoke("suggestion-v2:diagnose", documentPath, textContext, legacyDraft, includeAi),
   prepareClassificationPlan: (documentPath, proposedFilename) =>
     ipcRenderer.invoke("classification:preparePlan", documentPath, proposedFilename),
   executeClassification: (documentPath, proposedFilename) =>
@@ -44,19 +40,9 @@ const api: DocSorterApi = {
   unloadAiModel: () => ipcRenderer.invoke("ai:unloadModel"),
   runAiSuggestionForActiveDocument: (documentPath, textContext) =>
     ipcRenderer.invoke("ai:runSuggestion", documentPath, textContext),
+  exportAiDiagnostic: (documentPath, textContext, aiResult) =>
+    ipcRenderer.invoke("ai:exportDiagnostic", documentPath, textContext, aiResult),
   getRecentHistory: (limit) => ipcRenderer.invoke("history:getRecent", limit),
-  getRulesStatus: () => ipcRenderer.invoke("rules:getStatus"),
-  getUserRulesCatalog: () => ipcRenderer.invoke("rules:getUserCatalog"),
-  saveUserRulesCatalog: (catalog) => ipcRenderer.invoke("rules:saveUserCatalog", catalog),
-  reloadNamingRules: () => ipcRenderer.invoke("rules:reload"),
-  getReferenceDataStatus: () => ipcRenderer.invoke("reference-data:getStatus"),
-  openReferenceDataFolder: () => ipcRenderer.invoke("reference-data:openFolder"),
-  createMissingReferenceDataFiles: () => ipcRenderer.invoke("reference-data:createMissing"),
-  validateReferenceDataFile: (fileKey, content) =>
-    ipcRenderer.invoke("reference-data:validateFile", fileKey, content),
-  saveReferenceDataFile: (fileKey, content) =>
-    ipcRenderer.invoke("reference-data:saveFile", fileKey, content),
-  reloadReferenceData: () => ipcRenderer.invoke("reference-data:reload")
 };
 
 contextBridge.exposeInMainWorld("docSorter", api);

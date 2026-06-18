@@ -32,7 +32,6 @@ export interface PdfTextExtraction {
   truncated: boolean;
   extractedAt: string;
   fromCache?: boolean;
-  cachedSuggestions?: NamingSuggestions | null;
 }
 
 export type PdfTextExtractionResult =

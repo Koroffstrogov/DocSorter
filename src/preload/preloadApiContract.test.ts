@@ -66,33 +66,6 @@ describe("preload API surface", () => {
       ".pdf"
     );
     await api.checkDestinationAvailability("document.pdf");
-    await api.buildSuggestionV2(
-      "C:\\source\\document.pdf",
-      {
-        source: "pdf-native",
-        excerpt: "texte extrait"
-      },
-      {
-        documentDate: "",
-        subject: "",
-        documentType: "",
-        keywords: ""
-      }
-    );
-    await api.runSuggestionV2Diagnostic(
-      "C:\\source\\document.pdf",
-      {
-        source: "pdf-native",
-        excerpt: "texte extrait"
-      },
-      {
-        documentDate: "",
-        subject: "",
-        documentType: "",
-        keywords: ""
-      },
-      false
-    );
     await api.prepareClassificationPlan("C:\\source\\document.pdf", "document.pdf");
     await api.executeClassification("C:\\source\\document.pdf", "document.pdf");
     await api.undoLastClassification();
@@ -126,23 +99,21 @@ describe("preload API surface", () => {
       source: "pdf-native",
       excerpt: "texte extrait"
     });
+    await api.exportAiDiagnostic(
+      "C:\\source\\document.pdf",
+      {
+        source: "pdf-native",
+        excerpt: "texte extrait"
+      },
+      {
+        ok: false,
+        error: {
+          code: "AI_OUTPUT_INVALID",
+          message: "Réponse IA invalide."
+        }
+      }
+    );
     await api.getRecentHistory(8);
-    await api.getRulesStatus();
-    await api.getUserRulesCatalog();
-    await api.saveUserRulesCatalog({
-      version: 1,
-      documentTypeRules: [],
-      subjectRules: [],
-      keywordRules: [],
-      stopWords: []
-    });
-    await api.reloadNamingRules();
-    await api.getReferenceDataStatus();
-    await api.openReferenceDataFolder();
-    await api.createMissingReferenceDataFiles();
-    await api.validateReferenceDataFile("people", "[]");
-    await api.saveReferenceDataFile("people", "[]");
-    await api.reloadReferenceData();
 
     expect(recorder.calls.map((call) => call.channel)).toEqual([
       IPC_CHANNELS.appGetVersion,
@@ -156,8 +127,6 @@ describe("preload API surface", () => {
       IPC_CHANNELS.namingCreateInitialDraft,
       IPC_CHANNELS.namingBuildProposal,
       IPC_CHANNELS.namingCheckDestinationAvailability,
-      IPC_CHANNELS.suggestionV2Build,
-      IPC_CHANNELS.suggestionV2Diagnose,
       IPC_CHANNELS.classificationPreparePlan,
       IPC_CHANNELS.classificationExecute,
       IPC_CHANNELS.classificationUndoLast,
@@ -177,17 +146,8 @@ describe("preload API surface", () => {
       IPC_CHANNELS.aiGetModelStatus,
       IPC_CHANNELS.aiUnloadModel,
       IPC_CHANNELS.aiRunSuggestion,
-      IPC_CHANNELS.historyGetRecent,
-      IPC_CHANNELS.rulesGetStatus,
-      IPC_CHANNELS.rulesGetUserCatalog,
-      IPC_CHANNELS.rulesSaveUserCatalog,
-      IPC_CHANNELS.rulesReload,
-      IPC_CHANNELS.referenceDataGetStatus,
-      IPC_CHANNELS.referenceDataOpenFolder,
-      IPC_CHANNELS.referenceDataCreateMissing,
-      IPC_CHANNELS.referenceDataValidateFile,
-      IPC_CHANNELS.referenceDataSaveFile,
-      IPC_CHANNELS.referenceDataReload
+      IPC_CHANNELS.aiExportDiagnostic,
+      IPC_CHANNELS.historyGetRecent
     ]);
   });
 });

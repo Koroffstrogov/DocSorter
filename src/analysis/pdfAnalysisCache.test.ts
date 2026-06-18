@@ -24,7 +24,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -33,9 +32,6 @@ describe("pdf analysis cache", () => {
     expect(extractor.calls).toBe(1);
     if (result.ok) {
       expect(result.value.fromCache).toBe(false);
-      expect(result.value.cachedSuggestions?.targetFolder?.value).toBe(
-        "Vehicules/Renault-Captur/Entretien"
-      );
     }
     await expect(readFile(getAnalysisCacheFilePath(userDataPath, documentPath), "utf8")).resolves.toContain(
       "Facture Renault Captur"
@@ -53,7 +49,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -71,7 +66,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -79,7 +73,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -88,9 +81,7 @@ describe("pdf analysis cache", () => {
     expect(second.ok).toBe(true);
     if (second.ok) {
       expect(second.value.fromCache).toBe(true);
-      expect(second.value.cachedSuggestions?.targetFolder?.value).toBe(
-        "Vehicules/Scenic/Entretien"
-      );
+      expect(second.value.excerpt).toBe("Facture Scenic");
     }
   });
 
@@ -102,7 +93,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -115,7 +105,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -139,7 +128,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -151,7 +139,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -174,7 +161,6 @@ describe("pdf analysis cache", () => {
       documentPath,
       queuedDocumentPaths: [documentPath],
       userDataPath,
-      rulesCatalog: defaultCatalog(),
       extractText: extractor.extractText,
       now: fixedNow
     });
@@ -230,8 +216,4 @@ function createFakeExtractor(initialText: string): {
     }
   };
   return fake;
-}
-
-function defaultCatalog(): NamingSuggestionRulesCatalog {
-  return globalThis.DocSorterNamingSuggestionRulesCatalog.getDefaultNamingSuggestionRulesCatalog();
 }

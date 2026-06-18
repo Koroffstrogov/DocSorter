@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 describe("rendererAiFlow V2 application helpers", () => {
   it("replaces reference-data values when AI confidence is at least 70", async () => {
     const context = await loadAiFlow();
-    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+    const buildDraft = context.buildNamingDraftFromAiSuggestion as (
       draft: Record<string, string>,
       origins: Record<string, string>,
       suggestion: Record<string, unknown>
@@ -53,7 +53,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 
   it("does not replace non-empty values below confidence 70", async () => {
     const context = await loadAiFlow();
-    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+    const buildDraft = context.buildNamingDraftFromAiSuggestion as (
       draft: Record<string, string>,
       origins: Record<string, string>,
       suggestion: Record<string, unknown>
@@ -88,7 +88,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 
   it("uses AI subject before target for the rename subject field", async () => {
     const context = await loadAiFlow();
-    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+    const buildDraft = context.buildNamingDraftFromAiSuggestion as (
       draft: Record<string, string>,
       origins: Record<string, string>,
       suggestion: Record<string, unknown>
@@ -117,7 +117,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 
   it("removes DocSorter artifacts from non-manual fields when applying AI", async () => {
     const context = await loadAiFlow();
-    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+    const buildDraft = context.buildNamingDraftFromAiSuggestion as (
       draft: Record<string, string>,
       origins: Record<string, string>,
       suggestion: Record<string, unknown>
@@ -155,7 +155,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 
   it("never replaces manual fields", async () => {
     const context = await loadAiFlow();
-    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+    const buildDraft = context.buildNamingDraftFromAiSuggestion as (
       draft: Record<string, string>,
       origins: Record<string, string>,
       suggestion: Record<string, unknown>
@@ -186,7 +186,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 
   it("fills empty fields even below priority confidence", async () => {
     const context = await loadAiFlow();
-    const buildDraft = context.buildNamingDraftFromAiSuggestionV2 as (
+    const buildDraft = context.buildNamingDraftFromAiSuggestion as (
       draft: Record<string, string>,
       origins: Record<string, string>,
       suggestion: Record<string, unknown>

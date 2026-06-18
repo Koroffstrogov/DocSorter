@@ -244,6 +244,47 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
   render();
 }
 
+async function exportAiDiagnosticForActiveDocument(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canExportAiDiagnostic()) {
+    return;
+  }
+
+  const textContext = getActiveAiTextContext(activeDocument);
+  const aiResult = state.ai.suggestion
+    ? { ok: true as const, value: state.ai.suggestion }
+    : state.ai.error
+      ? { ok: false as const, error: state.ai.error }
+      : null;
+
+  state.ai = {
+    ...state.ai,
+    message: "Export du diagnostic IA..."
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.exportAiDiagnostic(
+    activeDocument.filePath,
+    textContext,
+    aiResult
+  );
+
+  if (!result.ok) {
+    applyAiError({
+      code: "UNKNOWN_ERROR",
+      message: result.error.message
+    });
+    return;
+  }
+
+  state.ai = {
+    ...state.ai,
+    message: result.value.message,
+    error: null
+  };
+  renderAiPanel();
+}
+
 function canRunAiSuggestion(): boolean {
   const activeDocument = getActiveDocument();
   return Boolean(
@@ -254,6 +295,18 @@ function canRunAiSuggestion(): boolean {
       !state.ai.dirty &&
       !isAiBusy() &&
       getActiveAiTextContext(activeDocument)
+  );
+}
+
+function canExportAiDiagnostic(): boolean {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !getActiveAiTextContext(activeDocument) || isAiBusy()) {
+    return false;
+  }
+
+  return Boolean(
+    (state.ai.suggestion && state.ai.suggestionDocumentPath === activeDocument.filePath) ||
+      state.ai.error
   );
 }
 
@@ -272,7 +325,7 @@ function applyAiSuggestionToEmptyFields(): void {
   }
 
   const targetFolder = state.ai.suggestion.suggestion.targetFolder?.trim() ?? "";
-  const result = buildNamingDraftFromAiSuggestionV2(
+  const result = buildNamingDraftFromAiSuggestion(
     state.naming.draft,
     state.naming.origins,
     state.ai.suggestion.suggestion
@@ -428,9 +481,9 @@ function getActiveAiTextContext(
   };
 }
 
-const AI_V2_PRIORITY_CONFIDENCE = 70;
+const AI_PRIORITY_CONFIDENCE = 70;
 
-function buildNamingDraftFromAiSuggestionV2(
+function buildNamingDraftFromAiSuggestion(
   draft: NamingDraft,
   origins: NamingDraftOrigins,
   suggestion: RendererAiClassificationSuggestion
@@ -438,14 +491,14 @@ function buildNamingDraftFromAiSuggestionV2(
   const nextDraft: NamingDraft = { ...draft };
   const nextOrigins: NamingDraftOrigins = { ...origins };
   const appliedFields: Array<keyof NamingDraft> = [];
-  const dateToken = normalizeAiV2DateForCurrentDraft(suggestion.dateToken);
+  const dateToken = normalizeAiDateForCurrentDraft(suggestion.dateToken);
   const subject = suggestion.subject?.trim() || suggestion.target?.trim() || "";
-  const keywords = buildAiV2Keywords(suggestion);
+  const keywords = buildAiKeywords(suggestion);
 
-  applyAiV2Field("documentDate", dateToken);
-  applyAiV2Field("subject", subject);
-  applyAiV2Field("documentType", suggestion.documentType?.trim() ?? "");
-  applyAiV2Field("keywords", keywords);
+  applyAiField("documentDate", dateToken);
+  applyAiField("subject", subject);
+  applyAiField("documentType", suggestion.documentType?.trim() ?? "");
+  applyAiField("keywords", keywords);
   cleanCurrentAiArtifactField("subject");
   cleanCurrentAiArtifactField("documentType");
   cleanCurrentAiArtifactField("keywords");
@@ -456,8 +509,8 @@ function buildNamingDraftFromAiSuggestionV2(
     appliedFields
   };
 
-  function applyAiV2Field(field: keyof NamingDraft, value: string): void {
-    if (!shouldApplyAiV2Value(nextDraft[field], nextOrigins[field], value, suggestion.confidence)) {
+  function applyAiField(field: keyof NamingDraft, value: string): void {
+    if (!shouldApplyAiValue(nextDraft[field], nextOrigins[field], value, suggestion.confidence)) {
       return;
     }
 
@@ -489,23 +542,23 @@ function hasApplicableAiSuggestionField(
   origins: NamingDraftOrigins,
   suggestion: RendererAiClassificationSuggestion
 ): boolean {
-  const dateToken = normalizeAiV2DateForCurrentDraft(suggestion.dateToken);
+  const dateToken = normalizeAiDateForCurrentDraft(suggestion.dateToken);
   const subject = suggestion.subject?.trim() || suggestion.target?.trim() || "";
-  const keywords = buildAiV2Keywords(suggestion);
+  const keywords = buildAiKeywords(suggestion);
   return (
-    shouldApplyAiV2Value(draft.documentDate, origins.documentDate, dateToken, suggestion.confidence) ||
-    shouldApplyAiV2Value(draft.subject, origins.subject, subject, suggestion.confidence) ||
-    shouldApplyAiV2Value(
+    shouldApplyAiValue(draft.documentDate, origins.documentDate, dateToken, suggestion.confidence) ||
+    shouldApplyAiValue(draft.subject, origins.subject, subject, suggestion.confidence) ||
+    shouldApplyAiValue(
       draft.documentType,
       origins.documentType,
       suggestion.documentType?.trim() ?? "",
       suggestion.confidence
     ) ||
-    shouldApplyAiV2Value(draft.keywords, origins.keywords, keywords, suggestion.confidence)
+    shouldApplyAiValue(draft.keywords, origins.keywords, keywords, suggestion.confidence)
   );
 }
 
-function shouldApplyAiV2Value(
+function shouldApplyAiValue(
   currentValue: string,
   currentOrigin: NamingFieldOrigin,
   nextValue: string,
@@ -522,7 +575,7 @@ function shouldApplyAiV2Value(
   }
 
   return (
-    confidence >= AI_V2_PRIORITY_CONFIDENCE &&
+    confidence >= AI_PRIORITY_CONFIDENCE &&
     currentOrigin !== "manual" &&
     trimmedCurrent.toLowerCase() !== trimmedNext.toLowerCase()
   );
@@ -551,7 +604,7 @@ function canApplyAiSuggestionTargetFolder(targetFolder: string, confidence: numb
     return true;
   }
 
-  return confidence >= AI_V2_PRIORITY_CONFIDENCE;
+  return confidence >= AI_PRIORITY_CONFIDENCE;
 }
 
 function normalizeFolderForComparison(value: string): string {
@@ -563,7 +616,7 @@ function normalizeFolderForComparison(value: string): string {
     .toLowerCase();
 }
 
-function normalizeAiV2DateForCurrentDraft(dateToken: string | undefined): string {
+function normalizeAiDateForCurrentDraft(dateToken: string | undefined): string {
   const trimmed = dateToken?.trim() ?? "";
   return /^(19|20)\d{2}$/.test(trimmed) ||
     /^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)
@@ -571,15 +624,15 @@ function normalizeAiV2DateForCurrentDraft(dateToken: string | undefined): string
     : "";
 }
 
-function buildAiV2Keywords(suggestion: RendererAiClassificationSuggestion): string {
-  return uniqueAiV2Strings([
+function buildAiKeywords(suggestion: RendererAiClassificationSuggestion): string {
+  return uniqueAiStrings([
     suggestion.issuer?.trim() ?? "",
     suggestion.detail?.trim() ?? ""
   ]).join(" ");
 }
 
 function removeDocSorterArtifact(value: string): string {
-  const tokens = normalizeAiV2Block(value).split("-").filter(Boolean);
+  const tokens = normalizeAiBlock(value).split("-").filter(Boolean);
   if (!tokens.includes("docsorter")) {
     return value;
   }
@@ -589,7 +642,7 @@ function removeDocSorterArtifact(value: string): string {
     .join("-");
 }
 
-function normalizeAiV2Block(value: string): string {
+function normalizeAiBlock(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -599,7 +652,7 @@ function normalizeAiV2Block(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function uniqueAiV2Strings(values: string[]): string[] {
+function uniqueAiStrings(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of values) {

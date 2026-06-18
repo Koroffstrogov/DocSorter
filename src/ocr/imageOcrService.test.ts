@@ -260,7 +260,6 @@ function createOptions(
     documentPath: workspace.documentPath,
     queuedDocumentPaths: [workspace.documentPath],
     userDataPath: workspace.userData,
-    rulesCatalog: createEmptyCatalog(),
     getStatus: async () => ({
       ok: true,
       value: createOcrStatus(workspace)
@@ -314,15 +313,5 @@ function createTimeStepper(): () => number {
   return () => {
     value += 123;
     return value;
-  };
-}
-
-function createEmptyCatalog(): NamingSuggestionRulesCatalog {
-  return {
-    version: 1,
-    documentTypeRules: [],
-    subjectRules: [],
-    keywordRules: [],
-    stopWords: []
   };
 }

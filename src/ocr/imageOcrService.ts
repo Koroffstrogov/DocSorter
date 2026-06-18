@@ -16,9 +16,6 @@ import {
   createTextExcerpt,
   normalizeExtractedText
 } from "../extraction/pdfTextExtraction";
-import "../rules/defaultNamingSuggestionRules";
-import "../rules/namingSuggestionRulesCatalog";
-import "../rules/namingSuggestions";
 import { getOcrStatus } from "./tesseractConfig";
 import {
   runTesseractImageOcr,
@@ -49,7 +46,6 @@ export interface ImageOcrExtraction {
   durationMs: number;
   extractedAt: string;
   fromCache: boolean;
-  cachedSuggestions?: NamingSuggestions | null;
   warnings: string[];
 }
 
@@ -59,7 +55,6 @@ export interface RunImageOcrForDocumentOptions {
   documentPath: string;
   queuedDocumentPaths: Iterable<string>;
   userDataPath: string;
-  rulesCatalog: NamingSuggestionRulesCatalog;
   maxFileBytes?: number;
   maxTextChars?: number;
   maxExcerptLength?: number;
@@ -90,7 +85,6 @@ interface ImageOcrCacheEntry {
   fingerprint: ImageOcrCacheFingerprint;
   analyzedAt: string;
   extraction: ImageOcrExtraction;
-  suggestions: NamingSuggestions | null;
   error: { code: string; message: string } | null;
 }
 
@@ -170,8 +164,7 @@ export async function runImageOcrForDocument(
       ok: true,
       value: {
         ...cached.extraction,
-        fromCache: true,
-        cachedSuggestions: cached.suggestions
+        fromCache: true
       }
     };
   }
@@ -199,8 +192,6 @@ export async function runImageOcrForDocument(
     maxTextChars: options.maxTextChars ?? MAX_EXTRACTED_TEXT_CHARS,
     maxExcerptLength: options.maxExcerptLength ?? MAX_EXTRACTED_TEXT_PREVIEW_CHARS
   });
-  const suggestions = buildCachedSuggestions(normalizedDocumentPath, extraction, options.rulesCatalog);
-
   const cacheWritten = await writeCacheEntry(
     cacheFilePath,
     {
@@ -209,7 +200,6 @@ export async function runImageOcrForDocument(
       fingerprint,
       analyzedAt: extractedAt,
       extraction,
-      suggestions,
       error: null
     },
     options
@@ -220,7 +210,6 @@ export async function runImageOcrForDocument(
     value: {
       ...extraction,
       fromCache: false,
-      cachedSuggestions: suggestions,
       warnings: cacheWritten
         ? extraction.warnings
         : [...extraction.warnings, "Cache OCR non sauvegardé."]
@@ -260,7 +249,6 @@ export function buildImageOcrExtraction(
     durationMs: options.durationMs,
     extractedAt: options.extractedAt,
     fromCache: false,
-    cachedSuggestions: null,
     warnings: []
   };
 }
@@ -342,18 +330,6 @@ async function writeCacheEntry(
   }
 }
 
-function buildCachedSuggestions(
-  documentPath: string,
-  extraction: ImageOcrExtraction,
-  rulesCatalog: NamingSuggestionRulesCatalog
-): NamingSuggestions {
-  return globalThis.DocSorterNamingSuggestions.buildNamingSuggestions({
-    filename: path.basename(documentPath),
-    extractedText: extraction.excerpt,
-    rulesCatalog
-  });
-}
-
 function isDocumentInQueue(documentPath: string, queuedDocumentPaths: Iterable<string>): boolean {
   const normalizedDocumentPath = path.resolve(documentPath);
   return new Set(Array.from(queuedDocumentPaths, (queuedPath) => path.resolve(queuedPath))).has(
@@ -388,7 +364,6 @@ function isImageOcrCacheEntry(value: unknown): value is ImageOcrCacheEntry {
     isImageOcrFingerprint(candidate.fingerprint) &&
     typeof candidate.analyzedAt === "string" &&
     isImageOcrExtraction(candidate.extraction) &&
-    (candidate.suggestions === null || typeof candidate.suggestions === "object") &&
     (candidate.error === null || isCachedError(candidate.error))
   );
 }

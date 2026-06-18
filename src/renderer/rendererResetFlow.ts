@@ -18,7 +18,6 @@ function resetDuplicateAnalysisState(): void {
 function resetTextExtractionState(): void {
   textExtractionRequestId += 1;
   state.textExtraction = createIdleTextExtractionState();
-  resetSuggestionV2State();
   resetAiSuggestionState();
 }
 
