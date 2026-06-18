@@ -16,6 +16,7 @@ export interface OllamaConnectionTest {
 
 export interface OllamaGeneration {
   responseText: string;
+  thinkingText: string | null;
   model: string;
   generatedAt: string;
 }
@@ -57,9 +58,15 @@ interface OllamaTagsResponse {
 
 interface OllamaGenerateResponse {
   response: string;
+  thinking?: string;
 }
 
 export const OLLAMA_MODEL_KEEP_ALIVE = "30m";
+
+export interface GenerateOllamaCompletionOptions extends TestOllamaConnectionOptions {
+  think?: boolean;
+  format?: unknown;
+}
 
 export async function testOllamaConnection(
   settings: AiSettings,
@@ -125,7 +132,7 @@ export async function testOllamaConnection(
 export async function generateOllamaCompletion(
   settings: AiSettings,
   prompt: string,
-  options: TestOllamaConnectionOptions = {}
+  options: GenerateOllamaCompletionOptions = {}
 ): Promise<AiSettingsResult<OllamaGeneration>> {
   if (!settings.enabled) {
     return aiFailure("AI_PROVIDER_DISABLED", "IA locale désactivée.");
@@ -147,7 +154,8 @@ export async function generateOllamaCompletion(
         model,
         prompt,
         stream: false,
-        format: "json",
+        format: options.format ?? "json",
+        think: options.think ?? settings.think,
         keep_alive: OLLAMA_MODEL_KEEP_ALIVE
       },
       timeoutMs: options.timeoutMs
@@ -166,6 +174,9 @@ export async function generateOllamaCompletion(
     ok: true,
     value: {
       responseText: result.value.response,
+      thinkingText: typeof result.value.thinking === "string" && result.value.thinking.trim()
+        ? result.value.thinking
+        : null,
       model,
       generatedAt
     }

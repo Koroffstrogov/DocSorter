@@ -246,10 +246,21 @@
               </label>
               <label>
                 <span class="field-label">
-                  Modèle
-                  <span class="field-help" tabindex="0" title="Nom du modèle Ollama à vérifier dans /api/tags. Exemple : llama3.2.">i</span>
+                  Profil IA
+                  <span class="field-help" tabindex="0" title="Profil de modèle Ollama utilisé pour l'analyse documentaire. Le profil fixe aussi le mode thinking.">i</span>
                 </span>
-                <input id="ai-model" name="model" autocomplete="off" placeholder="llama3.2" />
+                <select id="ai-profile" name="profileId">
+                  <option value="gemma3-4b">gemma3:4b</option>
+                  <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
+                  <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
+                </select>
+              </label>
+              <label>
+                <span class="field-label">
+                  Modèle résolu
+                  <span class="field-help" tabindex="0" title="Tag Ollama envoyé à /api/generate selon le profil choisi. Ce champ est informatif.">i</span>
+                </span>
+                <input id="ai-model" name="model" autocomplete="off" readonly />
               </label>
               <label>
                 <span class="field-label">

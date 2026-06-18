@@ -445,7 +445,9 @@ function createAiStatus() {
       enabled: true,
       provider: "ollama" as const,
       baseUrl: "http://localhost:11434/",
-      model: "mistral-small:latest",
+      profileId: "gemma3-4b" as const,
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30000,
       lastTestAt: null,
       lastStatus: "ok" as const,
@@ -460,7 +462,7 @@ function createAiStatus() {
 function createAiModelStatus() {
   return {
     status: "ready" as const,
-    model: "mistral-small:latest",
+    model: "gemma3:4b",
     message: "Modèle IA prêt.",
     loadedAt: "2026-06-18T10:00:00.000Z",
     keepAliveUntil: null,
@@ -483,11 +485,34 @@ function createAiSuggestion() {
       extension: ".pdf",
       extractedTextExcerpt: "texte extrait",
       ocrTextExcerpt: "",
-      localRuleSuggestions: null,
+      availableRootFolders: ["Fiscalite"],
       knownRelativeFolders: ["Vehicules"],
       namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
-      detectedDate: null
+      detectedDate: "",
+      detectedYear: ""
     },
+    profile: {
+      id: "gemma3-4b" as const,
+      label: "gemma3:4b",
+      model: "gemma3:4b",
+      think: false
+    },
+    responseJson: {
+      fields: {
+        dateToken: { selected: "2026", candidates: [] },
+        subject: { selected: "foyer", candidates: [] },
+        target: { selected: "foyer", candidates: [] },
+        documentType: { selected: "avis-imposition", candidates: [] },
+        issuer: { selected: "", candidates: [] },
+        detail: { selected: "", candidates: [] }
+      },
+      folderCandidates: [],
+      fileNameCandidates: [],
+      warnings: [],
+      confidence: 90,
+      source: "ollama" as const
+    },
+    thinking: null,
     suggestion: {
       dateToken: "2026",
       target: "foyer",

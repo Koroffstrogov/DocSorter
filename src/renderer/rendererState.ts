@@ -128,8 +128,9 @@ function createIdleAiState(): AiState {
     status: null,
     draft: {
       enabled: false,
+      profileId: "gemma3-4b",
       baseUrl: "http://localhost:11434/",
-      model: "",
+      model: "gemma3:4b",
       timeoutMs: "30000"
     },
     message: "Chargement de la configuration IA locale...",

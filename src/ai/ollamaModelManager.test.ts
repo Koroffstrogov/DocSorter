@@ -8,7 +8,7 @@ describe("OllamaModelManager", () => {
   it("loads the configured model once and then reuses it", async () => {
     const fetchClient = createMockFetch([
       { version: "0.5.1" },
-      { models: [{ name: "llama3.2" }] },
+      { models: [{ name: "gemma3:4b" }] },
       { done: true }
     ]);
     const manager = new OllamaModelManager({
@@ -27,7 +27,7 @@ describe("OllamaModelManager", () => {
       "http://localhost:11434/api/chat"
     ]);
     expect(JSON.parse(fetchClient.calls[2].options.body ?? "{}")).toMatchObject({
-      model: "llama3.2",
+      model: "gemma3:4b",
       messages: [],
       stream: false,
       keep_alive: "30m"
@@ -38,7 +38,7 @@ describe("OllamaModelManager", () => {
     let releasePreload: (() => void) | null = null;
     const fetchClient = createMockFetch([
       { version: "0.5.1" },
-      { models: [{ name: "llama3.2" }] },
+      { models: [{ name: "gemma3:4b" }] },
       () =>
         new Promise((resolve) => {
           releasePreload = () => resolve({ done: true });
@@ -89,11 +89,11 @@ describe("OllamaModelManager", () => {
   it("unloads the model and can reload it later", async () => {
     const fetchClient = createMockFetch([
       { version: "0.5.1" },
-      { models: [{ name: "llama3.2" }] },
+      { models: [{ name: "gemma3:4b" }] },
       { done: true },
       { done: true },
       { version: "0.5.1" },
-      { models: [{ name: "llama3.2" }] },
+      { models: [{ name: "gemma3:4b" }] },
       { done: true }
     ]);
     const manager = new OllamaModelManager({
@@ -154,7 +154,9 @@ function createSettings(): AiSettings {
     enabled: true,
     provider: "ollama",
     baseUrl: "http://localhost:11434/",
-    model: "llama3.2",
+    profileId: "gemma3-4b",
+    model: "gemma3:4b",
+    think: false,
     timeoutMs: 30_000,
     lastTestAt: null,
     lastStatus: null,

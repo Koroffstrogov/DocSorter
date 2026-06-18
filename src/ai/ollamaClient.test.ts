@@ -158,6 +158,7 @@ describe("generateOllamaCompletion", () => {
     expect(result.ok && result.value).toEqual({
       responseText:
         '{"confidence":70,"target":"captur","reasons":["test"],"warnings":[],"source":"ollama"}',
+      thinkingText: null,
       model: "llama3.2",
       generatedAt: "2026-06-16T10:00:00.000Z"
     });
@@ -168,7 +169,36 @@ describe("generateOllamaCompletion", () => {
       prompt: "prompt borné",
       stream: false,
       format: "json",
+      think: false,
       keep_alive: "30m"
+    });
+  });
+
+  it("sends top-level think and preserves Ollama thinking text", async () => {
+    const fetchClient = createMockFetch([
+      {
+        response: '{"confidence":70,"reasons":[],"warnings":[],"source":"ollama"}',
+        thinking: "raisonnement interne"
+      }
+    ]);
+
+    const result = await generateOllamaCompletion(
+      { ...createSettings(), think: true },
+      "prompt borné",
+      {
+        fetchClient,
+        format: { type: "object" },
+        now: () => new Date("2026-06-16T10:00:00.000Z")
+      }
+    );
+
+    expect(result.ok && result.value.thinkingText).toBe("raisonnement interne");
+    expect(JSON.parse(fetchClient.calls[0].options.body ?? "{}")).toMatchObject({
+      model: "llama3.2",
+      prompt: "prompt borné",
+      stream: false,
+      format: { type: "object" },
+      think: true
     });
   });
 
@@ -238,7 +268,9 @@ function createSettings(): AiSettings {
     enabled: true,
     provider: "ollama",
     baseUrl: "http://localhost:11434/",
+    profileId: "gemma3-4b",
     model: "llama3.2",
+    think: false,
     timeoutMs: 30_000,
     lastTestAt: null,
     lastStatus: null,

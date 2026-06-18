@@ -102,7 +102,7 @@ describe("runOllamaSuggestionForDocument", () => {
     const result = await runOllamaSuggestionForDocument({
       ...createOptions(workspace),
       fetchClient: createSuccessfulFetch({
-        response: JSON.stringify({
+        response: createAiResponse({
           dateToken: "2026-06-16",
           subject: "Renault Captur",
           target: "Renault Captur",
@@ -139,6 +139,80 @@ describe("runOllamaSuggestionForDocument", () => {
     });
   });
 
+  it("uses gemma3 profile with think false", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData, { profileId: "gemma3-4b" });
+    const fetchClient = createSuccessfulFetch();
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      fetchClient
+    });
+
+    expect(result.ok).toBe(true);
+    const body = readGenerateBody(fetchClient);
+    expect(body).toMatchObject({
+      model: "gemma3:4b",
+      think: false,
+      stream: false
+    });
+  });
+
+  it("uses gemma4 no-think profile with think false", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData, { profileId: "gemma4-12b-nothink" });
+    const fetchClient = createSuccessfulFetch();
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      fetchClient
+    });
+
+    expect(result.ok).toBe(true);
+    const body = readGenerateBody(fetchClient);
+    expect(body).toMatchObject({
+      model: "gemma4:12b",
+      think: false,
+      stream: false
+    });
+  });
+
+  it("uses gemma4 thinking profile with think true and preserves thinking diagnostic data", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData, { profileId: "gemma4-12b-thinking" });
+    const fetchClient = createMockFetch([
+      {
+        response: createAiResponse({
+          dateToken: "2026",
+          target: "captur",
+          documentType: "facture-entretien",
+          confidence: 74
+        }),
+        thinking: "raisonnement conservé pour diagnostic"
+      }
+    ]);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      fetchClient
+    });
+
+    expect(result.ok).toBe(true);
+    const body = readGenerateBody(fetchClient);
+    expect(body).toMatchObject({
+      model: "gemma4:12b",
+      think: true,
+      stream: false
+    });
+    expect(result.ok && result.value.profile).toMatchObject({
+      id: "gemma4-12b-thinking",
+      model: "gemma4:12b",
+      think: true
+    });
+    expect(result.ok && result.value.thinking).toBe("raisonnement conservé pour diagnostic");
+    expect(result.ok && result.value.responseJson.fields.target.selected).toBe("captur");
+  });
+
   it("converts monthly Ollama dates before proposed name generation", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
@@ -146,7 +220,7 @@ describe("runOllamaSuggestionForDocument", () => {
     const result = await runOllamaSuggestionForDocument({
       ...createOptions(workspace),
       fetchClient: createSuccessfulFetch({
-        response: JSON.stringify({
+        response: createAiResponse({
           dateToken: "2026-05",
           target: "captur",
           documentType: "facture-entretien",
@@ -175,7 +249,7 @@ describe("runOllamaSuggestionForDocument", () => {
     const result = await runOllamaSuggestionForDocument({
       ...createOptions(workspace),
       fetchClient: createSuccessfulFetch({
-        response: JSON.stringify({
+        response: createAiResponse({
           dateToken: "2026",
           subject: "Paul",
           documentType: "carnet-vaccination",
@@ -213,7 +287,7 @@ describe("runOllamaSuggestionForDocument", () => {
       queuedDocumentPaths: [documentPath],
       knownRelativeFolders: ["Assurances", "Véhicules", "Scolarité"],
       fetchClient: createSuccessfulFetch({
-        response: JSON.stringify({
+        response: createAiResponse({
           dateToken: "2024-03-15",
           subject: "renault-captur-facture",
           target: "vehicules",
@@ -260,7 +334,7 @@ describe("runOllamaSuggestionForDocument", () => {
       queuedDocuments: [{ filePath: documentPath, name: "T05-avis_imposition_foyer_2025.pdf" }],
       queuedDocumentPaths: [documentPath],
       fetchClient: createSuccessfulFetch({
-        response: JSON.stringify({
+        response: createAiResponse({
           dateToken: "2025",
           subject: "avis-imposition",
           target: "avis-imposition",
@@ -289,6 +363,95 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.value.suggestion.warnings.join(" ")).toContain("Sujet IA ignoré");
   });
 
+  it("accepts T05 fiscal target foyer from the multi-candidate response", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+    const documentPath = path.join(workspace.sourcePath, "T05-avis_imposition_foyer_2025.pdf");
+    await writeFile(documentPath, "contenu original", "utf8");
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Avis d'imposition 2025 foyer"
+      }),
+      documentPath,
+      queuedDocuments: [{ filePath: documentPath, name: "T05-avis_imposition_foyer_2025.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2025",
+          subject: "foyer",
+          target: "foyer",
+          documentType: "avis-imposition",
+          confidence: 88
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2025",
+      subject: "foyer",
+      target: "foyer",
+      documentType: "avis-imposition",
+      proposedName: "2025_foyer_avis-imposition.pdf"
+    });
+  });
+
+  it("rejects basename-like AI targets", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+    const documentPath = path.join(workspace.sourcePath, "T01-scan_renault_captur_facture.pdf");
+    await writeFile(documentPath, "contenu original", "utf8");
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      documentPath,
+      queuedDocuments: [{ filePath: documentPath, name: "T01-scan_renault_captur_facture.pdf" }],
+      queuedDocumentPaths: [documentPath],
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2024",
+          target: "T01-scan_renault_captur_facture",
+          documentType: "facture",
+          confidence: 80
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion.target).toBeUndefined();
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Cible IA ignorée");
+  });
+
+  it("keeps the effect date for an insurance contract response", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Contrat assurance habitation. Date de signature 15/12/2025. Date d'effet 01/01/2026."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026-01-01",
+          subject: "habitation",
+          documentType: "contrat-assurance-habitation",
+          issuer: "maif",
+          confidence: 86
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026-01-01",
+      subject: "habitation",
+      documentType: "contrat-assurance-habitation",
+      issuer: "maif",
+      proposedName: "2026-01-01_habitation_contrat-assurance-habitation_maif.pdf"
+    });
+  });
+
   it("refuses invalid JSON without crashing", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
@@ -312,10 +475,9 @@ describe("runOllamaSuggestionForDocument", () => {
     const result = await runOllamaSuggestionForDocument({
       ...createOptions(workspace),
       fetchClient: createSuccessfulFetch({
-        response: JSON.stringify({
-          targetFolder: "../Secret",
+        response: createAiResponse({
+          folderCandidates: ["../Secret"],
           confidence: 70,
-          reasons: ["test"],
           warnings: [],
           source: "ollama"
         })
@@ -362,12 +524,17 @@ describe("runOllamaSuggestionForDocument", () => {
   });
 });
 
-async function enableAi(userDataPath: string, overrides: { timeoutMs?: number } = {}) {
+async function enableAi(
+  userDataPath: string,
+  overrides: { timeoutMs?: number; profileId?: "gemma3-4b" | "gemma4-12b-nothink" | "gemma4-12b-thinking" } = {}
+) {
   const result = await saveAiSettings(userDataPath, {
     enabled: true,
     provider: "ollama",
     baseUrl: "http://localhost:11434/",
-    model: "llama3.2",
+    profileId: overrides.profileId ?? "gemma3-4b",
+    model: "gemma3:4b",
+    think: false,
     timeoutMs: overrides.timeoutMs ?? 30_000
   });
   expect(result.ok).toBe(true);
@@ -404,7 +571,7 @@ function createSuccessfulFetch(
     {
       response:
         options.response ??
-        JSON.stringify({
+        createAiResponse({
           dateToken: "2026",
           target: "captur",
           documentType: "facture-entretien",
@@ -417,6 +584,64 @@ function createSuccessfulFetch(
         })
     }
   ]);
+}
+
+function readGenerateBody(fetchClient: {
+  calls: Array<{ url: string; options: { body?: string } }>;
+}): Record<string, unknown> {
+  const generateCall = fetchClient.calls.find((call) => call.url.endsWith("/api/generate"));
+  return JSON.parse(generateCall?.options.body ?? "{}") as Record<string, unknown>;
+}
+
+function createAiResponse(options: {
+  dateToken?: string;
+  subject?: string;
+  target?: string;
+  documentType?: string;
+  issuer?: string;
+  detail?: string;
+  targetFolder?: string;
+  folderCandidates?: string[];
+  proposedName?: string;
+  confidence?: number;
+  reasons?: string[];
+  warnings?: string[];
+  source?: "ollama";
+}): string {
+  return JSON.stringify({
+    fields: {
+      dateToken: createField(options.dateToken),
+      subject: createField(options.subject),
+      target: createField(options.target),
+      documentType: createField(options.documentType),
+      issuer: createField(options.issuer),
+      detail: createField(options.detail)
+    },
+    folderCandidates: (options.folderCandidates ?? (options.targetFolder ? [options.targetFolder] : []))
+      .map((value, index) => createCandidate(value, 80 - index, "Dossier proposé.")),
+    fileNameCandidates: options.proposedName
+      ? [createCandidate(options.proposedName, 80, "Nom proposé.")]
+      : [],
+    confidence: options.confidence ?? 70,
+    warnings: options.warnings ?? [],
+    source: options.source ?? "ollama"
+  });
+}
+
+function createField(value: string | undefined) {
+  return {
+    selected: value ?? "",
+    candidates: value ? [createCandidate(value, 80, "Valeur sélectionnée.", "selected")] : []
+  };
+}
+
+function createCandidate(value: string, score: number, reason: string, role?: string) {
+  return {
+    value,
+    score,
+    reason,
+    ...(role ? { role } : {})
+  };
 }
 
 function createReadyModelManager(): OllamaModelManagerLike {

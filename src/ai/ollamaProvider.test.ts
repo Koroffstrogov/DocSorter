@@ -24,13 +24,15 @@ describe("Ollama provider preparation", () => {
       enabled: true,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000
     });
     expect(saved.ok).toBe(true);
     const fetchClient = createMockFetch([
       { version: "0.5.1" },
-      { models: [{ name: "llama3.2" }] }
+      { models: [{ name: "gemma3:4b" }] }
     ]);
 
     const result = await testAiConnection(workspace.userData, {
@@ -46,7 +48,9 @@ describe("Ollama provider preparation", () => {
       enabled: true,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000,
       lastTestAt: "2026-06-16T10:00:00.000Z",
       lastStatus: "ok",
@@ -62,7 +66,9 @@ describe("Ollama provider preparation", () => {
       enabled: true,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000,
       lastTestAt: null,
       lastStatus: null,
@@ -73,7 +79,7 @@ describe("Ollama provider preparation", () => {
       provider: "ollama",
       enabled: true,
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2"
+      model: "gemma3:4b"
     });
     expect(
       provider.validateOutput({
@@ -93,7 +99,9 @@ describe("Ollama provider preparation", () => {
       enabled: true,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000
     });
     const fetchClient = createMockFetch([{ version: "0.5.1" }, { models: [{ name: "mistral" }] }]);
@@ -107,7 +115,7 @@ describe("Ollama provider preparation", () => {
     expect(result.ok && result.value.status).toBe("model-missing");
     const persisted = JSON.parse(await readFile(getAiSettingsPath(workspace.userData), "utf8"));
     expect(persisted.lastStatus).toBe("model-missing");
-    expect(persisted.lastError).toContain("llama3.2");
+    expect(persisted.lastError).toContain("gemma3:4b");
   });
 
   it("returns disabled without HTTP call when IA locale is disabled", async () => {
@@ -116,7 +124,9 @@ describe("Ollama provider preparation", () => {
       enabled: false,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000
     });
     const fetchClient = createMockFetch([]);
@@ -134,7 +144,9 @@ describe("Ollama provider preparation", () => {
       enabled: true,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000
     });
 

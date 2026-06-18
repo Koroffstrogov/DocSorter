@@ -427,6 +427,7 @@ function applyAiError(error: RendererAiError): void {
 function aiStatusToDraft(status: RendererAiStatus): AiSettingsDraft {
   return {
     enabled: status.settings.enabled,
+    profileId: status.settings.profileId,
     baseUrl: status.settings.baseUrl || "http://localhost:11434/",
     model: status.settings.model,
     timeoutMs: String(status.settings.timeoutMs || 30000)
@@ -443,7 +444,9 @@ function aiDraftToSettings(draft: AiSettingsDraft): RendererAiSettings | null {
     enabled: draft.enabled,
     provider: "ollama",
     baseUrl: draft.baseUrl.trim(),
+    profileId: draft.profileId,
     model: draft.model.trim(),
+    think: draft.profileId === "gemma4-12b-thinking",
     timeoutMs,
     lastTestAt: null,
     lastStatus: draft.enabled ? null : "disabled",

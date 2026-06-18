@@ -89,7 +89,9 @@ describe("preload API surface", () => {
       enabled: true,
       provider: "ollama",
       baseUrl: "http://localhost:11434/",
-      model: "llama3.2",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
       timeoutMs: 30_000
     });
     await api.testAiConnection();

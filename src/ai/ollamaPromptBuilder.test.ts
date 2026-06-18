@@ -13,14 +13,16 @@ describe("buildOllamaClassificationPrompt", () => {
     });
 
     expect(result.prompt).toContain("Réponds uniquement avec un objet JSON valide");
+    expect(result.prompt).toContain('"fields"');
     expect(result.prompt).toContain('"dateToken"');
     expect(result.prompt).toContain('"subject"');
     expect(result.prompt).toContain('"target"');
     expect(result.prompt).toContain('"issuer"');
     expect(result.prompt).toContain('"detail"');
-    expect(result.prompt).toContain('"proposedName"');
+    expect(result.prompt).toContain('"folderCandidates"');
+    expect(result.prompt).toContain('"fileNameCandidates"');
     expect(result.prompt).toContain('"source": "ollama"');
-    expect(result.prompt).toContain("targetFolder doit être relatif");
+    expect(result.prompt).toContain("folderCandidates doit contenir des dossiers relatifs candidats");
     expect(result.prompt).toContain("AAAA-MM-JJ ou AAAA");
     expect(result.prompt).toContain("AAAA-MM-01");
     expect(result.prompt).toContain("n'utilise pas date-inconnue");
@@ -28,6 +30,13 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain("knownRelativeFolders");
     expect(result.prompt).toContain("subject ne doit pas répéter le type documentaire");
     expect(result.prompt).toContain("n'utilise jamais DocSorter");
+    expect(result.prompt).toContain("date d'effet est prioritaire");
+    expect(result.prompt).toContain("Pour avis-imposition, target doit être foyer");
+    expect(result.prompt).toContain("Pour scolarité 2026/2027, dateToken doit être 2026");
+    expect(result.format).toMatchObject({
+      type: "object",
+      required: ["fields", "folderCandidates", "fileNameCandidates", "warnings", "confidence", "source"]
+    });
     expect(result.prompt).not.toContain("currentSuggestionV2");
     expect(result.prompt).not.toContain('"keywords"');
     expect(result.input.extractedTextExcerpt).toBe("Facture Renault Captur du 05/03/2024");

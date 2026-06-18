@@ -1,6 +1,13 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  DEFAULT_AI_MODEL_PROFILE_ID,
+  getAiModelProfile,
+  inferAiModelProfileId,
+  type AiModelProfileId
+} from "./aiModelProfiles";
+
 export type AiProviderName = "ollama";
 export type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
 
@@ -32,7 +39,9 @@ export interface AiSettings {
   enabled: boolean;
   provider: AiProviderName;
   baseUrl: string;
+  profileId: AiModelProfileId;
   model: string;
+  think: boolean;
   timeoutMs: number;
   lastTestAt: string | null;
   lastStatus: AiConnectionStatus | null;
@@ -61,11 +70,14 @@ export function getAiSettingsPath(userDataPath: string): string {
 }
 
 export function createDefaultAiSettings(): AiSettings {
+  const profile = getAiModelProfile(DEFAULT_AI_MODEL_PROFILE_ID);
   return {
     enabled: false,
     provider: "ollama",
     baseUrl: DEFAULT_AI_BASE_URL,
-    model: "",
+    profileId: profile.id,
+    model: profile.model,
+    think: profile.think,
     timeoutMs: DEFAULT_AI_TIMEOUT_MS,
     lastTestAt: null,
     lastStatus: "disabled",
@@ -162,13 +174,20 @@ export function normalizeAiSettings(value: unknown): AiSettingsResult<AiSettings
     return baseUrl;
   }
 
+  const profile = getAiModelProfile(
+    readOptionalString(input.profileId) ||
+      inferAiModelProfileId(readOptionalString(input.model), Boolean(input.think))
+  );
+
   return {
     ok: true,
     value: {
       enabled: typeof input.enabled === "boolean" ? input.enabled : false,
       provider: "ollama",
       baseUrl: baseUrl.value,
-      model: sanitizeModelName(readOptionalString(input.model)),
+      profileId: profile.id,
+      model: sanitizeModelName(profile.model),
+      think: profile.think,
       timeoutMs: normalizeTimeout(input.timeoutMs),
       lastTestAt: readOptionalNullableString(input.lastTestAt),
       lastStatus: readConnectionStatus(input.lastStatus),

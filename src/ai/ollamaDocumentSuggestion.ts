@@ -2,14 +2,18 @@ import type { Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  buildAiClassificationSuggestion
-} from "./aiClassificationOrchestrator";
 import type {
   AiClassificationInput,
   AiClassificationSuggestion,
   BoundedAiClassificationInput
 } from "./aiClassificationTypes";
+import type { AiModelProfile } from "./aiModelProfiles";
+import { getAiModelProfile } from "./aiModelProfiles";
+import {
+  adaptMultiCandidateResponseToSuggestion,
+  type AiMultiCandidateResponse,
+  validateAiMultiCandidateResponse
+} from "./aiMultiCandidateResponse";
 import {
   generateOllamaCompletion,
   type OllamaHttpClient
@@ -52,6 +56,9 @@ export interface AiDocumentSuggestion {
   textSource: AiDocumentTextSource;
   modelStatus: OllamaModelStatus;
   input: BoundedAiClassificationInput;
+  profile: Pick<AiModelProfile, "id" | "label" | "model" | "think">;
+  responseJson: AiMultiCandidateResponse;
+  thinking: string | null;
   suggestion: AiClassificationSuggestion;
   promptCharacterCount: number;
   message: string;
@@ -125,7 +132,9 @@ export async function runOllamaSuggestionForDocument(
   const prompt = buildOllamaClassificationPrompt(aiInput);
   const generation = await generateOllamaCompletion(settings, prompt.prompt, {
     fetchClient: options.fetchClient,
-    now: options.now
+    now: options.now,
+    format: prompt.format,
+    think: settings.think
   });
   if (!generation.ok) {
     return generation;
@@ -136,12 +145,18 @@ export async function runOllamaSuggestionForDocument(
     return parsed;
   }
 
-  const classified = await buildAiClassificationSuggestion(prompt.input, () => parsed.value);
-  if (classified.status !== "ready") {
-    return aiFailure("AI_OUTPUT_INVALID", "Suggestion IA invalide.");
+  const multiCandidateValidation = validateAiMultiCandidateResponse(parsed.value);
+  if (multiCandidateValidation.status === "invalid") {
+    return aiFailure("AI_OUTPUT_INVALID", multiCandidateValidation.error.message);
   }
 
-  const sanitizedSuggestion = sanitizeAiSuggestion(classified.suggestion, prompt.input);
+  const adapted = adaptMultiCandidateResponseToSuggestion(multiCandidateValidation.response);
+  if (adapted.status !== "valid") {
+    return aiFailure("AI_OUTPUT_INVALID", adapted.error.message);
+  }
+
+  const sanitizedSuggestion = sanitizeAiSuggestion(adapted.suggestion, prompt.input);
+  const profile = getAiModelProfile(settings.profileId);
 
   return {
     ok: true,
@@ -154,6 +169,14 @@ export async function runOllamaSuggestionForDocument(
       textSource: textContext.source,
       modelStatus: modelReady.value,
       input: prompt.input,
+      profile: {
+        id: profile.id,
+        label: profile.label,
+        model: profile.model,
+        think: profile.think
+      },
+      responseJson: multiCandidateValidation.response,
+      thinking: generation.value.thinkingText,
       suggestion: sanitizedSuggestion,
       promptCharacterCount: prompt.prompt.length,
       message: "Suggestion IA autonome prête."

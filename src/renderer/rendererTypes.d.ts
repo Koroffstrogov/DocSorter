@@ -41,6 +41,7 @@ type AiPanelStatus =
   | "suggestion-ready"
   | "error";
 type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
+type AiModelProfileId = "gemma3-4b" | "gemma4-12b-nothink" | "gemma4-12b-thinking";
 type AiModelLifecycleStatus =
   | "unavailable"
   | "model_missing"
@@ -604,7 +605,9 @@ interface RendererAiSettings {
   enabled: boolean;
   provider: "ollama";
   baseUrl: string;
+  profileId: AiModelProfileId;
   model: string;
+  think: boolean;
   timeoutMs: number;
   lastTestAt: string | null;
   lastStatus: AiConnectionStatus | null;
@@ -631,6 +634,7 @@ interface RendererAiModelStatus {
 
 interface AiSettingsDraft {
   enabled: boolean;
+  profileId: AiModelProfileId;
   baseUrl: string;
   model: string;
   timeoutMs: string;
@@ -659,6 +663,14 @@ interface RendererAiDocumentSuggestion {
   suggestedAt: string;
   textSource: "pdf-native" | "tesseract-cli";
   modelStatus: RendererAiModelStatus;
+  profile: {
+    id: AiModelProfileId;
+    label: string;
+    model: string;
+    think: boolean;
+  };
+  responseJson: unknown;
+  thinking: string | null;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;
   message: string;

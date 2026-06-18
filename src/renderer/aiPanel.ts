@@ -26,6 +26,7 @@ interface AiPanelElements {
   status: HTMLElement | null;
   form: HTMLFormElement | null;
   enabledInput: HTMLInputElement | null;
+  profileInput: HTMLSelectElement | null;
   baseUrlInput: HTMLInputElement | null;
   modelInput: HTMLInputElement | null;
   timeoutInput: HTMLInputElement | null;
@@ -53,9 +54,13 @@ var DocSorterAiPanel: AiPanelFactoryApi;
 (() => {
   function createAiPanel(options: AiPanelOptions): AiPanelApi {
     const elements = getAiPanelElements(options.root ?? document);
-    const textInputs = [elements.baseUrlInput, elements.modelInput, elements.timeoutInput];
+    const textInputs = [elements.baseUrlInput, elements.timeoutInput];
 
     elements.enabledInput?.addEventListener("change", () => {
+      options.onDraftChange(readDraft(elements));
+    });
+
+    elements.profileInput?.addEventListener("change", () => {
       options.onDraftChange(readDraft(elements));
     });
 
@@ -123,6 +128,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
         elements.enabledInput.disabled = disabled;
       }
 
+      if (elements.profileInput) {
+        elements.profileInput.disabled = disabled;
+      }
+
       [elements.baseUrlInput, elements.modelInput, elements.timeoutInput].forEach((input) => {
         if (input) {
           input.disabled = disabled;
@@ -186,6 +195,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       status: root.querySelector<HTMLElement>("#ai-status"),
       form: root.querySelector<HTMLFormElement>("#ai-settings-form"),
       enabledInput: root.querySelector<HTMLInputElement>("#ai-enabled"),
+      profileInput: root.querySelector<HTMLSelectElement>("#ai-profile"),
       baseUrlInput: root.querySelector<HTMLInputElement>("#ai-base-url"),
       modelInput: root.querySelector<HTMLInputElement>("#ai-model"),
       timeoutInput: root.querySelector<HTMLInputElement>("#ai-timeout"),
@@ -204,8 +214,9 @@ var DocSorterAiPanel: AiPanelFactoryApi;
   function readDraft(elements: AiPanelElements): AiSettingsDraft {
     return {
       enabled: Boolean(elements.enabledInput?.checked),
+      profileId: readProfileId(elements.profileInput?.value ?? ""),
       baseUrl: elements.baseUrlInput?.value ?? "",
-      model: elements.modelInput?.value ?? "",
+      model: modelForProfile(readProfileId(elements.profileInput?.value ?? "")),
       timeoutMs: elements.timeoutInput?.value ?? "30000"
     };
   }
@@ -214,9 +225,28 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     if (elements.enabledInput && elements.enabledInput.checked !== draft.enabled) {
       elements.enabledInput.checked = draft.enabled;
     }
+    if (elements.profileInput && elements.profileInput.value !== draft.profileId) {
+      elements.profileInput.value = draft.profileId;
+    }
     syncInputValue(elements.baseUrlInput, draft.baseUrl);
-    syncInputValue(elements.modelInput, draft.model);
+    syncInputValue(elements.modelInput, modelForProfile(draft.profileId));
     syncInputValue(elements.timeoutInput, draft.timeoutMs);
+  }
+
+  function readProfileId(value: string): AiModelProfileId {
+    return value === "gemma4-12b-nothink" || value === "gemma4-12b-thinking"
+      ? value
+      : "gemma3-4b";
+  }
+
+  function modelForProfile(profileId: AiModelProfileId): string {
+    switch (profileId) {
+      case "gemma4-12b-nothink":
+      case "gemma4-12b-thinking":
+        return "gemma4:12b";
+      case "gemma3-4b":
+        return "gemma3:4b";
+    }
   }
 
   function syncInputValue(input: HTMLInputElement | null, value: string): void {
@@ -237,7 +267,9 @@ var DocSorterAiPanel: AiPanelFactoryApi;
 
     if (state.status) {
       lines.push(createMetaLine(`URL : ${compactText(state.status.settings.baseUrl)}`, state.status.settings.baseUrl));
+      lines.push(createMetaLine(`Profil : ${aiProfileLabel(state.status.settings.profileId)}`));
       lines.push(createMetaLine(`Modèle : ${state.status.settings.model || "Non renseigné"}`));
+      lines.push(createMetaLine(`Thinking : ${state.status.settings.think ? "activé" : "désactivé"}`));
       lines.push(createMetaLine(`Timeout : ${state.status.settings.timeoutMs} ms`));
       lines.push(createAiModelStatusLine(state.modelStatus));
 
@@ -349,6 +381,17 @@ var DocSorterAiPanel: AiPanelFactoryApi;
         return "Erreur IA locale";
       case "idle":
         return "modèle non chargé";
+    }
+  }
+
+  function aiProfileLabel(profileId: AiModelProfileId): string {
+    switch (profileId) {
+      case "gemma4-12b-nothink":
+        return "gemma4:12b no-think";
+      case "gemma4-12b-thinking":
+        return "gemma4:12b thinking";
+      case "gemma3-4b":
+        return "gemma3:4b";
     }
   }
 

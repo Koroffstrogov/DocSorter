@@ -54,6 +54,10 @@ describe("renderer right panel layout", () => {
 
     const advancedAiPanel = extractElementBlock(html, '<details id="ai-panel"', "</details>");
     expect(advancedAiPanel).not.toContain('id="run-ai-suggestion"');
+    expect(advancedAiPanel).toContain('id="ai-profile"');
+    expect(advancedAiPanel).toContain('value="gemma3-4b"');
+    expect(advancedAiPanel).toContain('value="gemma4-12b-nothink"');
+    expect(advancedAiPanel).toContain('value="gemma4-12b-thinking"');
     expect(advancedAiPanel).toContain("Tester Ollama");
     expect(advancedAiPanel).toContain("Libérer le modèle IA");
   });

@@ -8,6 +8,7 @@ import { boundAiClassificationInput } from "./aiClassificationValidator";
 
 export interface OllamaClassificationPrompt {
   prompt: string;
+  format: unknown;
   input: BoundedAiClassificationInput;
 }
 
@@ -32,6 +33,7 @@ export function buildOllamaClassificationPrompt(
 
   return {
     input: boundedInput,
+    format: OLLAMA_MULTI_CANDIDATE_JSON_SCHEMA,
     prompt: [
       "Tu aides DocSorter Local à proposer un classement documentaire local.",
       "Tu proposes seulement : l'utilisateur garde la décision finale.",
@@ -39,16 +41,44 @@ export function buildOllamaClassificationPrompt(
       "Schéma JSON attendu :",
       JSON.stringify(
         {
-          dateToken: "AAAA-MM-JJ ou AAAA optionnel",
-          subject: "sujet du champ Renommage proposé optionnel",
-          target: "cible normalisée optionnelle",
-          documentType: "type documentaire normalisé optionnel",
-          issuer: "émetteur normalisé optionnel",
-          detail: "détail normalisé optionnel",
-          proposedName: "nom complet proposé optionnel",
-          targetFolder: "dossier relatif optionnel",
+          fields: {
+            dateToken: {
+              selected: "AAAA-MM-JJ ou AAAA optionnel",
+              candidates: [{ value: "2026", score: 80, reason: "année fiscale détectée", role: "selected" }]
+            },
+            subject: {
+              selected: "sujet du champ Renommage proposé optionnel",
+              candidates: [{ value: "captur", score: 85, reason: "véhicule détecté", role: "selected" }]
+            },
+            target: {
+              selected: "cible logique optionnelle",
+              candidates: [{ value: "foyer", score: 85, reason: "document fiscal du foyer", role: "selected" }]
+            },
+            documentType: {
+              selected: "type documentaire normalisé optionnel",
+              candidates: [{ value: "avis-imposition", score: 90, reason: "libellé détecté", role: "selected" }]
+            },
+            issuer: {
+              selected: "émetteur normalisé optionnel",
+              candidates: [{ value: "renault", score: 60, reason: "organisme détecté", role: "selected" }]
+            },
+            detail: {
+              selected: "détail normalisé optionnel",
+              candidates: [{ value: "vidange", score: 65, reason: "prestation détectée", role: "selected" }]
+            }
+          },
+          folderCandidates: [
+            { value: "Vehicules", score: 80, reason: "dossier connu pertinent", role: "existing" }
+          ],
+          fileNameCandidates: [
+            {
+              value: "2026_captur_facture-entretien_renault_vidange.pdf",
+              score: 80,
+              reason: "convention respectée",
+              role: "selected"
+            }
+          ],
           confidence: "nombre entier 0..100",
-          reasons: ["raisons courtes"],
           warnings: ["avertissements courts"],
           source: "ollama"
         },
@@ -57,11 +87,13 @@ export function buildOllamaClassificationPrompt(
       ),
       "Contraintes strictes :",
       "- source doit valoir \"ollama\".",
-      "- targetFolder doit être relatif, sans chemin absolu, sans lettre de lecteur, sans \"..\".",
-      "- targetFolder doit reprendre un dossier relatif connu quand un dossier pertinent existe dans knownRelativeFolders.",
-      "- subject doit proposer le champ Sujet de Renommage proposé quand il est identifiable.",
-      "- subject, target, documentType, issuer et detail doivent être des blocs courts compatibles nom de fichier.",
-      "- proposedName doit suivre la convention de nommage si tu le fournis.",
+      "- Chaque champ de fields doit contenir selected et candidates ; chaque candidate contient value, score, reason, role optionnel.",
+      "- fields.subject.selected doit proposer le champ Sujet de Renommage proposé quand il est identifiable.",
+      "- fields.subject, fields.target, fields.documentType, fields.issuer et fields.detail doivent être des blocs courts compatibles nom de fichier.",
+      "- folderCandidates doit contenir des dossiers relatifs candidats ; chaque dossier doit être relatif, sans chemin absolu, sans lettre de lecteur, sans \"..\".",
+      "- folderCandidates doit préférer un dossier relatif connu pertinent quand il existe dans knownRelativeFolders.",
+      "- si aucun dossier connu ne convient, ajoute un candidat role \"newFolderProposal\" puis un fallback Divers/A-traiter-manuellement.",
+      "- fileNameCandidates doit contenir des noms complets proposés qui respectent la convention de nommage.",
       "- subject ne doit jamais être égal à documentType.",
       "- subject ne doit pas répéter le type documentaire.",
       "- target ne doit jamais être égal à documentType.",
@@ -71,6 +103,10 @@ export function buildOllamaClassificationPrompt(
       "- dateToken doit être au format AAAA-MM-JJ ou AAAA, ou rester absent.",
       "- si tu ne connais que le mois au format AAAA-MM, utilise AAAA-MM-01.",
       "- n'utilise pas date-inconnue, AAAA-env, ni AAAA-MM dans la sortie JSON.",
+      "- Pour contrat ou assurance, la date d'effet est prioritaire sur la date de signature.",
+      "- Pour avis-imposition, target doit être foyer et dateToken doit être l'année fiscale/recherche.",
+      "- Pour scolarité 2026/2027, dateToken doit être 2026.",
+      "- N'invente pas une date précise : si seulement l'année est connue, retourne AAAA.",
       "- confidence est un nombre entre 0 et 100.",
       "- n'invente pas une certitude : ajoute un warning si le signal est faible.",
       "- n'inclus jamais de chemin Windows complet.",
@@ -79,6 +115,76 @@ export function buildOllamaClassificationPrompt(
       JSON.stringify(payload, null, 2)
     ].join("\n")
   };
+}
+
+export const OLLAMA_MULTI_CANDIDATE_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["fields", "folderCandidates", "fileNameCandidates", "warnings", "confidence", "source"],
+  properties: {
+    fields: {
+      type: "object",
+      additionalProperties: false,
+      required: ["dateToken", "subject", "target", "documentType", "issuer", "detail"],
+      properties: {
+        dateToken: createFieldSchema(),
+        subject: createFieldSchema(),
+        target: createFieldSchema(),
+        documentType: createFieldSchema(),
+        issuer: createFieldSchema(),
+        detail: createFieldSchema()
+      }
+    },
+    folderCandidates: createCandidateArraySchema(),
+    fileNameCandidates: createCandidateArraySchema(),
+    warnings: {
+      type: "array",
+      maxItems: 8,
+      items: { type: "string" }
+    },
+    confidence: {
+      type: "integer",
+      minimum: 0,
+      maximum: 100
+    },
+    source: {
+      const: "ollama"
+    }
+  }
+} as const;
+
+function createFieldSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["selected", "candidates"],
+    properties: {
+      selected: { type: "string" },
+      candidates: createCandidateArraySchema()
+    }
+  } as const;
+}
+
+function createCandidateArraySchema() {
+  return {
+    type: "array",
+    maxItems: 8,
+    items: {
+      type: "object",
+      additionalProperties: false,
+      required: ["value", "score", "reason"],
+      properties: {
+        value: { type: "string" },
+        score: {
+          type: "integer",
+          minimum: 0,
+          maximum: 100
+        },
+        reason: { type: "string" },
+        role: { type: "string" }
+      }
+    }
+  } as const;
 }
 
 function sanitizeBoundedInput(input: BoundedAiClassificationInput): BoundedAiClassificationInput {
