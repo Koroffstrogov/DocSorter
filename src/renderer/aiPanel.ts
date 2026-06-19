@@ -356,6 +356,12 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       return "IA locale désactivée";
     }
 
+    if (state.status?.status === "not-tested") {
+      return state.status.settings.lastStatus === "ok"
+        ? "Dernier test Ollama OK"
+        : "Test Ollama requis";
+    }
+
     if (state.status?.status === "ok") {
       return "Connexion Ollama OK";
     }

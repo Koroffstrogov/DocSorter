@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  getAiStatus,
   getAiSettingsPath,
   loadAiSettings,
   normalizeLocalOllamaUrl,
@@ -87,6 +88,31 @@ describe("Ollama AI settings", () => {
       lastStatus: "ok",
       lastError: null
     });
+  });
+
+  it("does not expose a saved successful test as a current live connection", async () => {
+    const workspace = await createWorkspace();
+
+    await saveAiSettings(workspace.userData, {
+      enabled: true,
+      provider: "ollama",
+      baseUrl: "http://localhost:11434/",
+      profileId: "gemma3-4b",
+      model: "gemma3:4b",
+      think: false,
+      timeoutMs: 30_000,
+      lastTestAt: "2026-06-16T10:00:00.000Z",
+      lastStatus: "ok",
+      lastError: null
+    });
+
+    const status = await getAiStatus(workspace.userData);
+
+    expect(status.ok).toBe(true);
+    expect(status.ok && status.value.status).toBe("not-tested");
+    expect(status.ok && status.value.message).toBe(
+      "Dernier test Ollama OK. Relancez Tester Ollama pour vérifier la connexion actuelle."
+    );
   });
 
   it("accepts only local Ollama URLs", () => {

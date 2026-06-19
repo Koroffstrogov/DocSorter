@@ -40,7 +40,7 @@ type AiPanelStatus =
   | "unloading"
   | "suggestion-ready"
   | "error";
-type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
+type AiConnectionStatus = "disabled" | "not-tested" | "ok" | "model-missing" | "error" | "timeout";
 type AiModelProfileId = "gemma3-4b" | "gemma4-12b-nothink" | "gemma4-12b-thinking";
 type AiModelLifecycleStatus =
   | "unavailable"

@@ -9,7 +9,13 @@ import {
 } from "./aiModelProfiles";
 
 export type AiProviderName = "ollama";
-export type AiConnectionStatus = "disabled" | "ok" | "model-missing" | "error" | "timeout";
+export type AiConnectionStatus =
+  | "disabled"
+  | "not-tested"
+  | "ok"
+  | "model-missing"
+  | "error"
+  | "timeout";
 
 export type AiSettingsErrorCode =
   | "AI_URL_NOT_LOCAL"
@@ -294,9 +300,7 @@ export function aiErrorMessage(code: AiSettingsErrorCode): string {
 }
 
 function createAiStatus(settingsPath: string, settings: AiSettings): AiStatus {
-  const status: AiConnectionStatus = settings.enabled
-    ? settings.lastStatus ?? "error"
-    : "disabled";
+  const status: AiConnectionStatus = currentConnectionStatus(settings);
   const disabledMessage = "IA locale désactivée. Aucun document n'est envoyé.";
   return {
     settingsPath,
@@ -318,6 +322,10 @@ function statusMessage(status: AiConnectionStatus, settings: AiSettings): string
   switch (status) {
     case "disabled":
       return "IA locale désactivée. Aucun document n'est envoyé.";
+    case "not-tested":
+      return settings.lastStatus === "ok" && settings.lastTestAt
+        ? "Dernier test Ollama OK. Relancez Tester Ollama pour vérifier la connexion actuelle."
+        : "Configuration IA sauvegardée. Test Ollama non lancé.";
     case "ok":
       return "Connexion Ollama locale OK.";
     case "model-missing":
@@ -329,6 +337,22 @@ function statusMessage(status: AiConnectionStatus, settings: AiSettings): string
     case "error":
       return settings.lastError ?? "Configuration IA sauvegardée. Test Ollama non lancé.";
   }
+}
+
+function currentConnectionStatus(settings: AiSettings): AiConnectionStatus {
+  if (!settings.enabled) {
+    return "disabled";
+  }
+
+  if (
+    settings.lastStatus === "error" ||
+    settings.lastStatus === "timeout" ||
+    settings.lastStatus === "model-missing"
+  ) {
+    return settings.lastStatus;
+  }
+
+  return "not-tested";
 }
 
 function sanitizeModelName(value: string): string {
@@ -349,6 +373,7 @@ function normalizeTimeout(value: unknown): number {
 
 function readConnectionStatus(value: unknown): AiConnectionStatus | null {
   return value === "disabled" ||
+    value === "not-tested" ||
     value === "ok" ||
     value === "model-missing" ||
     value === "error" ||

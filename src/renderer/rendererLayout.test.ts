@@ -96,6 +96,14 @@ describe("renderer right panel layout", () => {
     expect(aiPanel).toContain('textContent = "Modifier"');
   });
 
+  it("does not present a saved Ollama success as a live connection in the IA panel", async () => {
+    const aiPanel = await readFile(path.join(process.cwd(), "src", "renderer", "aiPanel.ts"), "utf8");
+
+    expect(aiPanel).toContain('"not-tested"');
+    expect(aiPanel).toContain("Dernier test Ollama OK");
+    expect(aiPanel).toContain("Test Ollama requis");
+  });
+
   it("keeps document metadata folded in the right panel header", async () => {
     const html = await readRendererHtml();
 
