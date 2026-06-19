@@ -22,15 +22,13 @@ var DocSorterAiStatusContent: AiStatusContentApi;
   function createSimpleStatusContent(state: AiState): Node[] {
     const lines: Node[] = [];
     const summary = document.createElement("strong");
+    summary.className = "ai-simple-status-line";
     summary.textContent = `${aiFormatters.simpleConnectionLabel(state)} · ${aiFormatters.simpleModelLabel(state.modelStatus)}`;
     lines.push(summary);
 
-    if (state.timing.stage !== "idle" || state.timing.finalElapsedMs !== null) {
-      lines.push(createMetaLine(`Chronomètre : ${aiFormatters.formatDuration(state.timing.finalElapsedMs ?? state.timing.elapsedMs)}`));
-    } else if (state.timing.lastAnalysisMs !== null) {
-      lines.push(createMetaLine(`Dernière analyse : ${aiFormatters.formatDuration(state.timing.lastAnalysisMs)}`));
-    } else if (state.timing.lastLoadMs !== null) {
-      lines.push(createMetaLine(`Dernier chargement : ${aiFormatters.formatDuration(state.timing.lastLoadMs)}`));
+    const timingLine = createSimpleTimingLine(state.timing);
+    if (timingLine) {
+      lines.push(timingLine);
     }
 
     if (state.dirty) {
@@ -42,6 +40,42 @@ var DocSorterAiStatusContent: AiStatusContentApi;
     }
 
     return lines;
+  }
+
+  function createSimpleTimingLine(timing: AiPipelineTimingState): HTMLElement | null {
+    if (timing.stage !== "idle" && timing.stage !== "completed" && timing.stage !== "error") {
+      return createMetaLine(
+        `${aiFormatters.aiPipelineStageLabel(timing.stage)}... ${aiFormatters.formatDuration(timing.elapsedMs)}`,
+        undefined,
+        "ai-simple-timing-line"
+      );
+    }
+
+    if (timing.lastAnalysisMs !== null) {
+      return createMetaLine(
+        `Dernière analyse : ${aiFormatters.formatDuration(timing.lastAnalysisMs)}`,
+        undefined,
+        "ai-simple-timing-line"
+      );
+    }
+
+    if (timing.lastLoadMs !== null) {
+      return createMetaLine(
+        `Dernier chargement : ${aiFormatters.formatDuration(timing.lastLoadMs)}`,
+        undefined,
+        "ai-simple-timing-line"
+      );
+    }
+
+    if (timing.finalElapsedMs !== null) {
+      return createMetaLine(
+        `Dernier essai : ${aiFormatters.formatDuration(timing.finalElapsedMs)}`,
+        undefined,
+        "ai-simple-timing-line"
+      );
+    }
+
+    return null;
   }
 
   function createTechnicalStatusContent(state: AiState, options: AiStatusContentOptions): Node[] {
@@ -84,9 +118,12 @@ var DocSorterAiStatusContent: AiStatusContentApi;
     return lines;
   }
 
-  function createMetaLine(value: string, title?: string): HTMLElement {
+  function createMetaLine(value: string, title?: string, className?: string): HTMLElement {
     const line = document.createElement("span");
     line.textContent = value;
+    if (className) {
+      line.className = className;
+    }
     if (title) {
       line.title = title;
     }

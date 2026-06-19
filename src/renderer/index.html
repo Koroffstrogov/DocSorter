@@ -147,23 +147,27 @@
               </div>
             </section>
 
-            <section id="ai-control-panel" class="detail-section ai-control-panel" aria-label="Assistant IA">
-              <div class="section-heading">
+            <section id="ai-control-panel" class="detail-section ai-control-panel ds-card" aria-label="Assistant IA">
+              <div class="section-heading assistant-header ds-section-header">
                 <h3>Assistant IA</h3>
                 <span id="ai-text-status" class="ai-text-status">Sélectionnez un document à trier.</span>
               </div>
-              <label class="ai-quick-profile">
-                Profil IA
+              <label class="ai-quick-profile assistant-profile">
+                <span>Profil IA</span>
                 <select id="ai-quick-profile" name="quickProfileId">
                   <option value="gemma3-4b">gemma3:4b</option>
                   <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
                   <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
                 </select>
               </label>
-              <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
-              <div class="ai-control-actions">
-                <button id="preload-ai-model" type="button" disabled>Charger le modèle IA</button>
-                <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
+              <div id="ai-status" class="ai-status ai-simple-status">Chargement de la configuration IA locale...</div>
+              <div class="ai-control-actions assistant-actions">
+                <button id="preload-ai-model" class="ds-button ds-button-secondary" type="button" disabled>
+                  Charger le modèle IA
+                </button>
+                <button id="run-ai-suggestion" class="ds-button ds-button-primary" type="button" disabled>
+                  Analyser avec IA locale
+                </button>
               </div>
             </section>
 

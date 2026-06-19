@@ -83,12 +83,20 @@ describe("renderer right panel layout", () => {
     expect(html).not.toMatch(/<details id="advanced-panel"[^>]*\sopen[\s>]/);
 
     const aiControlPanel = extractElementBlock(html, '<section id="ai-control-panel"', "</section>");
+    expect(aiControlPanel).toContain('class="detail-section ai-control-panel ds-card"');
+    expect(aiControlPanel).toContain('class="section-heading assistant-header ds-section-header"');
     expect(aiControlPanel).toContain('id="ai-quick-profile"');
     expect(aiControlPanel).toContain('id="ai-status"');
+    expect(aiControlPanel).toContain('class="ai-status ai-simple-status"');
     expect(aiControlPanel).toContain('id="preload-ai-model"');
     expect(aiControlPanel).toContain('id="run-ai-suggestion"');
+    expect(aiControlPanel).toContain('class="ds-button ds-button-secondary"');
+    expect(aiControlPanel).toContain('class="ds-button ds-button-primary"');
+    expect(aiControlPanel.match(/<button /g)?.length).toBe(2);
     expect(aiControlPanel).not.toContain("URL Ollama");
     expect(aiControlPanel).not.toContain("Timeout");
+    expect(aiControlPanel).not.toContain("Keep alive");
+    expect(aiControlPanel).not.toContain("Config");
     expect(aiControlPanel).not.toContain("Tester Ollama");
 
     const sortProposalPanel = extractElementBlock(html, '<section id="sort-proposal-panel"', "</section>");

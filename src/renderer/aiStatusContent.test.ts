@@ -16,6 +16,7 @@ describe("ai status content renderer module", () => {
     const text = collectNodeText(nodes);
 
     expect(text).toContain("Ollama OK · modèle chargé");
+    expect(nodes[0]?.className).toBe("ai-simple-status-line");
     expect(text).not.toContain("URL :");
     expect(text).not.toContain("Timeout :");
     expect(text).not.toContain("Keep alive :");
@@ -73,6 +74,30 @@ describe("ai status content renderer module", () => {
     expect(technicalText).toContain("Ollama indisponible");
   });
 
+  it("renders the latest completed analysis duration in simple status", () => {
+    installTestDocument();
+
+    const text = collectNodeText(statusContent.createSimpleStatusContent(createAiState({
+      status: createRendererAiStatus("ok"),
+      modelStatus: createModelStatus("ready"),
+      timing: {
+        stage: "completed",
+        startedAtMs: null,
+        elapsedMs: 4200,
+        finalElapsedMs: 4200,
+        lastLoadMs: 1300,
+        lastAnalysisMs: 4200,
+        lastGenerationMs: 2300,
+        model: "gemma3:4b",
+        profileId: "gemma3-4b",
+        think: false
+      }
+    })));
+
+    expect(text).toContain("Dernière analyse : 4.2 s");
+    expect(text).not.toContain("Dernier chargement");
+  });
+
   it("renders pipeline timing details", () => {
     installTestDocument();
 
@@ -97,7 +122,7 @@ describe("ai status content renderer module", () => {
       formatDate: (isoDate) => isoDate
     }));
 
-    expect(simpleText).toContain("Chronomètre : 2.3 s");
+    expect(simpleText).toContain("Analyse IA... 1.2 s");
     expect(technicalText).toContain("Étape IA : Analyse IA");
     expect(technicalText).toContain("Chronomètre : 2.3 s");
     expect(technicalText).toContain("Dernier chargement modèle : 3.5 s");

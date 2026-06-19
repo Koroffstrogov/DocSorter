@@ -956,19 +956,48 @@ details.detail-section[open] > summary {
   background: #fbfdff;
 }
 
-.ai-control-panel .ai-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs) 10px;
+.assistant-header {
+  min-height: 28px;
+}
+
+.assistant-profile {
+  gap: var(--space-xs);
+}
+
+.assistant-profile span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.ai-control-panel .ai-simple-status {
+  display: grid;
+  gap: 2px;
   border-color: var(--border-subtle);
-  padding: var(--space-sm) 10px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
   background: var(--surface-card);
 }
 
-.ai-control-panel .ai-status strong,
-.ai-control-panel .ai-status span {
+.ai-control-panel .ai-simple-status strong,
+.ai-control-panel .ai-simple-status span {
   font-size: 12px;
   line-height: 1.25;
+}
+
+.ai-simple-status-line {
+  overflow: hidden;
+  color: var(--text-main);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-simple-timing-line {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sort-proposal-card {
@@ -1052,7 +1081,8 @@ details.detail-section[open] > summary {
   white-space: nowrap;
 }
 
-.ai-control-actions {
+.ai-control-actions,
+.assistant-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-sm);
@@ -1069,10 +1099,29 @@ details.detail-section[open] > summary {
   font-weight: 720;
 }
 
+.assistant-actions #preload-ai-model {
+  border-color: var(--border-strong);
+  color: var(--text-main);
+  background: var(--button-secondary-bg);
+}
+
+.assistant-actions #run-ai-suggestion {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--button-primary-bg);
+}
+
 .ai-control-actions button:hover:not(:disabled),
 .ai-control-actions button:focus-visible {
   border-color: var(--border-strong);
   background: var(--surface-muted);
+}
+
+.assistant-actions #run-ai-suggestion:hover:not(:disabled),
+.assistant-actions #run-ai-suggestion:focus-visible {
+  border-color: var(--accent-strong);
+  color: #ffffff;
+  background: var(--accent-strong);
 }
 
 .proposal-mode strong {
