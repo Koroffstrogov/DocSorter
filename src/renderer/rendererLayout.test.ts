@@ -110,50 +110,73 @@ describe("renderer right panel layout", () => {
     expect(advancedPanel).toContain("Libérer le modèle IA");
   });
 
+  it("loads ai panel field helpers before the ai panel script", async () => {
+    const html = await readRendererHtml();
+
+    expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
+    expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiFieldRows.js"));
+    expect(indexOf(html, "aiFieldRows.js")).toBeLessThan(indexOf(html, "aiFolderCandidates.js"));
+    expect(indexOf(html, "aiFolderCandidates.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
+  });
+
   it("renders the six IA refinement fields and folder candidate area", async () => {
     const html = await readRendererHtml();
     const aiPanel = await readFile(path.join(process.cwd(), "src", "renderer", "aiPanel.ts"), "utf8");
+    const aiFieldRows = await readFile(path.join(process.cwd(), "src", "renderer", "aiFieldRows.ts"), "utf8");
+    const aiFolderCandidates = await readFile(
+      path.join(process.cwd(), "src", "renderer", "aiFolderCandidates.ts"),
+      "utf8"
+    );
+    const aiPanelFormatters = await readFile(
+      path.join(process.cwd(), "src", "renderer", "aiPanelFormatters.ts"),
+      "utf8"
+    );
 
     expect(html).toContain('id="ai-suggestion-details"');
     expect(html).toContain('id="ai-folder-candidates"');
     expect(html).toContain('id="target-folder-input"');
     expect(html).toContain('id="apply-ai-suggestion-empty"');
-    expect(aiPanel).toContain('createAiFieldRow("Date"');
-    expect(aiPanel).toContain('createAiFieldRow("Sujet"');
-    expect(aiPanel).toContain('createAiFieldRow("Cible"');
-    expect(aiPanel).toContain('createAiFieldRow("Type"');
-    expect(aiPanel).toContain('createAiFieldRow("Émetteur"');
-    expect(aiPanel).toContain('createAiFieldRow("Détail"');
-    expect(aiPanel).toContain('className = "ai-field-edit"');
-    expect(aiPanel).toContain('textContent = "✎"');
-    expect(aiPanel).toContain("aria-label");
-    expect(aiPanel).toContain("Analyse IA requise pour afficher les choix par champ.");
-    expect(aiPanel).toContain("Analyse IA requise pour proposer un dossier.");
-    expect(aiPanel).toContain("return [container];");
-    expect(aiPanel).toContain("createCandidateButton");
-    expect(aiPanel).toContain("fieldCandidates.slice(0, 3)");
-    expect(aiPanel).toContain("folderCandidates = getFolderCandidates(suggestion).slice(0, 3)");
-    expect(aiPanel).toContain("onFolderCandidateSelect");
-    expect(aiPanel).toContain("folder-candidate-badge");
-    expect(aiPanel).toContain("requiresCreation");
-    expect(aiPanel).toContain("Chronomètre");
-    expect(aiPanel).toContain("Dernier chargement modèle");
-    expect(aiPanel).toContain("Dernière analyse totale");
-    expect(aiPanel).toContain("return \"à créer\"");
-    expect(aiPanel).toContain("return \"existe\"");
-    expect(aiPanel).toContain("return \"fallback\"");
+    expect(aiPanel).toContain("aiFieldRows.createSuggestionContent");
+    expect(aiFieldRows).toContain('createAiFieldRow("Date"');
+    expect(aiFieldRows).toContain('createAiFieldRow("Sujet"');
+    expect(aiFieldRows).toContain('createAiFieldRow("Cible"');
+    expect(aiFieldRows).toContain('createAiFieldRow("Type"');
+    expect(aiFieldRows).toContain('createAiFieldRow("Émetteur"');
+    expect(aiFieldRows).toContain('createAiFieldRow("Détail"');
+    expect(aiFieldRows).toContain('className = "ai-field-edit"');
+    expect(aiFieldRows).toContain('textContent = "✎"');
+    expect(aiFieldRows).toContain("aria-label");
+    expect(aiFieldRows).toContain("Analyse IA requise pour afficher les choix par champ.");
+    expect(aiPanel).toContain("aiFolderCandidates.createFolderCandidateContent");
+    expect(aiFolderCandidates).toContain("Analyse IA requise pour proposer un dossier.");
+    expect(aiFolderCandidates).toContain("return [container];");
+    expect(aiFieldRows).toContain("createCandidateButton");
+    expect(aiFieldRows).toContain("fieldCandidates.slice(0, 3)");
+    expect(aiFolderCandidates).toContain("folderCandidates = aiFieldRows.getFolderCandidates(suggestion).slice(0, 3)");
+    expect(aiFolderCandidates).toContain("onFolderCandidateSelect");
+    expect(aiFolderCandidates).toContain("folder-candidate-badge");
+    expect(aiFieldRows).toContain("requiresCreation");
+    expect(aiPanelFormatters).toContain("return \"à créer\"");
+    expect(aiPanelFormatters).toContain("return \"existe\"");
+    expect(aiPanelFormatters).toContain("return \"fallback\"");
   });
 
   it("keeps technical Ollama details out of the simple IA status", async () => {
     const aiPanel = await readFile(path.join(process.cwd(), "src", "renderer", "aiPanel.ts"), "utf8");
+    const aiPanelFormatters = await readFile(
+      path.join(process.cwd(), "src", "renderer", "aiPanelFormatters.ts"),
+      "utf8"
+    );
 
     const simpleStatus = extractFunctionBlock(aiPanel, "function createSimpleStatusContent");
-    expect(simpleStatus).toContain("simpleConnectionLabel");
-    expect(simpleStatus).toContain("simpleModelLabel");
+    expect(simpleStatus).toContain("aiFormatters.simpleConnectionLabel");
+    expect(simpleStatus).toContain("aiFormatters.simpleModelLabel");
     expect(simpleStatus).not.toContain("URL :");
     expect(simpleStatus).not.toContain("Timeout :");
     expect(simpleStatus).not.toContain("Keep alive :");
     expect(simpleStatus).not.toContain("Config :");
+    expect(aiPanelFormatters).toContain("function simpleConnectionLabel");
+    expect(aiPanelFormatters).toContain("function simpleModelLabel");
 
     const technicalStatus = extractFunctionBlock(aiPanel, "function createTechnicalStatusContent");
     expect(technicalStatus).toContain("URL :");
@@ -183,11 +206,14 @@ describe("renderer right panel layout", () => {
   });
 
   it("does not present a saved Ollama success as a live connection in the IA panel", async () => {
-    const aiPanel = await readFile(path.join(process.cwd(), "src", "renderer", "aiPanel.ts"), "utf8");
+    const aiPanelFormatters = await readFile(
+      path.join(process.cwd(), "src", "renderer", "aiPanelFormatters.ts"),
+      "utf8"
+    );
 
-    expect(aiPanel).toContain('"not-tested"');
-    expect(aiPanel).toContain("Dernier test Ollama OK");
-    expect(aiPanel).toContain("Test Ollama requis");
+    expect(aiPanelFormatters).toContain('"not-tested"');
+    expect(aiPanelFormatters).toContain("Dernier test Ollama OK");
+    expect(aiPanelFormatters).toContain("Test Ollama requis");
   });
 
   it("keeps document metadata folded in the right panel header", async () => {
