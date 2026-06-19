@@ -269,7 +269,7 @@ describe("rendererAiFlow V2 application helpers", () => {
     });
     expect(selection.selectedFolder).toBe("Vehicules/Captur");
     expect(selection.previewFilename).toBe("2024-03-15_captur_facture_renault_vidange.pdf");
-    expect(selection.previewDestinationFolder).toBe("Z:\\cible\\Vehicules/Captur");
+    expect(selection.previewDestinationFolder).toBe("Vehicules/Captur");
   });
 
   it("recalculates the AI filename when Date or Cible candidates change", async () => {
@@ -375,7 +375,7 @@ describe("rendererAiFlow V2 application helpers", () => {
       "Z:\\cible"
     );
 
-    expect(updated.previewDestinationFolder).toBe("Z:\\cible\\Vehicules/Captur/Entretien");
+    expect(updated.previewDestinationFolder).toBe("Vehicules/Captur/Entretien");
   });
 
   it("preloads the IA model through test Ollama then preload", async () => {

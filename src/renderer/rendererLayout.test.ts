@@ -66,7 +66,6 @@ describe("renderer right panel layout", () => {
     expect(html).toContain('id="sort-proposal-panel"');
     expect(html).toContain("Nom final");
     expect(html).toContain("Dossier final");
-    expect(html).toContain("Mode : <strong>IA locale seule</strong>");
     expect(html).toContain('id="simple-classification-action"');
     expect(html).toContain("Vérifier et classer");
     expect(html).toContain('id="ai-quality-badges"');
@@ -100,6 +99,20 @@ describe("renderer right panel layout", () => {
     expect(aiControlPanel).not.toContain("Tester Ollama");
 
     const sortProposalPanel = extractElementBlock(html, '<section id="sort-proposal-panel"', "</section>");
+    expect(sortProposalPanel).toContain('class="sort-proposal-card ds-card"');
+    expect(sortProposalPanel).toContain('id="proposed-filename"');
+    expect(sortProposalPanel).toContain("Nom final non généré");
+    expect(sortProposalPanel).toContain('id="destination-final-path"');
+    expect(sortProposalPanel).toContain("Aucun dossier final");
+    expect(sortProposalPanel).toContain('id="destination-folder-badge"');
+    expect(sortProposalPanel).toContain('id="proposal-state"');
+    expect(sortProposalPanel).toContain("Analyse IA requise pour générer une proposition.");
+    expect(sortProposalPanel).toContain(
+      'id="ai-quality-badges" class="quality-badges" aria-label="Qualité de la proposition"></div>'
+    );
+    expect(sortProposalPanel).not.toContain("Mode :");
+    expect(sortProposalPanel).not.toContain("quality-badge neutral");
+    expect(sortProposalPanel).not.toMatch(/[A-Z]:\\/);
     expect(sortProposalPanel).not.toContain('id="run-ai-suggestion"');
     expect(sortProposalPanel).toContain('id="simple-classification-action"');
     expect(sortProposalPanel).toContain('id="execute-classification"');
@@ -128,7 +141,9 @@ describe("renderer right panel layout", () => {
       "preload-ai-model",
       "run-ai-suggestion",
       "proposed-filename",
+      "proposal-state",
       "destination-final-path",
+      "destination-folder-badge",
       "simple-classification-action",
       "execute-classification",
       "prepare-classification",
@@ -191,6 +206,8 @@ describe("renderer right panel layout", () => {
 
     expect(css).toContain(".simple-mode-toolbar,");
     expect(css).toContain(".sort-proposal-card,");
+    expect(css).toContain(".proposal-final-name");
+    expect(css).toContain(".folder-status-badge");
     expect(css).toContain("border: 1px solid var(--border-subtle)");
     expect(css).toContain("background: var(--surface-card)");
     expect(css).toContain("background: var(--candidate-pill-selected-bg)");
@@ -299,6 +316,31 @@ describe("renderer right panel layout", () => {
     expect(namingPanel).toContain("Sélectionnez un document à trier.");
   });
 
+  it("keeps the simple sort proposal relative and state-driven", async () => {
+    const html = await readRendererHtml();
+    const namingPanel = await readFile(path.join(process.cwd(), "src", "renderer", "namingPanel.ts"), "utf8");
+    const aiFlow = await readFile(path.join(process.cwd(), "src", "renderer", "rendererAiFlow.ts"), "utf8");
+    const sortProposalPanel = extractElementBlock(html, '<section id="sort-proposal-panel"', "</section>");
+    const destinationFormatter = extractFunctionBlock(aiFlow, "function formatAiPreviewDestinationFolder");
+
+    expect(sortProposalPanel).toContain('id="proposed-filename"');
+    expect(sortProposalPanel).toContain('id="destination-final-path"');
+    expect(sortProposalPanel).toContain('id="destination-folder-badge"');
+    expect(sortProposalPanel).toContain('id="ai-quality-badges"');
+    expect(sortProposalPanel).not.toMatch(/[A-Z]:\\/);
+    expect(namingPanel).toContain("formatRelativeDestinationFolder");
+    expect(namingPanel).toContain("folderBadgeFor");
+    expect(namingPanel).toContain("proposalStateLabel");
+    expect(namingPanel).toContain("Proposition prête.");
+    expect(namingPanel).toContain("Proposition incomplète :");
+    expect(namingPanel).toContain('label: "existe"');
+    expect(namingPanel).toContain('label: "à créer"');
+    expect(namingPanel).toContain('label: "fallback"');
+    expect(destinationFormatter).toContain('replace(/\\\\/g, "/")');
+    expect(destinationFormatter).toContain('return folder || "Aucun dossier final";');
+    expect(destinationFormatter).not.toContain("targetRootPath.replace");
+  });
+
   it("does not present a saved Ollama success as a live connection in the IA panel", async () => {
     const aiPanelFormatters = await readFile(
       path.join(process.cwd(), "src", "renderer", "aiPanelFormatters.ts"),
@@ -379,6 +421,5 @@ function extractFunctionBlock(value: string, startNeedle: string): string {
   ]
     .filter((index) => index > start)
     .sort((left, right) => left - right)[0];
-  expect(nextFunction).toBeGreaterThan(start);
-  return value.slice(start, nextFunction);
+  return value.slice(start, nextFunction ?? value.length);
 }

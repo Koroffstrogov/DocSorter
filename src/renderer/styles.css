@@ -1005,9 +1005,19 @@ details.detail-section[open] > summary {
   background: var(--surface-muted);
 }
 
+.proposal-header {
+  min-height: 28px;
+}
+
+.proposal-header #reset-naming {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .proposal-summary {
   display: grid;
-  gap: 6px;
+  gap: var(--space-sm);
   margin: 0;
 }
 
@@ -1033,6 +1043,22 @@ details.detail-section[open] > summary {
   line-height: 1.35;
 }
 
+.proposal-final-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  background: var(--surface-card);
+}
+
+.proposal-final-name {
+  display: block;
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 820;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .proposal-summary strong.valid {
   color: var(--success);
 }
@@ -1041,10 +1067,35 @@ details.detail-section[open] > summary {
   color: var(--warning);
 }
 
+.proposal-final-folder {
+  display: inline-block;
+  min-width: 0;
+  color: var(--text-main);
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.proposal-folder-block dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.folder-status-badge[hidden] {
+  display: none;
+}
+
+.folder-status-badge {
+  white-space: nowrap;
+}
+
+.proposal-state-line,
 .proposal-mode {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
+  line-height: 1.35;
 }
 
 .ai-quick-profile {

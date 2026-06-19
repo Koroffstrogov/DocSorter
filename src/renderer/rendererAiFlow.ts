@@ -1309,15 +1309,7 @@ function removeRedundantAiNameParts(input: {
 }
 
 function formatAiPreviewDestinationFolder(targetRootPath: string | null, relativeFolder: string): string {
-  const folder = relativeFolder.trim();
-  if (!targetRootPath) {
-    return folder || "Aucun dossier cible sélectionné";
-  }
-
-  if (!folder) {
-    return targetRootPath;
-  }
-
-  const separator = targetRootPath.includes("\\") ? "\\" : "/";
-  return `${targetRootPath.replace(/[\\/]+$/, "")}${separator}${folder.replace(/^[\\/]+/, "")}`;
+  void targetRootPath;
+  const folder = relativeFolder.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return folder || "Aucun dossier final";
 }

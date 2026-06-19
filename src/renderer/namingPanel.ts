@@ -36,6 +36,7 @@ interface NamingPanelElements {
   keywordsInput: HTMLInputElement | null;
   resetButton: HTMLButtonElement | null;
   proposedFilename: HTMLElement | null;
+  proposalState: HTMLElement | null;
   messages: HTMLUListElement | null;
   destinationStatus: HTMLElement | null;
   targetFolderInput: HTMLInputElement | null;
@@ -44,6 +45,7 @@ interface NamingPanelElements {
   createTargetFolderButton: HTMLButtonElement | null;
   destinationTarget: HTMLElement | null;
   destinationFinalPath: HTMLElement | null;
+  destinationFolderBadge: HTMLElement | null;
   destinationAlternative: HTMLElement | null;
   applyDestinationAlternativeButton: HTMLButtonElement | null;
 }
@@ -99,10 +101,12 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       elements.panel.hidden = false;
       if (!activeDocument) {
         if (elements.proposedFilename) {
-          elements.proposedFilename.className = "invalid";
+          elements.proposedFilename.className = "proposal-final-name invalid";
           elements.proposedFilename.replaceChildren("Nom final non généré");
           elements.proposedFilename.title = "";
         }
+
+        setProposalState(elements, "Aucun document sélectionné.");
 
         if (elements.messages) {
           elements.messages.replaceChildren(
@@ -121,18 +125,21 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       if (elements.proposedFilename) {
-        const displayFilename = aiPreview ? aiPreview.filename : effectiveFilename;
+        const displayFilename = aiPreview
+          ? aiPreview.filename
+          : naming.proposal?.isValid
+            ? effectiveFilename
+            : "";
         const displayIsValid = aiPreview ? aiPreview.filenameValid : Boolean(naming.proposal?.isValid);
-        elements.proposedFilename.className = displayIsValid ? "valid" : "invalid";
-        elements.proposedFilename.replaceChildren(
-          !aiPreview && naming.isLoading
-            ? "Calcul de la proposition..."
-            : displayFilename || "Nom final non généré"
-        );
-        elements.proposedFilename.title = aiPreview
-          ? "Prévisualisation IA non appliquée au classement réel"
-          : effectiveFilename;
+        const label = !aiPreview && naming.isLoading
+          ? "Calcul de la proposition..."
+          : displayFilename || "Nom final non généré";
+        elements.proposedFilename.className = `proposal-final-name ${displayIsValid ? "valid" : "invalid"}`;
+        elements.proposedFilename.replaceChildren(label);
+        elements.proposedFilename.title = displayFilename;
       }
+
+      setProposalState(elements, proposalStateLabel(naming, aiPreview));
 
       if (elements.messages) {
         if (aiPreview) {
@@ -161,7 +168,11 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       const { activeDocument, targetPath, targetFolder, naming, destination, aiPreview } = options.getState();
-      const finalFolder = aiPreview?.destinationFolder || formatDestinationFolder(targetPath, targetFolder.selectedFolder);
+      const finalFolder = aiPreview
+        ? formatRelativeDestinationFolder(aiPreview.destinationFolder)
+        : naming.proposal?.isValid
+          ? formatRelativeDestinationFolder(targetFolder.selectedFolder)
+          : "Aucun dossier final";
       const targetLabel = targetPath ?? "Aucun dossier cible sélectionné";
       elements.destinationTarget.replaceChildren(targetLabel);
       elements.destinationTarget.title = targetLabel;
@@ -172,6 +183,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusClass: "status-neutral",
           statusText: "Aucun document actif",
           finalPath: "Aucun dossier final",
+          folderBadge: null,
           alternative: "",
           showAlternativeButton: false
         });
@@ -183,6 +195,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusClass: aiPreview.filenameValid ? "status-neutral" : "status-warning",
           statusText: aiPreview.filenameValid ? "Prévisualisation IA" : "Prévisualisation IA incomplète",
           finalPath: finalFolder,
+          folderBadge: folderBadgeFor(finalFolder, targetFolder, destination),
           alternative: "Non appliqué au classement réel dans ce lot",
           showAlternativeButton: false
         });
@@ -193,7 +206,8 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         setDestinationState(elements, {
           statusClass: "status-neutral",
           statusText: "En attente de la proposition",
-          finalPath: finalFolder,
+          finalPath: "Aucun dossier final",
+          folderBadge: null,
           alternative: "",
           showAlternativeButton: false
         });
@@ -205,6 +219,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusClass: "status-warning",
           statusText: "Nom proposé invalide",
           finalPath: "Corriger la proposition avant contrôle cible",
+          folderBadge: null,
           alternative: "",
           showAlternativeButton: false
         });
@@ -216,6 +231,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusClass: "status-warning",
           statusText: "Aucune cible sélectionnée",
           finalPath: "Choisir une cible pour vérifier la disponibilité",
+          folderBadge: null,
           alternative: "",
           showAlternativeButton: false
         });
@@ -227,6 +243,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusClass: "status-neutral",
           statusText: "Contrôle en cours",
           finalPath: finalFolder,
+          folderBadge: folderBadgeFor(finalFolder, targetFolder, destination),
           alternative: "",
           showAlternativeButton: false
         });
@@ -239,6 +256,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusClass: isCollision ? "status-warning" : "status-valid",
           statusText: isCollision ? "Nom déjà utilisé" : "Nom disponible",
           finalPath: finalFolder,
+          folderBadge: folderBadgeFor(finalFolder, targetFolder, destination),
           alternative: destination.result.alternativeFilename
             ? `Alternative proposée : ${destination.result.alternativeFilename}`
             : "Aucune alternative nécessaire",
@@ -251,7 +269,8 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         setDestinationState(elements, {
           statusClass: "status-error",
           statusText: destinationErrorLabel(destination.error),
-          finalPath: destination.error.message,
+          finalPath: "Aucun dossier final",
+          folderBadge: null,
           alternative: "",
           showAlternativeButton: false
         });
@@ -262,6 +281,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         statusClass: "status-neutral",
         statusText: "Contrôle cible non lancé",
         finalPath: finalFolder,
+        folderBadge: folderBadgeFor(finalFolder, targetFolder, destination),
         alternative: "",
         showAlternativeButton: false
       });
@@ -282,6 +302,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       keywordsInput: root.querySelector<HTMLInputElement>("#naming-keywords"),
       resetButton: root.querySelector<HTMLButtonElement>("#reset-naming"),
       proposedFilename: root.querySelector<HTMLElement>("#proposed-filename"),
+      proposalState: root.querySelector<HTMLElement>("#proposal-state"),
       messages: root.querySelector<HTMLUListElement>("#naming-messages"),
       destinationStatus: root.querySelector<HTMLElement>("#destination-status"),
       targetFolderInput: root.querySelector<HTMLInputElement>("#target-folder-input"),
@@ -290,6 +311,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       createTargetFolderButton: root.querySelector<HTMLButtonElement>("#create-target-folder"),
       destinationTarget: root.querySelector<HTMLElement>("#destination-target"),
       destinationFinalPath: root.querySelector<HTMLElement>("#destination-final-path"),
+      destinationFolderBadge: root.querySelector<HTMLElement>("#destination-folder-badge"),
       destinationAlternative: root.querySelector<HTMLElement>("#destination-alternative"),
       applyDestinationAlternativeButton: root.querySelector<HTMLButtonElement>(
         "#apply-destination-alternative"
@@ -447,6 +469,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       statusClass: string;
       statusText: string;
       finalPath: string;
+      folderBadge: FolderBadge | null;
       alternative: string;
       showAlternativeButton: boolean;
     }
@@ -463,24 +486,106 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
     elements.destinationStatus.replaceChildren(destination.statusText);
     elements.destinationFinalPath.replaceChildren(destination.finalPath);
     elements.destinationFinalPath.title = destination.finalPath;
+    renderFolderBadge(elements.destinationFolderBadge, destination.folderBadge);
     elements.destinationAlternative.replaceChildren(destination.alternative);
     if (elements.applyDestinationAlternativeButton) {
       elements.applyDestinationAlternativeButton.hidden = !destination.showAlternativeButton;
     }
   }
 
-  function formatDestinationFolder(targetPath: string | null, targetFolder: string): string {
-    if (!targetPath) {
-      return "Aucun dossier cible sélectionné";
+  interface FolderBadge {
+    label: "existe" | "à créer" | "fallback";
+    className: string;
+  }
+
+  function setProposalState(elements: NamingPanelElements, message: string): void {
+    if (elements.proposalState) {
+      elements.proposalState.replaceChildren(message);
+      elements.proposalState.title = message;
+    }
+  }
+
+  function proposalStateLabel(
+    naming: NamingState,
+    aiPreview: NamingPanelState["aiPreview"]
+  ): string {
+    if (aiPreview) {
+      if (aiPreview.filenameValid) {
+        return "Proposition prête.";
+      }
+
+      const firstError = aiPreview.messages.find((message) => message.level === "error");
+      return firstError
+        ? `Proposition incomplète : ${firstError.message}`
+        : "Proposition incomplète.";
     }
 
-    const folder = targetFolder.trim();
-    if (!folder) {
-      return targetPath;
+    if (naming.isLoading) {
+      return "Calcul de la proposition...";
     }
 
-    const separator = targetPath.includes("\\") ? "\\" : "/";
-    return `${targetPath.replace(/[\\/]+$/, "")}${separator}${folder.replace(/^[\\/]+/, "")}`;
+    if (naming.proposal?.isValid) {
+      return "Proposition prête à vérifier.";
+    }
+
+    const firstError = naming.proposal?.messages.find((message) => message.level === "error");
+    return firstError
+      ? `Proposition incomplète : ${firstError.message}`
+      : "Analyse IA requise pour générer une proposition.";
+  }
+
+  function formatRelativeDestinationFolder(value: string): string {
+    const folder = value
+      .trim()
+      .replace(/\\/g, "/")
+      .replace(/^\/+|\/+$/g, "");
+    return folder || "Aucun dossier final";
+  }
+
+  function folderBadgeFor(
+    finalFolder: string,
+    targetFolder: TargetFolderState,
+    destination: DestinationCheckState
+  ): FolderBadge | null {
+    const normalized = normalizeFolderForComparison(finalFolder);
+    if (!normalized || normalized === normalizeFolderForComparison("Aucun dossier final")) {
+      return null;
+    }
+
+    if (normalized.startsWith("divers") || normalized.includes("/a-traiter-manuellement")) {
+      return { label: "fallback", className: "folder-status-badge ds-badge ds-badge-fallback" };
+    }
+
+    const matchesKnownFolder = targetFolder.folders.some(
+      (folder) => normalizeFolderForComparison(folder) === normalized
+    );
+    if (matchesKnownFolder || destination.result) {
+      return { label: "existe", className: "folder-status-badge ds-badge ds-badge-success" };
+    }
+
+    return { label: "à créer", className: "folder-status-badge ds-badge ds-badge-warning" };
+  }
+
+  function renderFolderBadge(element: HTMLElement | null, badge: FolderBadge | null): void {
+    if (!element) {
+      return;
+    }
+
+    element.hidden = !badge;
+    if (!badge) {
+      element.className = "folder-status-badge ds-badge";
+      element.replaceChildren();
+      element.title = "";
+      return;
+    }
+
+    element.className = badge.className;
+    element.replaceChildren(badge.label);
+    element.title = badge.label;
+  }
+
+  function normalizeFolderForComparison(value: string): string {
+    return value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
   }
 
   function destinationErrorLabel(error: DestinationAvailabilityError): string {

@@ -171,27 +171,26 @@
               </div>
             </section>
 
-            <section id="sort-proposal-panel" class="sort-proposal-card" aria-label="Proposition de tri">
-              <div class="section-heading">
+            <section id="sort-proposal-panel" class="sort-proposal-card ds-card" aria-label="Proposition de tri">
+              <div class="section-heading proposal-header ds-section-header">
                 <h3>Proposition de tri</h3>
-                <button id="reset-naming" type="button">Réinitialiser</button>
+                <button id="reset-naming" class="ds-button ds-button-secondary" type="button">Réinitialiser</button>
               </div>
-              <dl class="proposal-summary">
-                <div>
+              <dl class="proposal-summary proposal-decision-grid">
+                <div class="proposal-final-block proposal-name-block">
                   <dt>Nom final</dt>
-                  <dd><strong id="proposed-filename">Nom impossible à générer</strong></dd>
+                  <dd><strong id="proposed-filename" class="proposal-final-name invalid">Nom final non généré</strong></dd>
                 </div>
-                <div>
+                <div class="proposal-final-block proposal-folder-block">
                   <dt>Dossier final</dt>
-                  <dd id="destination-final-path">Le nom final sera vérifié avant validation future</dd>
+                  <dd>
+                    <span id="destination-final-path" class="proposal-final-folder">Aucun dossier final</span>
+                    <span id="destination-folder-badge" class="folder-status-badge ds-badge" hidden></span>
+                  </dd>
                 </div>
               </dl>
-              <div id="ai-quality-badges" class="quality-badges" aria-label="Qualité de la proposition">
-                <span class="quality-badge neutral">Date</span>
-                <span class="quality-badge neutral">Type</span>
-                <span class="quality-badge neutral">Dossier</span>
-              </div>
-              <p class="proposal-mode">Mode : <strong>IA locale seule</strong></p>
+              <p id="proposal-state" class="proposal-state-line">Analyse IA requise pour générer une proposition.</p>
+              <div id="ai-quality-badges" class="quality-badges" aria-label="Qualité de la proposition"></div>
               <div class="proposal-actions">
                 <button id="simple-classification-action" class="primary-action simple-classification-action" type="button" disabled>
                   Vérifier et classer
