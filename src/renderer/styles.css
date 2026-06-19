@@ -736,6 +736,138 @@ details.detail-section[open] > summary {
   font-weight: 760;
 }
 
+.triage-workflow {
+  display: grid;
+  gap: 14px;
+}
+
+.triage-workflow[hidden] {
+  display: none;
+}
+
+.sort-proposal-card,
+.field-refinement-panel,
+.target-folder-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #ccd6e2;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.sort-proposal-card {
+  border-color: #b7c7d9;
+  background: #f7fafc;
+}
+
+.proposal-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.proposal-summary div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.proposal-summary dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.proposal-summary dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.proposal-summary strong.valid {
+  color: var(--success);
+}
+
+.proposal-summary strong.invalid {
+  color: var(--warning);
+}
+
+.proposal-mode {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.proposal-mode strong {
+  color: var(--ink);
+}
+
+.quality-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quality-badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.quality-badge.ok {
+  border-color: #badbcc;
+  color: #155724;
+  background: #eef8f1;
+}
+
+.quality-badge.neutral {
+  color: var(--muted);
+  background: #ffffff;
+}
+
+.proposal-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.proposal-actions button,
+.diagnostic-actions button,
+.folder-candidate-card,
+.ai-field-row button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.proposal-actions button,
+.diagnostic-actions button,
+.ai-field-row button {
+  padding: 0 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.proposal-actions .primary-action {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.proposal-actions button[hidden],
+.diagnostic-actions button[hidden] {
+  display: none;
+}
+
 .duplicate-panel {
   border: 1px solid #d7bc5d;
   border-radius: 8px;
@@ -896,6 +1028,162 @@ details.detail-section[open] > summary {
   resize: vertical;
 }
 
+.field-refinement-list,
+.ai-field-list {
+  display: grid;
+  gap: 9px;
+}
+
+.ai-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 10px;
+  align-items: center;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 9px;
+  background: #ffffff;
+}
+
+.ai-field-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-field-title strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.ai-field-title span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.ai-field-selected {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.ai-field-selected.empty {
+  color: var(--muted);
+  font-weight: 560;
+}
+
+.ai-field-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  grid-column: 1 / -1;
+}
+
+.ai-candidate-chip {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #ccd6e2;
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--muted);
+  background: #f7fafc;
+  font-size: 11px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-field-row button {
+  min-width: 72px;
+}
+
+.naming-manual-fields {
+  border: 1px dashed #c7d1dc;
+  border-radius: 8px;
+  padding: 9px;
+  background: #fbfcfe;
+}
+
+.naming-manual-fields > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.naming-manual-fields[open] > summary {
+  margin-bottom: 10px;
+}
+
+.folder-candidate-list,
+.folder-candidate-content {
+  display: grid;
+  gap: 9px;
+}
+
+.folder-current {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.folder-candidate-cards {
+  display: grid;
+  gap: 8px;
+}
+
+.folder-candidate-card {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  background: #ffffff;
+}
+
+.folder-candidate-card strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.folder-candidate-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.folder-candidate-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.folder-candidate-card.existing {
+  border-color: #badbcc;
+}
+
+.folder-candidate-card.new {
+  border-color: #b7c7d9;
+}
+
+.folder-candidate-card.fallback {
+  border-color: #ead7a2;
+  background: #fffaf0;
+}
+
+.folder-candidate-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .ocr-panel,
 .ai-panel {
   display: grid;
@@ -903,12 +1191,22 @@ details.detail-section[open] > summary {
 }
 
 .advanced-settings-panel {
-  display: block;
-}
-
-.advanced-settings-panel[open] {
   display: grid;
   gap: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.diagnostic-panel[open],
+.advanced-panel[open] {
+  display: grid;
+  gap: 12px;
+}
+
+.diagnostic-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
 }
 
 .ocr-status,
@@ -951,7 +1249,8 @@ details.detail-section[open] > summary {
 }
 
 .ocr-settings-form input,
-.ai-settings-form input {
+.ai-settings-form input,
+.ai-settings-form select {
   min-width: 0;
   width: 100%;
   min-height: 32px;
@@ -961,6 +1260,11 @@ details.detail-section[open] > summary {
   color: var(--ink);
   background: #ffffff;
   font-size: 12px;
+}
+
+.ai-settings-form input[readonly] {
+  color: var(--muted);
+  background: #f7fafc;
 }
 
 .ai-note {
@@ -1032,11 +1336,7 @@ details.detail-section[open] > summary {
 .ai-suggestion-details {
   display: grid;
   gap: 9px;
-  border: 1px solid #d7e0ec;
-  border-radius: 8px;
-  padding: 12px;
   color: var(--muted);
-  background: #f9fbfd;
   font-size: 12px;
   line-height: 1.4;
 }

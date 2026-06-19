@@ -132,6 +132,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       const { activeDocument, targetPath, targetFolder, naming, destination } = options.getState();
+      const finalFolder = formatDestinationFolder(targetPath, targetFolder.selectedFolder);
       const targetLabel = targetPath ?? "Aucun dossier cible sélectionné";
       elements.destinationTarget.replaceChildren(targetLabel);
       elements.destinationTarget.title = targetLabel;
@@ -141,7 +142,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         setDestinationState(elements, {
           statusClass: "status-neutral",
           statusText: "Aucun document actif",
-          finalPath: "Aucun contrôle cible en cours",
+          finalPath: "Aucun dossier final",
           alternative: "",
           showAlternativeButton: false
         });
@@ -152,7 +153,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         setDestinationState(elements, {
           statusClass: "status-neutral",
           statusText: "En attente de la proposition",
-          finalPath: "Le nom final sera contrôlé après calcul",
+          finalPath: finalFolder,
           alternative: "",
           showAlternativeButton: false
         });
@@ -185,7 +186,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         setDestinationState(elements, {
           statusClass: "status-neutral",
           statusText: "Contrôle en cours",
-          finalPath: destination.checkedFilename,
+          finalPath: finalFolder,
           alternative: "",
           showAlternativeButton: false
         });
@@ -197,7 +198,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         setDestinationState(elements, {
           statusClass: isCollision ? "status-warning" : "status-valid",
           statusText: isCollision ? "Nom déjà utilisé" : "Nom disponible",
-          finalPath: destination.result.finalPath,
+          finalPath: finalFolder,
           alternative: destination.result.alternativeFilename
             ? `Alternative proposée : ${destination.result.alternativeFilename}`
             : "Aucune alternative nécessaire",
@@ -220,7 +221,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       setDestinationState(elements, {
         statusClass: "status-neutral",
         statusText: "Contrôle cible non lancé",
-        finalPath: "Le nom final sera vérifié avant validation future",
+        finalPath: finalFolder,
         alternative: "",
         showAlternativeButton: false
       });
@@ -419,6 +420,20 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
     if (elements.applyDestinationAlternativeButton) {
       elements.applyDestinationAlternativeButton.hidden = !destination.showAlternativeButton;
     }
+  }
+
+  function formatDestinationFolder(targetPath: string | null, targetFolder: string): string {
+    if (!targetPath) {
+      return "Aucun dossier cible sélectionné";
+    }
+
+    const folder = targetFolder.trim();
+    if (!folder) {
+      return targetPath;
+    }
+
+    const separator = targetPath.includes("\\") ? "\\" : "/";
+    return `${targetPath.replace(/[\\/]+$/, "")}${separator}${folder.replace(/^[\\/]+/, "")}`;
   }
 
   function destinationErrorLabel(error: DestinationAvailabilityError): string {

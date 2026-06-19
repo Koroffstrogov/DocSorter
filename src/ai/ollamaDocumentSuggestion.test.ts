@@ -337,7 +337,7 @@ describe("runOllamaSuggestionForDocument", () => {
         response: createAiResponse({
           dateToken: "2025",
           subject: "avis-imposition",
-          target: "avis-imposition",
+          target: "T05-avis_imposition_foyer_2025",
           documentType: "avis-imposition",
           detail: "foyer",
           confidence: 82,
@@ -381,6 +381,7 @@ describe("runOllamaSuggestionForDocument", () => {
           dateToken: "2025",
           subject: "foyer",
           target: "foyer",
+          targetKind: "household",
           documentType: "avis-imposition",
           confidence: 88
         })
@@ -423,6 +424,58 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Cible IA ignorée");
   });
 
+  it("rejects AI responses where target equals documentType", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2025",
+          target: "avis-imposition",
+          targetKind: "household",
+          documentType: "avis-imposition",
+          confidence: 80
+        })
+      })
+    });
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.code).toBe("AI_OUTPUT_INVALID");
+  });
+
+  it("keeps T02 school-year date as the starting year", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Certificat de scolarité Léa année scolaire 2026/2027."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026",
+          subject: "lea",
+          target: "lea",
+          targetKind: "person",
+          documentType: "certificat-scolarite",
+          confidence: 82
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026",
+      subject: "lea",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      proposedName: "2026_lea_certificat-scolarite.pdf"
+    });
+    expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
+  });
+
   it("keeps the effect date for an insurance contract response", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
@@ -434,8 +487,9 @@ describe("runOllamaSuggestionForDocument", () => {
       fetchClient: createSuccessfulFetch({
         response: createAiResponse({
           dateToken: "2026-01-01",
-          subject: "habitation",
-          documentType: "contrat-assurance-habitation",
+          target: "maison-principale",
+          targetKind: "property",
+          documentType: "assurance-habitation",
           issuer: "maif",
           confidence: 86
         })
@@ -445,11 +499,105 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2026-01-01",
-      subject: "habitation",
-      documentType: "contrat-assurance-habitation",
+      target: "maison-principale",
+      documentType: "assurance-habitation",
       issuer: "maif",
-      proposedName: "2026-01-01_habitation_contrat-assurance-habitation_maif.pdf"
+      proposedName: "2026-01-01_maison-principale_assurance-habitation_maif.pdf"
     });
+    expect(result.ok && result.value.suggestion.target).not.toBe("assurance-habitation");
+    expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("property");
+  });
+
+  it("keeps T07 identity issue date, person target and known CNI folder", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt:
+          "Carte nationale d'identité de Paul. Né le 04/05/2012. Date de délivrance 10/09/2021."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2023-11-02",
+          subject: "paul",
+          target: "paul",
+          targetKind: "person",
+          documentType: "carte-identite",
+          detail: "identite",
+          confidence: 84
+        })
+      }),
+      knownRelativeFolders: ["CNI", "Identité"]
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2023-11-02",
+      subject: "paul",
+      target: "paul",
+      documentType: "carte-identite",
+      targetFolder: "CNI",
+      proposedName: "2023-11-02_paul_carte-identite.pdf"
+    });
+    expect(result.ok && result.value.suggestion.detail).toBeUndefined();
+    expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
+  });
+
+  it("accepts an identity folder candidate requiring creation when no known folder exists", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Carte nationale d'identité de Paul. Délivrée le 02/11/2023."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2023-11-02",
+          subject: "paul",
+          target: "paul",
+          targetKind: "person",
+          documentType: "carte-identite",
+          targetFolder: "Identité",
+          folderCandidates: [{ value: "Identité", requiresCreation: true, score: 84 }],
+          confidence: 84
+        })
+      }),
+      knownRelativeFolders: []
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion.targetFolder).toBe("Identité");
+    expect(result.ok && result.value.responseJson.folderCandidates[0]).toMatchObject({
+      value: "Identité",
+      requiresCreation: true
+    });
+  });
+
+  it("warns when a precise identity date is expected but only a year is returned", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Carte nationale d'identité de Paul. Délivrée le 02/11/2023."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2023",
+          subject: "paul",
+          target: "paul",
+          targetKind: "person",
+          documentType: "carte-identite",
+          confidence: 72
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2023");
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA à préciser");
   });
 
   it("refuses invalid JSON without crashing", async () => {
@@ -597,11 +745,18 @@ function createAiResponse(options: {
   dateToken?: string;
   subject?: string;
   target?: string;
+  targetKind?: "person" | "household" | "vehicle" | "property" | "other";
   documentType?: string;
   issuer?: string;
   detail?: string;
   targetFolder?: string;
-  folderCandidates?: string[];
+  folderCandidates?: Array<string | {
+    value: string;
+    score?: number;
+    reason?: string;
+    exists?: boolean;
+    requiresCreation?: boolean;
+  }>;
   proposedName?: string;
   confidence?: number;
   reasons?: string[];
@@ -613,12 +768,26 @@ function createAiResponse(options: {
       dateToken: createField(options.dateToken),
       subject: createField(options.subject),
       target: createField(options.target),
+      targetKind: createField(options.targetKind),
       documentType: createField(options.documentType),
       issuer: createField(options.issuer),
       detail: createField(options.detail)
     },
     folderCandidates: (options.folderCandidates ?? (options.targetFolder ? [options.targetFolder] : []))
-      .map((value, index) => createCandidate(value, 80 - index, "Dossier proposé.")),
+      .map((value, index) =>
+        typeof value === "string"
+          ? createCandidate(value, 80 - index, "Dossier proposé.")
+          : createCandidate(
+              value.value,
+              value.score ?? 80 - index,
+              value.reason ?? "Dossier proposé.",
+              undefined,
+              {
+                exists: value.exists,
+                requiresCreation: value.requiresCreation
+              }
+            )
+      ),
     fileNameCandidates: options.proposedName
       ? [createCandidate(options.proposedName, 80, "Nom proposé.")]
       : [],
@@ -635,12 +804,22 @@ function createField(value: string | undefined) {
   };
 }
 
-function createCandidate(value: string, score: number, reason: string, role?: string) {
+function createCandidate(
+  value: string,
+  score: number,
+  reason: string,
+  role?: string,
+  metadata: { exists?: boolean; requiresCreation?: boolean } = {}
+) {
   return {
     value,
     score,
     reason,
-    ...(role ? { role } : {})
+    ...(role ? { role } : {}),
+    ...(typeof metadata.exists === "boolean" ? { exists: metadata.exists } : {}),
+    ...(typeof metadata.requiresCreation === "boolean"
+      ? { requiresCreation: metadata.requiresCreation }
+      : {})
   };
 }
 

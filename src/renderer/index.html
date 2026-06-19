@@ -139,227 +139,248 @@
           </details>
         </div>
         <div class="detail-scroll">
-          <section id="text-extraction-panel" class="detail-section text-extraction-panel" aria-label="Texte extrait" hidden>
-            <div class="section-heading">
-              <h3>Texte extrait</h3>
-              <button id="extract-pdf-text" type="button" disabled>Extraire le texte PDF</button>
-            </div>
-            <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
-          </section>
-
-          <section id="duplicate-panel" class="detail-section duplicate-panel" aria-label="Doublons exacts" hidden>
-            <h3>Doublons exacts</h3>
-            <div id="duplicate-details" class="duplicate-details"></div>
-            <div class="duplicate-actions">
-              <button id="ignore-duplicate" type="button">Ignorer pour l'instant</button>
-              <button id="keep-duplicate" type="button">Conserver quand même</button>
-            </div>
-          </section>
-
-          <section id="ai-suggestion-panel" class="detail-section ai-suggestion-panel" aria-label="IA locale">
-            <div class="section-heading">
-              <h3>IA locale</h3>
-              <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
-            </div>
-            <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
-            <div id="ai-suggestion-details" class="ai-suggestion-details">
-              Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale.
-            </div>
-            <div class="ai-suggestion-actions">
-              <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
-                Appliquer aux champs vides
-              </button>
-              <button id="export-ai-diagnostic" type="button" disabled hidden>Exporter diagnostic IA</button>
-              <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer</button>
-            </div>
-          </section>
-
-          <details id="ocr-panel" class="detail-section ocr-panel advanced-settings-panel" aria-label="Réglages OCR avancés">
-            <summary>Réglages OCR avancés</summary>
-            <div class="section-heading">
-              <h3>OCR local</h3>
-              <button id="refresh-ocr-status" type="button">Rafraîchir</button>
-            </div>
-            <div id="ocr-status" class="ocr-status">Chargement de la configuration OCR locale...</div>
-            <form id="ocr-settings-form" class="ocr-settings-form">
-              <label>
-                <span class="field-label">
-                  Tesseract
-                  <span class="field-help" tabindex="0" title="Chemin local vers tesseract.exe. Aucun téléchargement automatique n'est effectué.">i</span>
-                </span>
-                <input id="ocr-tesseract-path" name="tesseractPath" autocomplete="off" placeholder="C:\Program Files\Tesseract-OCR\tesseract.exe" />
-              </label>
-              <button id="choose-tesseract" type="button">Choisir tesseract.exe</button>
-              <label>
-                <span class="field-label">
-                  Tessdata
-                  <span class="field-help" tabindex="0" title="Dossier contenant les fichiers .traineddata, notamment fra.traineddata pour le français.">i</span>
-                </span>
-                <input id="ocr-tessdata-path" name="tessdataPath" autocomplete="off" placeholder="C:\Program Files\Tesseract-OCR\tessdata" />
-              </label>
-              <button id="choose-tessdata" type="button">Choisir tessdata</button>
-              <div class="ocr-inline-fields">
-                <label>
-                  <span class="field-label">
-                    Langue
-                    <span class="field-help" tabindex="0" title="Code langue Tesseract à tester. Par défaut : fra. Plusieurs langues peuvent être séparées par +.">i</span>
-                  </span>
-                  <input id="ocr-language" name="language" autocomplete="off" value="fra" />
-                </label>
-                <label>
-                  <span class="field-label">
-                    PSM
-                    <span class="field-help" tabindex="0" title="Mode de segmentation Tesseract préparé pour les lots futurs. Par défaut : 3. Aucun OCR n'est lancé dans ce lot.">i</span>
-                  </span>
-                  <input id="ocr-psm" name="psm" type="number" min="0" max="13" step="1" value="3" />
-                </label>
+          <section id="naming-panel" class="detail-section triage-workflow" aria-label="Interface de tri IA" hidden>
+            <section id="sort-proposal-panel" class="sort-proposal-card" aria-label="Proposition de tri">
+              <div class="section-heading">
+                <h3>Proposition de tri</h3>
+                <button id="reset-naming" type="button">Réinitialiser</button>
               </div>
-              <div class="ocr-actions">
-                <button id="save-ocr-settings" type="button" disabled>Sauvegarder</button>
-                <button id="test-ocr-engine" type="button" disabled>Tester Tesseract</button>
-              </div>
-              <button id="future-document-ocr" type="button" disabled>OCR document prévu au lot suivant</button>
-            </form>
-          </details>
-
-          <details id="ai-panel" class="detail-section ai-panel advanced-settings-panel" aria-label="Réglages IA avancés">
-            <summary>Réglages IA avancés</summary>
-            <div class="section-heading">
-              <h3>IA locale</h3>
-              <button id="refresh-ai-status" type="button">Rafraîchir</button>
-            </div>
-            <p class="ai-note">Analyse locale explicite uniquement. Aucun classement automatique.</p>
-            <form id="ai-settings-form" class="ai-settings-form">
-              <label class="ai-checkbox">
-                <input id="ai-enabled" name="enabled" type="checkbox" />
-                <span class="field-label">
-                  Activer IA locale
-                  <span class="field-help" tabindex="0" title="Active uniquement le test de connexion Ollama local. Aucun document n'est envoyé à un modèle dans ce lot.">i</span>
-                </span>
-              </label>
-              <label>
-                <span class="field-label">
-                  URL Ollama
-                  <span class="field-help" tabindex="0" title="URL locale uniquement : localhost, 127.0.0.1 ou ::1. Aucun chemin comme /api/generate n'est accepté.">i</span>
-                </span>
-                <input id="ai-base-url" name="baseUrl" autocomplete="off" placeholder="http://localhost:11434/" />
-              </label>
-              <label>
-                <span class="field-label">
-                  Profil IA
-                  <span class="field-help" tabindex="0" title="Profil de modèle Ollama utilisé pour l'analyse documentaire. Le profil fixe aussi le mode thinking.">i</span>
-                </span>
-                <select id="ai-profile" name="profileId">
-                  <option value="gemma3-4b">gemma3:4b</option>
-                  <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
-                  <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
-                </select>
-              </label>
-              <label>
-                <span class="field-label">
-                  Modèle résolu
-                  <span class="field-help" tabindex="0" title="Tag Ollama envoyé à /api/generate selon le profil choisi. Ce champ est informatif.">i</span>
-                </span>
-                <input id="ai-model" name="model" autocomplete="off" readonly />
-              </label>
-              <label>
-                <span class="field-label">
-                  Timeout
-                  <span class="field-help" tabindex="0" title="Durée maximale du test de connexion en millisecondes. Par défaut : 30000.">i</span>
-                </span>
-                <input id="ai-timeout" name="timeoutMs" type="number" min="1000" max="120000" step="1000" value="30000" />
-              </label>
-              <div class="ai-actions">
-                <button id="save-ai-settings" type="button" disabled>Sauvegarder</button>
-                <button id="test-ai-connection" type="button" disabled>Tester Ollama</button>
-              </div>
-              <div class="ai-advanced-actions">
-                <button id="unload-ai-model" type="button" disabled>Libérer le modèle IA</button>
-              </div>
-            </form>
-          </details>
-
-          <section id="naming-panel" class="detail-section naming-panel" aria-label="Renommage proposé" hidden>
-            <div class="section-heading">
-              <h3>Renommage proposé</h3>
-              <button id="reset-naming" type="button">Réinitialiser</button>
-            </div>
-            <form id="naming-form" class="naming-form">
-              <label>
-                Date documentaire
-                <input id="naming-date" name="documentDate" autocomplete="off" placeholder="AAAA-MM-JJ ou AAAA" />
-              </label>
-              <label>
-                Sujet
-                <input id="naming-subject" name="subject" autocomplete="off" />
-              </label>
-              <label>
-                Type
-                <input id="naming-type" name="documentType" autocomplete="off" placeholder="Facture, Releve, Avis" />
-              </label>
-              <label>
-                Mots-clés
-                <input id="naming-keywords" name="keywords" autocomplete="off" placeholder="Optionnel" />
-              </label>
-            </form>
-            <div class="naming-result" aria-live="polite">
-              <span>Nom proposé</span>
-              <strong id="proposed-filename">Nom impossible à générer</strong>
-              <ul id="naming-messages" class="naming-messages"></ul>
-              <div class="destination-check" aria-label="Contrôle cible">
-                <div class="destination-check-header">
-                  <span>Contrôle cible</span>
-                  <strong id="destination-status" class="status-neutral">Contrôle cible non lancé</strong>
+              <dl class="proposal-summary">
+                <div>
+                  <dt>Nom final</dt>
+                  <dd><strong id="proposed-filename">Nom impossible à générer</strong></dd>
                 </div>
-                <div class="target-folder-controls" aria-label="Sous-dossier cible">
+                <div>
+                  <dt>Dossier final</dt>
+                  <dd id="destination-final-path">Le nom final sera vérifié avant validation future</dd>
+                </div>
+              </dl>
+              <div id="ai-quality-badges" class="quality-badges" aria-label="Qualité de la proposition">
+                <span class="quality-badge neutral">Date</span>
+                <span class="quality-badge neutral">Type</span>
+                <span class="quality-badge neutral">Dossier</span>
+              </div>
+              <p class="proposal-mode">Mode : <strong>IA locale seule</strong></p>
+              <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
+              <div class="proposal-actions">
+                <button id="execute-classification" class="primary-action" type="button" disabled>
+                  Valider et classer (Ctrl+Entrée)
+                </button>
+                <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
+                <button id="prepare-classification" type="button" disabled>Vérifier avant classement (V)</button>
+                <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
+                  Appliquer aux champs vides
+                </button>
+              </div>
+            </section>
+
+            <section id="field-refinement-panel" class="detail-section field-refinement-panel" aria-label="Affiner les champs">
+              <div class="section-heading">
+                <h3>Affiner les champs</h3>
+              </div>
+              <div id="ai-suggestion-details" class="ai-suggestion-details">
+                Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale.
+              </div>
+              <details class="naming-manual-fields">
+                <summary>Champs appliqués au classement réel</summary>
+                <form id="naming-form" class="naming-form">
                   <label>
-                    Sous-dossier cible
-                    <input
-                      id="target-folder-input"
-                      list="target-folder-options"
-                      autocomplete="off"
-                      placeholder="Racine cible"
-                    />
+                    Date documentaire
+                    <input id="naming-date" name="documentDate" autocomplete="off" placeholder="AAAA-MM-JJ ou AAAA" />
                   </label>
-                  <datalist id="target-folder-options"></datalist>
-                  <p id="target-folder-status">Classement à la racine cible</p>
-                  <button id="create-target-folder" type="button" hidden>Créer ce dossier</button>
-                </div>
-                <dl class="destination-details">
-                  <div>
-                    <dt>Racine cible</dt>
-                    <dd id="destination-target">Aucune racine cible sélectionnée</dd>
-                  </div>
-                  <div>
-                    <dt>Chemin final</dt>
-                    <dd id="destination-final-path">Le nom final sera vérifié avant validation future</dd>
-                  </div>
-                  <div>
-                    <dt>Alternative</dt>
-                    <dd id="destination-alternative"></dd>
-                  </div>
-                </dl>
-                <button id="apply-destination-alternative" type="button" hidden>Appliquer le suffixe</button>
+                  <label>
+                    Sujet
+                    <input id="naming-subject" name="subject" autocomplete="off" />
+                  </label>
+                  <label>
+                    Type
+                    <input id="naming-type" name="documentType" autocomplete="off" placeholder="Facture, Releve, Avis" />
+                  </label>
+                  <label>
+                    Mots-clés
+                    <input id="naming-keywords" name="keywords" autocomplete="off" placeholder="Optionnel" />
+                  </label>
+                </form>
+              </details>
+              <ul id="naming-messages" class="naming-messages"></ul>
+            </section>
+
+            <section id="target-folder-panel" class="detail-section target-folder-panel" aria-label="Dossier cible">
+              <div class="section-heading">
+                <h3>Dossier cible</h3>
+                <strong id="destination-status" class="status-neutral">Contrôle cible non lancé</strong>
               </div>
-            </div>
-            <div class="classification-actions">
-              <button id="prepare-classification" type="button" disabled>Vérifier avant classement (V)</button>
-              <button id="execute-classification" type="button" disabled>Valider et classer (Ctrl+Entrée)</button>
+              <div class="target-folder-controls" aria-label="Sous-dossier cible">
+                <label>
+                  Sous-dossier cible
+                  <input
+                    id="target-folder-input"
+                    list="target-folder-options"
+                    autocomplete="off"
+                    placeholder="Racine cible"
+                  />
+                </label>
+                <datalist id="target-folder-options"></datalist>
+                <p id="target-folder-status">Classement à la racine cible</p>
+                <button id="create-target-folder" type="button" hidden>Créer ce dossier</button>
+              </div>
+              <div id="ai-folder-candidates" class="folder-candidate-list">
+                Aucun dossier IA proposé pour le moment.
+              </div>
+              <dl class="destination-details">
+                <div>
+                  <dt>Racine cible</dt>
+                  <dd id="destination-target">Aucune racine cible sélectionnée</dd>
+                </div>
+                <div>
+                  <dt>Alternative</dt>
+                  <dd id="destination-alternative"></dd>
+                </div>
+              </dl>
+              <button id="apply-destination-alternative" type="button" hidden>Appliquer le suffixe</button>
+            </section>
+          </section>
+
+          <details id="diagnostic-panel" class="detail-section diagnostic-panel" aria-label="Diagnostic">
+            <summary>Diagnostic</summary>
+            <section id="text-extraction-panel" class="detail-section text-extraction-panel" aria-label="Texte extrait" hidden>
+              <div class="section-heading">
+                <h3>Texte extrait</h3>
+                <button id="extract-pdf-text" type="button" disabled>Extraire le texte PDF</button>
+              </div>
+              <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
+            </section>
+            <section id="duplicate-panel" class="detail-section duplicate-panel" aria-label="Doublons exacts" hidden>
+              <h3>Doublons exacts</h3>
+              <div id="duplicate-details" class="duplicate-details"></div>
+              <div class="duplicate-actions">
+                <button id="ignore-duplicate" type="button">Ignorer pour l'instant</button>
+                <button id="keep-duplicate" type="button">Conserver quand même</button>
+              </div>
+            </section>
+            <div class="diagnostic-actions">
+              <button id="export-ai-diagnostic" type="button" disabled hidden>Exporter diagnostic IA</button>
+              <button id="ignore-ai-suggestion" type="button" disabled hidden>Ignorer la suggestion IA</button>
             </div>
             <section id="classification-summary" class="classification-summary" aria-live="polite" hidden></section>
-          </section>
-
-          <details class="detail-section history-panel" aria-label="Historique récent">
-            <summary>Historique récent</summary>
-            <div class="section-heading">
-              <h3>Historique récent</h3>
-              <div class="history-actions">
-                <button id="refresh-history" type="button">Rafraîchir</button>
-                <button id="undo-last-action" type="button" disabled>Annuler dernière action (Ctrl+Z)</button>
+            <details class="history-panel" aria-label="Historique récent">
+              <summary>Historique récent</summary>
+              <div class="section-heading">
+                <h3>Historique récent</h3>
+                <div class="history-actions">
+                  <button id="refresh-history" type="button">Rafraîchir</button>
+                  <button id="undo-last-action" type="button" disabled>Annuler dernière action (Ctrl+Z)</button>
+                </div>
               </div>
-            </div>
-            <div id="history-state" class="history-state">Lecture du journal...</div>
-            <ol id="history-list" class="history-list"></ol>
+              <div id="history-state" class="history-state">Lecture du journal...</div>
+              <ol id="history-list" class="history-list"></ol>
+            </details>
+          </details>
+
+          <details id="advanced-panel" class="detail-section advanced-panel" aria-label="Réglages avancés">
+            <summary>Réglages avancés</summary>
+            <section id="ocr-panel" class="ocr-panel advanced-settings-panel" aria-label="Réglages OCR avancés">
+              <div class="section-heading">
+                <h3>OCR local</h3>
+                <button id="refresh-ocr-status" type="button">Rafraîchir</button>
+              </div>
+              <div id="ocr-status" class="ocr-status">Chargement de la configuration OCR locale...</div>
+              <form id="ocr-settings-form" class="ocr-settings-form">
+                <label>
+                  <span class="field-label">
+                    Tesseract
+                    <span class="field-help" tabindex="0" title="Chemin local vers tesseract.exe. Aucun téléchargement automatique n'est effectué.">i</span>
+                  </span>
+                  <input id="ocr-tesseract-path" name="tesseractPath" autocomplete="off" placeholder="C:\Program Files\Tesseract-OCR\tesseract.exe" />
+                </label>
+                <button id="choose-tesseract" type="button">Choisir tesseract.exe</button>
+                <label>
+                  <span class="field-label">
+                    Tessdata
+                    <span class="field-help" tabindex="0" title="Dossier contenant les fichiers .traineddata, notamment fra.traineddata pour le français.">i</span>
+                  </span>
+                  <input id="ocr-tessdata-path" name="tessdataPath" autocomplete="off" placeholder="C:\Program Files\Tesseract-OCR\tessdata" />
+                </label>
+                <button id="choose-tessdata" type="button">Choisir tessdata</button>
+                <div class="ocr-inline-fields">
+                  <label>
+                    <span class="field-label">
+                      Langue
+                      <span class="field-help" tabindex="0" title="Code langue Tesseract à tester. Par défaut : fra. Plusieurs langues peuvent être séparées par +.">i</span>
+                    </span>
+                    <input id="ocr-language" name="language" autocomplete="off" value="fra" />
+                  </label>
+                  <label>
+                    <span class="field-label">
+                      PSM
+                      <span class="field-help" tabindex="0" title="Mode de segmentation Tesseract préparé pour les lots futurs. Par défaut : 3. Aucun OCR n'est lancé dans ce lot.">i</span>
+                    </span>
+                    <input id="ocr-psm" name="psm" type="number" min="0" max="13" step="1" value="3" />
+                  </label>
+                </div>
+                <div class="ocr-actions">
+                  <button id="save-ocr-settings" type="button" disabled>Sauvegarder</button>
+                  <button id="test-ocr-engine" type="button" disabled>Tester Tesseract</button>
+                </div>
+                <button id="future-document-ocr" type="button" disabled>OCR document prévu au lot suivant</button>
+              </form>
+            </section>
+
+            <section id="ai-panel" class="ai-panel advanced-settings-panel" aria-label="Réglages IA avancés">
+              <div class="section-heading">
+                <h3>IA locale</h3>
+                <button id="refresh-ai-status" type="button">Rafraîchir</button>
+              </div>
+              <p class="ai-note">Analyse locale explicite uniquement. Aucun classement automatique.</p>
+              <form id="ai-settings-form" class="ai-settings-form">
+                <label class="ai-checkbox">
+                  <input id="ai-enabled" name="enabled" type="checkbox" />
+                  <span class="field-label">
+                    Activer IA locale
+                    <span class="field-help" tabindex="0" title="Active uniquement le test de connexion Ollama local. Aucun document n'est envoyé à un modèle dans ce lot.">i</span>
+                  </span>
+                </label>
+                <label>
+                  <span class="field-label">
+                    URL Ollama
+                    <span class="field-help" tabindex="0" title="URL locale uniquement : localhost, 127.0.0.1 ou ::1. Aucun chemin comme /api/generate n'est accepté.">i</span>
+                  </span>
+                  <input id="ai-base-url" name="baseUrl" autocomplete="off" placeholder="http://localhost:11434/" />
+                </label>
+                <label>
+                  <span class="field-label">
+                    Profil IA
+                    <span class="field-help" tabindex="0" title="Profil de modèle Ollama utilisé pour l'analyse documentaire. Le profil fixe aussi le mode thinking.">i</span>
+                  </span>
+                  <select id="ai-profile" name="profileId">
+                    <option value="gemma3-4b">gemma3:4b</option>
+                    <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
+                    <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="field-label">
+                    Modèle résolu
+                    <span class="field-help" tabindex="0" title="Tag Ollama envoyé à /api/generate selon le profil choisi. Ce champ est informatif.">i</span>
+                  </span>
+                  <input id="ai-model" name="model" autocomplete="off" readonly />
+                </label>
+                <label>
+                  <span class="field-label">
+                    Timeout
+                    <span class="field-help" tabindex="0" title="Durée maximale du test de connexion en millisecondes. Par défaut : 30000.">i</span>
+                  </span>
+                  <input id="ai-timeout" name="timeoutMs" type="number" min="1000" max="120000" step="1000" value="30000" />
+                </label>
+                <div class="ai-actions">
+                  <button id="save-ai-settings" type="button" disabled>Sauvegarder</button>
+                  <button id="test-ai-connection" type="button" disabled>Tester Ollama</button>
+                </div>
+                <div class="ai-advanced-actions">
+                  <button id="unload-ai-model" type="button" disabled>Libérer le modèle IA</button>
+                </div>
+              </form>
+            </section>
           </details>
 
         </div>

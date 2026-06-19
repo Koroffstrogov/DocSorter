@@ -221,11 +221,35 @@ function sanitizeAiSuggestion(
   }
 
   applyInferredTargetFolder(next, input);
+  addDatePrecisionWarning(next);
   applyGeneratedProposedName(next, input.extension);
 
   next.reasons = uniqueStrings(next.reasons).slice(0, 8);
   next.warnings = uniqueStrings(next.warnings).slice(0, 8);
   return next;
+}
+
+function addDatePrecisionWarning(suggestion: AiClassificationSuggestion): void {
+  if (!suggestion.dateToken || !/^(19|20)\d{2}$/.test(suggestion.dateToken)) {
+    return;
+  }
+
+  const documentType = normalizeNameBlock(suggestion.documentType);
+  if (!expectsPreciseDate(documentType)) {
+    return;
+  }
+
+  suggestion.warnings.push("Date IA à préciser : une date complète était attendue pour ce type de document.");
+}
+
+function expectsPreciseDate(documentType: string): boolean {
+  return (
+    documentType.includes("contrat") ||
+    documentType.includes("assurance") ||
+    documentType.includes("carte-identite") ||
+    documentType.includes("passeport") ||
+    documentType.includes("identite")
+  );
 }
 
 function sanitizeNameBlocks(suggestion: AiClassificationSuggestion): void {
@@ -360,7 +384,15 @@ function inferKnownTargetFolder(
   return candidates[0]?.folder ?? null;
 }
 
-type FolderKey = "vehicles" | "fiscal" | "health" | "school" | "bank" | "home" | "insurance";
+type FolderKey =
+  | "vehicles"
+  | "fiscal"
+  | "health"
+  | "school"
+  | "bank"
+  | "home"
+  | "insurance"
+  | "identity";
 
 const FOLDER_KEY_ALIASES: Record<FolderKey, Set<string>> = {
   vehicles: new Set(["vehicules", "vehicule", "vehicles", "vehicle"]),
@@ -369,7 +401,8 @@ const FOLDER_KEY_ALIASES: Record<FolderKey, Set<string>> = {
   school: new Set(["scolarite", "ecole"]),
   bank: new Set(["banque", "finances", "finance"]),
   home: new Set(["maison", "habitation"]),
-  insurance: new Set(["assurances", "assurance"])
+  insurance: new Set(["assurances", "assurance"]),
+  identity: new Set(["cni", "identite", "identite-famille", "papiers-identite"])
 };
 
 function inferFolderKeys(
@@ -408,6 +441,9 @@ function inferFolderKeys(
   }
   if (hasAnySignal(signal, ["assurance", "attestation-assurance", "contrat-assurance", "sinistre"])) {
     keys.push("insurance");
+  }
+  if (hasAnySignal(signal, ["carte-identite", "identite", "passeport", "cni", "delivrance"])) {
+    keys.push("identity");
   }
 
   return uniqueStrings(keys) as FolderKey[];

@@ -12,6 +12,7 @@ export type AiCandidateFieldKey =
   | "dateToken"
   | "subject"
   | "target"
+  | "targetKind"
   | "documentType"
   | "issuer"
   | "detail";
@@ -21,6 +22,8 @@ export interface AiCandidate {
   score: number;
   reason: string;
   role?: string;
+  exists?: boolean;
+  requiresCreation?: boolean;
 }
 
 export interface AiFieldCandidates {
@@ -51,6 +54,7 @@ const FIELD_KEYS: AiCandidateFieldKey[] = [
   "dateToken",
   "subject",
   "target",
+  "targetKind",
   "documentType",
   "issuer",
   "detail"
@@ -63,6 +67,21 @@ const TOP_LEVEL_KEYS = new Set([
   "warnings",
   "confidence",
   "source"
+]);
+const CANDIDATE_KEYS = new Set(["value", "score", "reason", "role", "exists", "requiresCreation"]);
+const MAX_CANDIDATES = 3;
+const TARGET_KIND_VALUES = new Set(["person", "household", "vehicle", "property", "other"]);
+const GENERIC_TARGET_VALUES = new Set([
+  "person",
+  "personne",
+  "household",
+  "vehicle",
+  "vehicule",
+  "document",
+  "property",
+  "bien",
+  "other",
+  "autre"
 ]);
 
 export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandidateValidationResult {
@@ -92,6 +111,11 @@ export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandida
   const fields = readFields(record.fields);
   if (!("ok" in fields)) {
     return fields;
+  }
+
+  const fieldConsistency = validateSelectedFields(fields.value);
+  if (!("ok" in fieldConsistency)) {
+    return fieldConsistency;
   }
 
   const folderCandidates = readCandidateList(record.folderCandidates, "folderCandidates", true);
@@ -186,6 +210,18 @@ function readFieldCandidates(
     return candidates;
   }
 
+  if (key === "targetKind") {
+    for (const candidate of candidates.value) {
+      if (!TARGET_KIND_VALUES.has(normalizeNameBlock(candidate.value))) {
+        return invalid(
+          "AI_FIELD_INVALID",
+          "targetKind IA invalide. Valeurs attendues : person, household, vehicle, property, other.",
+          `fields.${key}.candidates`
+        );
+      }
+    }
+  }
+
   return {
     ok: true,
     value: {
@@ -218,7 +254,7 @@ function readCandidateList(
 
   return {
     ok: true,
-    value: candidates.slice(0, 8)
+    value: candidates.slice(0, MAX_CANDIDATES)
   };
 }
 
@@ -232,6 +268,12 @@ function readCandidate(
   }
 
   const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (!CANDIDATE_KEYS.has(key)) {
+      return invalid("AI_OUTPUT_UNKNOWN_FIELD", "Champ de candidat IA non prévu.", `${field}.${key}`);
+    }
+  }
+
   if (typeof record.value !== "string" || !record.value.trim()) {
     return invalid("AI_FIELD_INVALID", "Valeur de candidat IA invalide.", `${field}.value`);
   }
@@ -242,6 +284,22 @@ function readCandidate(
 
   if (typeof record.reason !== "string" || !record.reason.trim()) {
     return invalid("AI_FIELD_INVALID", "Raison de candidat IA invalide.", `${field}.reason`);
+  }
+
+  if (record.role !== undefined && typeof record.role !== "string") {
+    return invalid("AI_FIELD_INVALID", "Rôle de candidat IA invalide.", `${field}.role`);
+  }
+
+  if (record.exists !== undefined && typeof record.exists !== "boolean") {
+    return invalid("AI_FIELD_INVALID", "Indicateur exists de candidat IA invalide.", `${field}.exists`);
+  }
+
+  if (record.requiresCreation !== undefined && typeof record.requiresCreation !== "boolean") {
+    return invalid(
+      "AI_FIELD_INVALID",
+      "Indicateur requiresCreation de candidat IA invalide.",
+      `${field}.requiresCreation`
+    );
   }
 
   if (!isFolderCandidate && looksLikePath(record.value)) {
@@ -263,9 +321,63 @@ function readCandidate(
       reason: limitString(record.reason.trim(), AI_CLASSIFICATION_LIMITS.listItemChars),
       ...(typeof record.role === "string" && record.role.trim()
         ? { role: normalizeNameBlock(record.role).slice(0, 40) }
+        : {}),
+      ...(typeof record.exists === "boolean" ? { exists: record.exists } : {}),
+      ...(typeof record.requiresCreation === "boolean"
+        ? { requiresCreation: record.requiresCreation }
         : {})
     }
   };
+}
+
+function validateSelectedFields(
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>
+): { ok: true } | Extract<AiMultiCandidateValidationResult, { status: "invalid" }> {
+  for (const key of FIELD_KEYS) {
+    const selected = fields[key].selected?.trim();
+    if (!selected) {
+      continue;
+    }
+
+    const hasSelectedCandidate = fields[key].candidates.some((candidate) => candidate.value === selected);
+    if (!hasSelectedCandidate) {
+      return invalid(
+        "AI_FIELD_INVALID",
+        "Le candidat sélectionné IA doit être présent dans la liste des candidats.",
+        `fields.${key}.selected`
+      );
+    }
+  }
+
+  const selectedTarget = normalizeNameBlock(fields.target.selected);
+  const selectedDocumentType = normalizeNameBlock(fields.documentType.selected);
+  const selectedTargetKind = normalizeNameBlock(fields.targetKind.selected);
+
+  if (selectedTargetKind && !TARGET_KIND_VALUES.has(selectedTargetKind)) {
+    return invalid(
+      "AI_FIELD_INVALID",
+      "targetKind IA invalide. Valeurs attendues : person, household, vehicle, property, other.",
+      "fields.targetKind.selected"
+    );
+  }
+
+  if (selectedTarget && GENERIC_TARGET_VALUES.has(selectedTarget)) {
+    return invalid(
+      "AI_FIELD_INVALID",
+      "Cible IA invalide : target doit être la valeur de nommage, pas une nature générique.",
+      "fields.target.selected"
+    );
+  }
+
+  if (selectedTarget && selectedDocumentType && selectedTarget === selectedDocumentType) {
+    return invalid(
+      "AI_FIELD_INVALID",
+      "Cible IA invalide : target ne doit pas être égal à documentType.",
+      "fields.target.selected"
+    );
+  }
+
+  return { ok: true };
 }
 
 function normalizeFolderCandidate(value: string): string | null {

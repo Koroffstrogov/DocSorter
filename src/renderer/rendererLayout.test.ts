@@ -4,25 +4,33 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("renderer right panel layout", () => {
-  it("keeps text extraction before IA and naming controls", async () => {
+  it("shows the IA sorting workflow in the requested right-panel order", async () => {
     const html = await readRendererHtml();
 
-    expect(indexOf(html, 'id="text-extraction-panel"')).toBeLessThan(
-      indexOf(html, 'id="ai-suggestion-panel"')
+    expect(indexOf(html, 'id="sort-proposal-panel"')).toBeLessThan(
+      indexOf(html, 'id="field-refinement-panel"')
     );
-    expect(indexOf(html, 'id="ai-suggestion-panel"')).toBeLessThan(
-      indexOf(html, 'id="naming-panel"')
+    expect(indexOf(html, 'id="field-refinement-panel"')).toBeLessThan(
+      indexOf(html, 'id="target-folder-panel"')
     );
-    expect(html).toContain("<h3>Texte extrait</h3>");
-    expect(html).toContain("<h3>IA locale</h3>");
-    expect(html).toContain("Analyser avec IA locale");
+    expect(indexOf(html, 'id="target-folder-panel"')).toBeLessThan(
+      indexOf(html, 'id="diagnostic-panel"')
+    );
+    expect(indexOf(html, 'id="diagnostic-panel"')).toBeLessThan(
+      indexOf(html, 'id="advanced-panel"')
+    );
+
+    expect(html).toContain("<h3>Proposition de tri</h3>");
+    expect(html).toContain("<h3>Affiner les champs</h3>");
+    expect(html).toContain("<h3>Dossier cible</h3>");
+    expect(html).toContain("<summary>Diagnostic</summary>");
+    expect(html).toContain("<summary>Réglages avancés</summary>");
   });
 
   it("removes deterministic suggestion panels and scripts from the UI", async () => {
     const html = await readRendererHtml();
 
     expect(html).not.toContain('id="suggestion-v2-panel"');
-    expect(html).not.toContain("Proposition de tri");
     expect(html).not.toContain("Analyser le document");
     expect(html).not.toContain('id="apply-suggestion-v2-empty"');
     expect(html).not.toContain('id="suggestion-v2-diagnostic-panel"');
@@ -40,26 +48,52 @@ describe("renderer right panel layout", () => {
     expect(html).not.toContain("../rules/namingSuggestions.js");
   });
 
-  it("keeps IA actions visible and advanced IA settings collapsed", async () => {
+  it("keeps the quick IA actions visible and advanced IA/OCR settings collapsed", async () => {
     const html = await readRendererHtml();
 
-    expect(html).toContain('id="ai-suggestion-panel"');
+    expect(html).toContain('id="sort-proposal-panel"');
+    expect(html).toContain("Nom final");
+    expect(html).toContain("Dossier final");
+    expect(html).toContain("Mode : <strong>IA locale seule</strong>");
+    expect(html).toContain('id="ai-quality-badges"');
     expect(html).toContain('id="run-ai-suggestion"');
     expect(html).toContain('id="apply-ai-suggestion-empty"');
     expect(html).toContain('id="export-ai-diagnostic"');
     expect(html).toContain('id="ignore-ai-suggestion"');
-    expect(html).toContain('<details id="ai-panel"');
-    expect(html).toContain("Réglages IA avancés");
-    expect(html).not.toMatch(/<details id="ai-panel"[^>]*\sopen[\s>]/);
+    expect(html).toContain('<details id="advanced-panel"');
+    expect(html).toContain('<details id="diagnostic-panel"');
+    expect(html).not.toMatch(/<details id="diagnostic-panel"[^>]*\sopen[\s>]/);
+    expect(html).not.toMatch(/<details id="advanced-panel"[^>]*\sopen[\s>]/);
 
-    const advancedAiPanel = extractElementBlock(html, '<details id="ai-panel"', "</details>");
-    expect(advancedAiPanel).not.toContain('id="run-ai-suggestion"');
-    expect(advancedAiPanel).toContain('id="ai-profile"');
-    expect(advancedAiPanel).toContain('value="gemma3-4b"');
-    expect(advancedAiPanel).toContain('value="gemma4-12b-nothink"');
-    expect(advancedAiPanel).toContain('value="gemma4-12b-thinking"');
-    expect(advancedAiPanel).toContain("Tester Ollama");
-    expect(advancedAiPanel).toContain("Libérer le modèle IA");
+    const sortProposalPanel = extractElementBlock(html, '<section id="sort-proposal-panel"', "</section>");
+    expect(sortProposalPanel).toContain('id="run-ai-suggestion"');
+
+    const advancedPanel = extractElementBlock(html, '<details id="advanced-panel"', "</details>");
+    expect(advancedPanel).not.toContain('id="run-ai-suggestion"');
+    expect(advancedPanel).toContain('id="ocr-panel"');
+    expect(advancedPanel).toContain('id="ai-panel"');
+    expect(advancedPanel).toContain('id="ai-profile"');
+    expect(advancedPanel).toContain('value="gemma3-4b"');
+    expect(advancedPanel).toContain('value="gemma4-12b-nothink"');
+    expect(advancedPanel).toContain('value="gemma4-12b-thinking"');
+    expect(advancedPanel).toContain("Tester Ollama");
+    expect(advancedPanel).toContain("Libérer le modèle IA");
+  });
+
+  it("renders the six IA refinement fields and folder candidate area", async () => {
+    const html = await readRendererHtml();
+    const aiPanel = await readFile(path.join(process.cwd(), "src", "renderer", "aiPanel.ts"), "utf8");
+
+    expect(html).toContain('id="ai-suggestion-details"');
+    expect(html).toContain('id="ai-folder-candidates"');
+    expect(html).toContain('id="target-folder-input"');
+    expect(aiPanel).toContain('createAiFieldRow("Date"');
+    expect(aiPanel).toContain('createAiFieldRow("Sujet"');
+    expect(aiPanel).toContain('createAiFieldRow("Cible"');
+    expect(aiPanel).toContain('createAiFieldRow("Type"');
+    expect(aiPanel).toContain('createAiFieldRow("Émetteur"');
+    expect(aiPanel).toContain('createAiFieldRow("Détail"');
+    expect(aiPanel).toContain('textContent = "Modifier"');
   });
 
   it("keeps document metadata folded in the right panel header", async () => {

@@ -502,6 +502,7 @@ function createAiSuggestion() {
         dateToken: { selected: "2026", candidates: [] },
         subject: { selected: "foyer", candidates: [] },
         target: { selected: "foyer", candidates: [] },
+        targetKind: { selected: "household", candidates: [] },
         documentType: { selected: "avis-imposition", candidates: [] },
         issuer: { selected: "", candidates: [] },
         detail: { selected: "", candidates: [] }

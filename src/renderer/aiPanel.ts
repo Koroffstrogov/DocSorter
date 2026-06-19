@@ -36,9 +36,31 @@ interface AiPanelElements {
   unloadModelButton: HTMLButtonElement | null;
   runSuggestionButton: HTMLButtonElement | null;
   suggestionDetails: HTMLElement | null;
+  qualityBadges: HTMLElement | null;
+  folderCandidates: HTMLElement | null;
   applySuggestionButton: HTMLButtonElement | null;
   exportDiagnosticButton: HTMLButtonElement | null;
   ignoreSuggestionButton: HTMLButtonElement | null;
+}
+
+type AiCandidateFieldKey = "dateToken" | "subject" | "target" | "documentType" | "issuer" | "detail";
+
+interface AiCandidateView {
+  value: string;
+  score: number;
+  reason: string;
+  role: string;
+  exists?: boolean;
+  requiresCreation?: boolean;
+}
+
+interface AiMultiCandidateResponseView {
+  fields?: Partial<Record<AiCandidateFieldKey, {
+    selected?: string;
+    candidates?: AiCandidateView[];
+  }>>;
+  folderCandidates?: AiCandidateView[];
+  fileNameCandidates?: AiCandidateView[];
 }
 
 interface AiPanelFactoryApi {
@@ -169,6 +191,14 @@ var DocSorterAiPanel: AiPanelFactoryApi;
         elements.suggestionDetails.replaceChildren(...createSuggestionContent(state, options));
       }
 
+      if (elements.qualityBadges) {
+        elements.qualityBadges.replaceChildren(...createQualityBadges(state));
+      }
+
+      if (elements.folderCandidates) {
+        elements.folderCandidates.replaceChildren(...createFolderCandidateContent(state));
+      }
+
       if (elements.applySuggestionButton) {
         elements.applySuggestionButton.disabled = disabled || !options.canApplySuggestionToEmptyFields();
         elements.applySuggestionButton.hidden = !state.suggestion;
@@ -205,6 +235,8 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       unloadModelButton: root.querySelector<HTMLButtonElement>("#unload-ai-model"),
       runSuggestionButton: root.querySelector<HTMLButtonElement>("#run-ai-suggestion"),
       suggestionDetails: root.querySelector<HTMLElement>("#ai-suggestion-details"),
+      qualityBadges: root.querySelector<HTMLElement>("#ai-quality-badges"),
+      folderCandidates: root.querySelector<HTMLElement>("#ai-folder-candidates"),
       applySuggestionButton: root.querySelector<HTMLButtonElement>("#apply-ai-suggestion-empty"),
       exportDiagnosticButton: root.querySelector<HTMLButtonElement>("#export-ai-diagnostic"),
       ignoreSuggestionButton: root.querySelector<HTMLButtonElement>("#ignore-ai-suggestion")
@@ -396,83 +428,214 @@ var DocSorterAiPanel: AiPanelFactoryApi;
   }
 
   function createSuggestionContent(state: AiState, options: AiPanelOptions): Node[] {
-    if (state.panelStatus === "analyzing") {
-      return [createMetaLine("Analyse du document actif en cours...")];
-    }
-
-    if (!state.suggestion) {
-      return [
-        createMetaLine(
-          "Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale."
-        )
-      ];
-    }
-
-    const suggestion = state.suggestion.suggestion;
     const container = document.createElement("div");
-    const heading = document.createElement("div");
-    const score = document.createElement("strong");
-    const meta = document.createElement("span");
+    container.className = "field-refinement-list";
 
-    container.className = "ai-suggestion-summary";
-    heading.className = "ai-suggestion-heading";
-    score.textContent = `Score ${suggestion.confidence} %`;
-    meta.textContent = `${state.suggestion.model} - ${options.formatDate(state.suggestion.suggestedAt)}`;
-    heading.append(score, meta);
-    container.append(heading, createAiSuggestionGrid(state.suggestion));
-
-    if (suggestion.reasons.length > 0) {
-      container.append(createList("Raisons", suggestion.reasons));
+    if (state.panelStatus === "analyzing") {
+      container.append(createMetaLine("Analyse du document actif en cours..."));
+    } else if (!state.suggestion) {
+      container.append(
+        createMetaLine("Aucune proposition IA prête. Lance l'analyse après extraction PDF ou OCR image.")
+      );
+    } else {
+      const heading = document.createElement("div");
+      const score = document.createElement("strong");
+      const meta = document.createElement("span");
+      heading.className = "ai-suggestion-heading";
+      score.textContent = `Score global ${state.suggestion.suggestion.confidence} %`;
+      meta.textContent = `${state.suggestion.profile.label} - ${options.formatDate(state.suggestion.suggestedAt)}`;
+      heading.append(score, meta);
+      container.append(heading);
     }
 
-    if (suggestion.warnings.length > 0) {
-      container.append(createList("Avertissements", suggestion.warnings));
-    }
+    container.append(createAiFieldRows(state.suggestion));
 
     return [container];
   }
 
-  function createAiSuggestionGrid(suggestion: RendererAiDocumentSuggestion): HTMLDListElement {
-    const grid = document.createElement("dl");
-    grid.className = "ai-suggestion-grid";
-    grid.append(
-      createSuggestionRow("Date", suggestion.suggestion.dateToken),
-      createSuggestionRow("Sujet", suggestion.suggestion.subject),
-      createSuggestionRow("Cible", suggestion.suggestion.target),
-      createSuggestionRow("Type", suggestion.suggestion.documentType),
-      createSuggestionRow("Émetteur", suggestion.suggestion.issuer),
-      createSuggestionRow("Détail", suggestion.suggestion.detail),
-      createSuggestionRow("Nom proposé", suggestion.suggestion.proposedName),
-      createSuggestionRow("Dossier", suggestion.suggestion.targetFolder)
+  function createAiFieldRows(suggestion: RendererAiDocumentSuggestion | null): HTMLElement {
+    const list = document.createElement("div");
+    list.className = "ai-field-list";
+    list.replaceChildren(
+      createAiFieldRow("Date", "dateToken", suggestion?.suggestion.dateToken, suggestion),
+      createAiFieldRow("Sujet", "subject", suggestion?.suggestion.subject, suggestion),
+      createAiFieldRow("Cible", "target", suggestion?.suggestion.target, suggestion),
+      createAiFieldRow("Type", "documentType", suggestion?.suggestion.documentType, suggestion),
+      createAiFieldRow("Émetteur", "issuer", suggestion?.suggestion.issuer, suggestion),
+      createAiFieldRow("Détail", "detail", suggestion?.suggestion.detail, suggestion)
     );
-    return grid;
+    return list;
   }
 
-  function createSuggestionRow(label: string, value: string | undefined): HTMLDivElement {
+  function createAiFieldRow(
+    label: string,
+    key: AiCandidateFieldKey,
+    selectedValue: string | undefined,
+    suggestion: RendererAiDocumentSuggestion | null
+  ): HTMLElement {
     const row = document.createElement("div");
-    const term = document.createElement("dt");
-    const description = document.createElement("dd");
-    term.textContent = label;
-    description.textContent = value?.trim() || "Aucune suggestion";
-    row.append(term, description);
+    const title = document.createElement("div");
+    const labelElement = document.createElement("strong");
+    const scoreElement = document.createElement("span");
+    const selected = document.createElement("p");
+    const candidates = document.createElement("div");
+    const editButton = document.createElement("button");
+    const fieldCandidates = getFieldCandidates(suggestion, key);
+    const selectedScore = scoreForSelected(fieldCandidates, selectedValue);
+
+    row.className = "ai-field-row";
+    title.className = "ai-field-title";
+    labelElement.textContent = label;
+    scoreElement.textContent = selectedScore === null ? "Score non disponible" : `Score ${selectedScore}`;
+    selected.textContent = selectedValue?.trim() || "Aucune suggestion";
+    selected.title = selectedValue?.trim() || "";
+    selected.className = selectedValue?.trim() ? "ai-field-selected" : "ai-field-selected empty";
+    candidates.className = "ai-field-candidates";
+    candidates.replaceChildren(...fieldCandidates.slice(0, 3).map(createCandidateChip));
+    editButton.type = "button";
+    editButton.textContent = "Modifier";
+    editButton.disabled = true;
+    editButton.title = "Choix manuel par champ prévu dans un lot ultérieur";
+
+    title.append(labelElement, scoreElement);
+    row.append(title, selected, candidates, editButton);
     return row;
   }
 
-  function createList(label: string, values: string[]): HTMLElement {
-    const section = document.createElement("div");
-    const title = document.createElement("strong");
-    const list = document.createElement("ul");
-    section.className = "ai-suggestion-list";
-    title.textContent = label;
-    list.replaceChildren(
-      ...values.map((value) => {
-        const item = document.createElement("li");
-        item.textContent = value;
-        return item;
-      })
-    );
-    section.append(title, list);
-    return section;
+  function createCandidateChip(candidate: AiCandidateView): HTMLElement {
+    const chip = document.createElement("span");
+    chip.className = "ai-candidate-chip";
+    chip.textContent = `${candidate.value} (${candidate.score})`;
+    chip.title = candidate.reason;
+    return chip;
+  }
+
+  function createQualityBadges(state: AiState): HTMLElement[] {
+    const suggestion = state.suggestion?.suggestion;
+    return [
+      createQualityBadge("Date", Boolean(suggestion?.dateToken)),
+      createQualityBadge("Type", Boolean(suggestion?.documentType)),
+      createQualityBadge("Dossier", Boolean(suggestion?.targetFolder))
+    ];
+  }
+
+  function createQualityBadge(label: string, ok: boolean): HTMLElement {
+    const badge = document.createElement("span");
+    badge.className = `quality-badge ${ok ? "ok" : "neutral"}`;
+    badge.textContent = label;
+    return badge;
+  }
+
+  function createFolderCandidateContent(state: AiState): Node[] {
+    const suggestion = state.suggestion;
+    const container = document.createElement("div");
+    const current = document.createElement("p");
+    const cards = document.createElement("div");
+    const folderCandidates = getFolderCandidates(suggestion).slice(0, 3);
+
+    container.className = "folder-candidate-content";
+    current.className = "folder-current";
+    current.textContent = `Dossier proposé actuel : ${suggestion?.suggestion.targetFolder?.trim() || "Aucun"}`;
+    cards.className = "folder-candidate-cards";
+    cards.replaceChildren(...folderCandidates.map(createFolderCandidateCard));
+
+    if (folderCandidates.length === 0) {
+      const empty = document.createElement("span");
+      empty.className = "folder-candidate-empty";
+      empty.textContent = "Aucune carte de dossier disponible.";
+      cards.append(empty);
+    }
+
+    container.append(current, cards);
+    return [container];
+  }
+
+  function createFolderCandidateCard(candidate: AiCandidateView): HTMLElement {
+    const card = document.createElement("article");
+    const value = document.createElement("strong");
+    const meta = document.createElement("span");
+    const reason = document.createElement("p");
+    card.className = `folder-candidate-card ${folderRoleClass(candidate)}`;
+    value.textContent = candidate.value;
+    value.title = candidate.value;
+    meta.textContent = `${folderRoleLabel(candidate)} · score ${candidate.score}`;
+    reason.textContent = candidate.reason;
+    card.append(value, meta, reason);
+    return card;
+  }
+
+  function folderRoleClass(candidate: AiCandidateView): string {
+    if (candidate.role === "fallback") {
+      return "fallback";
+    }
+    if (candidate.requiresCreation || candidate.role === "newFolderProposal") {
+      return "new";
+    }
+    return "existing";
+  }
+
+  function folderRoleLabel(candidate: AiCandidateView): string {
+    if (candidate.role === "fallback") {
+      return "fallback";
+    }
+    if (candidate.requiresCreation || candidate.role === "newFolderProposal") {
+      return "à créer";
+    }
+    if (candidate.exists === false) {
+      return "proposé";
+    }
+    return "existe";
+  }
+
+  function getFieldCandidates(
+    suggestion: RendererAiDocumentSuggestion | null,
+    key: AiCandidateFieldKey
+  ): AiCandidateView[] {
+    const response = readResponseJson(suggestion);
+    return normalizeCandidates(response?.fields?.[key]?.candidates ?? []);
+  }
+
+  function getFolderCandidates(suggestion: RendererAiDocumentSuggestion | null): AiCandidateView[] {
+    const response = readResponseJson(suggestion);
+    return normalizeCandidates(response?.folderCandidates ?? []);
+  }
+
+  function scoreForSelected(candidates: AiCandidateView[], selectedValue: string | undefined): number | null {
+    const selected = selectedValue?.trim().toLowerCase();
+    if (!selected) {
+      return null;
+    }
+
+    const match = candidates.find((candidate) => candidate.value.trim().toLowerCase() === selected);
+    return match?.score ?? null;
+  }
+
+  function readResponseJson(
+    suggestion: RendererAiDocumentSuggestion | null
+  ): AiMultiCandidateResponseView | null {
+    const value = suggestion?.responseJson;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value as AiMultiCandidateResponseView
+      : null;
+  }
+
+  function normalizeCandidates(values: unknown[]): AiCandidateView[] {
+    return values
+      .filter((value): value is Partial<AiCandidateView> => Boolean(value && typeof value === "object"))
+      .map((value) => ({
+        value: typeof value.value === "string" ? value.value : "",
+        score: typeof value.score === "number" && Number.isFinite(value.score) ? Math.round(value.score) : 0,
+        reason: typeof value.reason === "string" ? value.reason : "",
+        role: typeof value.role === "string" ? value.role : "",
+        ...(typeof value.exists === "boolean" ? { exists: value.exists } : {}),
+        ...(typeof value.requiresCreation === "boolean"
+          ? { requiresCreation: value.requiresCreation }
+          : {})
+      }))
+      .filter((value) => value.value.trim())
+      .sort((left, right) =>
+        right.score - left.score || left.value.localeCompare(right.value, "fr", { sensitivity: "base" })
+      );
   }
 
   function compactText(value: string): string {

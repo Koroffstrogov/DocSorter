@@ -54,6 +54,10 @@ export function buildOllamaClassificationPrompt(
               selected: "cible logique optionnelle",
               candidates: [{ value: "foyer", score: 85, reason: "document fiscal du foyer", role: "selected" }]
             },
+            targetKind: {
+              selected: "person | household | vehicle | property | other optionnel",
+              candidates: [{ value: "household", score: 80, reason: "document du foyer", role: "selected" }]
+            },
             documentType: {
               selected: "type documentaire normalisé optionnel",
               candidates: [{ value: "avis-imposition", score: 90, reason: "libellé détecté", role: "selected" }]
@@ -68,14 +72,15 @@ export function buildOllamaClassificationPrompt(
             }
           },
           folderCandidates: [
-            { value: "Vehicules", score: 80, reason: "dossier connu pertinent", role: "existing" }
+            { value: "Vehicules", score: 80, reason: "dossier connu pertinent", exists: true }
           ],
           fileNameCandidates: [
             {
               value: "2026_captur_facture-entretien_renault_vidange.pdf",
               score: 80,
               reason: "convention respectée",
-              role: "selected"
+              exists: false,
+              requiresCreation: false
             }
           ],
           confidence: "nombre entier 0..100",
@@ -87,16 +92,24 @@ export function buildOllamaClassificationPrompt(
       ),
       "Contraintes strictes :",
       "- source doit valoir \"ollama\".",
-      "- Chaque champ de fields doit contenir selected et candidates ; chaque candidate contient value, score, reason, role optionnel.",
+      "- Chaque champ de fields doit contenir selected et candidates ; retourne jusqu'à 3 candidats par champ.",
+      "- Chaque candidate de champ contient value, score, reason, role optionnel ; le meilleur candidat doit être dans selected.",
+      "- Chaque candidat de folderCandidates et fileNameCandidates contient value, score, reason, exists optionnel, requiresCreation optionnel.",
       "- fields.subject.selected doit proposer le champ Sujet de Renommage proposé quand il est identifiable.",
       "- fields.subject, fields.target, fields.documentType, fields.issuer et fields.detail doivent être des blocs courts compatibles nom de fichier.",
       "- folderCandidates doit contenir des dossiers relatifs candidats ; chaque dossier doit être relatif, sans chemin absolu, sans lettre de lecteur, sans \"..\".",
       "- folderCandidates doit préférer un dossier relatif connu pertinent quand il existe dans knownRelativeFolders.",
-      "- si aucun dossier connu ne convient, ajoute un candidat role \"newFolderProposal\" puis un fallback Divers/A-traiter-manuellement.",
+      "- si aucun dossier connu ne convient, ajoute un candidat requiresCreation true puis un fallback Divers/A-traiter-manuellement.",
       "- fileNameCandidates doit contenir des noms complets proposés qui respectent la convention de nommage.",
       "- subject ne doit jamais être égal à documentType.",
       "- subject ne doit pas répéter le type documentaire.",
       "- target ne doit jamais être égal à documentType.",
+      "- target est la valeur de nommage : paul, lea, foyer, captur, maison-principale.",
+      "- target ne doit jamais valoir personne, person, véhicule, vehicle, document, bien, property, other, ni le type documentaire.",
+      "- targetKind décrit seulement la nature optionnelle de target : person, household, vehicle, property ou other.",
+      "- subject peut rester un libellé lisible, mais ne doit pas remplacer target.",
+      "- la cible doit être la personne, le foyer, le véhicule ou le bien concerné ; le type documentaire ne doit pas servir de cible.",
+      "- detail ne doit pas répéter subject, target, documentType ou issuer.",
       "- le nom de fichier source ou son basename ne doit jamais devenir subject ni target.",
       "- n'utilise jamais DocSorter, docsorter-local, document de test ou contenu fictif dans subject, issuer, detail ou proposedName.",
       "- n'utilise jamais de chemin absolu dans target, documentType, issuer, detail ou targetFolder.",
@@ -104,8 +117,12 @@ export function buildOllamaClassificationPrompt(
       "- si tu ne connais que le mois au format AAAA-MM, utilise AAAA-MM-01.",
       "- n'utilise pas date-inconnue, AAAA-env, ni AAAA-MM dans la sortie JSON.",
       "- Pour contrat ou assurance, la date d'effet est prioritaire sur la date de signature.",
+      "- Si une date complète d'effet, émission ou délivrance est détectée, dateToken doit être AAAA-MM-JJ, pas seulement AAAA.",
+      "- Si une date de prise d'effet est présente, elle doit gagner comme dateToken.",
       "- Pour avis-imposition, target doit être foyer et dateToken doit être l'année fiscale/recherche.",
       "- Pour scolarité 2026/2027, dateToken doit être 2026.",
+      "- Pour identité, carte-identite ou passeport, la date d'émission/délivrance est prioritaire ; la date de naissance est exclue du dateToken.",
+      "- Pour carte-identite, targetFolder doit prioriser un dossier connu pertinent comme CNI ou Identité ; sinon propose Identité avec requiresCreation true.",
       "- N'invente pas une date précise : si seulement l'année est connue, retourne AAAA.",
       "- confidence est un nombre entre 0 et 100.",
       "- n'invente pas une certitude : ajoute un warning si le signal est faible.",
@@ -125,11 +142,12 @@ export const OLLAMA_MULTI_CANDIDATE_JSON_SCHEMA = {
     fields: {
       type: "object",
       additionalProperties: false,
-      required: ["dateToken", "subject", "target", "documentType", "issuer", "detail"],
+      required: ["dateToken", "subject", "target", "targetKind", "documentType", "issuer", "detail"],
       properties: {
         dateToken: createFieldSchema(),
         subject: createFieldSchema(),
         target: createFieldSchema(),
+        targetKind: createFieldSchema(),
         documentType: createFieldSchema(),
         issuer: createFieldSchema(),
         detail: createFieldSchema()
@@ -168,7 +186,7 @@ function createFieldSchema() {
 function createCandidateArraySchema() {
   return {
     type: "array",
-    maxItems: 8,
+    maxItems: 3,
     items: {
       type: "object",
       additionalProperties: false,
@@ -181,7 +199,9 @@ function createCandidateArraySchema() {
           maximum: 100
         },
         reason: { type: "string" },
-        role: { type: "string" }
+        role: { type: "string" },
+        exists: { type: "boolean" },
+        requiresCreation: { type: "boolean" }
       }
     }
   } as const;
