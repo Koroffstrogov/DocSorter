@@ -445,6 +445,47 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(!result.ok && result.error.code).toBe("AI_OUTPUT_INVALID");
   });
 
+  it("keeps the invalid multi-candidate field in the diagnostic error", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Bulletin scolaire de Lea Martin. Année scolaire 2026-2027."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          fields: {
+            dateToken: createField("2026"),
+            subject: createField("lea"),
+            target: createField("lea"),
+            targetKind: createField("person"),
+            documentType: {
+              selected: "bulletin-scolaire",
+              candidates: [
+                createCandidate("bulletin scolaire", 90, "Libellé détecté.", "selected")
+              ]
+            },
+            issuer: createField("college-monet"),
+            detail: createField("trimestre-1")
+          },
+          folderCandidates: [],
+          fileNameCandidates: [],
+          confidence: 82,
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error).toEqual({
+      code: "AI_OUTPUT_INVALID",
+      message: "Le candidat sélectionné IA doit être présent dans la liste des candidats.",
+      field: "fields.documentType.selected"
+    });
+  });
+
   it("keeps T02 school-year date as the starting year", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);

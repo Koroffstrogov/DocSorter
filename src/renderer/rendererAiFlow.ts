@@ -7,7 +7,8 @@ async function refreshAiStatus(): Promise<void> {
     error: null,
     modelStatus: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
   renderAiPanel();
 
@@ -24,6 +25,8 @@ async function refreshAiStatus(): Promise<void> {
   applyAiStatus(result.value as RendererAiStatus);
   void refreshAiModelStatus();
 }
+
+let aiPipelineTimer: number | null = null;
 
 async function saveAiSettingsFromPanel(): Promise<void> {
   if (isAiBusy()) {
@@ -47,7 +50,8 @@ async function saveAiSettingsFromPanel(): Promise<void> {
     error: null,
     modelStatus: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
   renderAiPanel();
 
@@ -78,7 +82,8 @@ async function testAiConnectionFromPanel(): Promise<void> {
     error: null,
     modelStatus: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
   renderAiPanel();
 
@@ -107,7 +112,8 @@ function updateAiDraft(draft: AiSettingsDraft): void {
     error: null,
     modelStatus: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
   renderAiPanel();
 }
@@ -168,21 +174,105 @@ async function unloadAiModelFromPanel(): Promise<void> {
   render();
 }
 
+async function preloadAiModelFromPanel(): Promise<void> {
+  if (isAiBusy() || !canPreloadAiModel()) {
+    return;
+  }
+
+  const requestId = ++aiRequestId;
+  const startedAt = nowMs();
+  startAiPipelineTimer("connection");
+  state.ai = {
+    ...state.ai,
+    panelStatus: "preloading",
+    message: "Connexion Ollama...",
+    error: null,
+    modelStatus: {
+      status: "loading",
+      model: state.ai.status?.settings.model ?? state.ai.draft.model,
+      message: "Connexion Ollama...",
+      loadedAt: null,
+      keepAliveUntil: null,
+      lastCheckedAt: null,
+      error: null
+    },
+    suggestion: null,
+    suggestionDocumentPath: null,
+    selection: null
+  };
+  renderAiPanel();
+
+  const connection = await window.docSorter.testAiConnection();
+  if (requestId !== aiRequestId) {
+    return;
+  }
+  if (!connection.ok) {
+    finishAiPipelineTimer("error", { finalElapsedMs: nowMs() - startedAt });
+    applyAiError(connection.error as RendererAiError);
+    return;
+  }
+
+  state.ai.status = connection.value as RendererAiStatus;
+  state.ai.draft = aiStatusToDraft(connection.value as RendererAiStatus);
+  if (connection.value.status !== "ok") {
+    finishAiPipelineTimer("error", { finalElapsedMs: nowMs() - startedAt });
+    state.ai = {
+      ...state.ai,
+      panelStatus: "error",
+      message: connection.value.message,
+      error: connection.value.error
+    };
+    renderAiPanel();
+    return;
+  }
+
+  const loadStartedAt = nowMs();
+  updateAiPipelineStage("model-loading");
+  state.ai = {
+    ...state.ai,
+    message: "Chargement anticipé du modèle IA...",
+    modelStatus: {
+      status: "loading",
+      model: connection.value.settings.model,
+      message: "Chargement du modèle IA...",
+      loadedAt: null,
+      keepAliveUntil: null,
+      lastCheckedAt: null,
+      error: null
+    }
+  };
+  renderAiPanel();
+
+  const preload = await window.docSorter.preloadAiModel();
+  if (requestId !== aiRequestId) {
+    return;
+  }
+
+  const loadMs = nowMs() - loadStartedAt;
+  const totalMs = nowMs() - startedAt;
+  if (!preload.ok) {
+    finishAiPipelineTimer("error", { finalElapsedMs: totalMs, lastLoadMs: loadMs });
+    applyAiError(preload.error as RendererAiError);
+    return;
+  }
+
+  state.ai = {
+    ...state.ai,
+    panelStatus: "ready",
+    message: preload.value.message,
+    error: null,
+    modelStatus: preload.value as RendererAiModelStatus
+  };
+  finishAiPipelineTimer("completed", { finalElapsedMs: totalMs, lastLoadMs: loadMs });
+  render();
+}
+
 async function runAiSuggestionForActiveDocument(): Promise<void> {
   const activeDocument = getActiveDocument();
-  const textContext = getActiveAiTextContext(activeDocument);
   if (!activeDocument) {
     applyAiError({
       code: "AI_DOCUMENT_NOT_SELECTED",
       message: "Aucun document sélectionné pour l'analyse IA."
-    });
-    return;
-  }
-
-  if (!textContext) {
-    applyAiError({
-      code: "AI_TEXT_NOT_AVAILABLE",
-      message: "Texte extrait requis avant l'analyse IA locale."
     });
     return;
   }
@@ -192,41 +282,145 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
   }
 
   const requestId = ++aiSuggestionRequestId;
-  const message =
-    state.ai.modelStatus?.status === "ready"
-      ? "Analyse IA locale du document actif..."
-      : "Chargement du modèle IA...";
+  const startedAt = nowMs();
+  let loadMs: number | null = null;
+  let generationMs: number | null = null;
+  startAiPipelineTimer("connection");
   state.ai = {
     ...state.ai,
     panelStatus: "analyzing",
-    message,
+    message: "Connexion Ollama...",
     error: null,
-    modelStatus:
-      state.ai.modelStatus?.status === "ready"
-        ? state.ai.modelStatus
-        : {
-            status: "loading",
-            model: state.ai.status?.settings.model ?? "",
-            message: "Chargement du modèle IA...",
-            loadedAt: null,
-            keepAliveUntil: null,
-            lastCheckedAt: null,
-            error: null
-          },
+    modelStatus: state.ai.modelStatus?.status === "ready"
+      ? state.ai.modelStatus
+      : {
+          status: "loading",
+          model: state.ai.status?.settings.model ?? state.ai.draft.model,
+          message: "Connexion Ollama...",
+          loadedAt: null,
+          keepAliveUntil: null,
+          lastCheckedAt: null,
+          error: null
+        },
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
   renderAiPanel();
 
+  const connection = await window.docSorter.testAiConnection();
+  if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+    return;
+  }
+  if (!connection.ok) {
+    finishAiPipelineTimer("error", { finalElapsedMs: nowMs() - startedAt });
+    applyAiError(connection.error as RendererAiError);
+    return;
+  }
+
+  state.ai.status = connection.value as RendererAiStatus;
+  state.ai.draft = aiStatusToDraft(connection.value as RendererAiStatus);
+  if (connection.value.status !== "ok") {
+    finishAiPipelineTimer("error", { finalElapsedMs: nowMs() - startedAt });
+    state.ai = {
+      ...state.ai,
+      panelStatus: "error",
+      message: connection.value.message,
+      error: connection.value.error
+    };
+    renderAiPanel();
+    return;
+  }
+
+  if (!isAiModelReadyForCurrentSettings()) {
+    const loadStartedAt = nowMs();
+    updateAiPipelineStage("model-loading");
+    state.ai = {
+      ...state.ai,
+      message: "Chargement du modèle IA...",
+      modelStatus: {
+        status: "loading",
+        model: connection.value.settings.model,
+        message: "Chargement du modèle IA...",
+        loadedAt: null,
+        keepAliveUntil: null,
+        lastCheckedAt: null,
+        error: null
+      }
+    };
+    renderAiPanel();
+
+    const preload = await window.docSorter.preloadAiModel();
+    if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+      return;
+    }
+    loadMs = nowMs() - loadStartedAt;
+    if (!preload.ok) {
+      finishAiPipelineTimer("error", { finalElapsedMs: nowMs() - startedAt, lastLoadMs: loadMs });
+      applyAiError(preload.error as RendererAiError);
+      return;
+    }
+
+    state.ai = {
+      ...state.ai,
+      modelStatus: preload.value as RendererAiModelStatus
+    };
+  }
+
+  let textContext = getActiveAiTextContext(activeDocument);
+  if (!textContext && activeDocument.extension === ".pdf") {
+    updateAiPipelineStage("text-extraction");
+    state.ai = {
+      ...state.ai,
+      message: "Extraction texte PDF avant analyse IA..."
+    };
+    renderAiPanel();
+
+    await extractTextFromActivePdf();
+    if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+      return;
+    }
+    textContext = getActiveAiTextContext(activeDocument);
+  }
+
+  if (!textContext) {
+    const message = activeDocument.extension === ".pdf"
+      ? "OCR nécessaire ou texte PDF inexploitable."
+      : "OCR nécessaire avant l'analyse IA locale.";
+    finishAiPipelineTimer("error", {
+      finalElapsedMs: nowMs() - startedAt,
+      lastLoadMs: loadMs
+    });
+    applyAiError({
+      code: "AI_TEXT_NOT_AVAILABLE",
+      message
+    });
+    return;
+  }
+
+  updateAiPipelineStage("analysis");
+  state.ai = {
+    ...state.ai,
+    message: "Analyse IA locale du document actif..."
+  };
+  renderAiPanel();
+
+  const generationStartedAt = nowMs();
   const result = await window.docSorter.runAiSuggestionForActiveDocument(
     activeDocument.filePath,
     textContext
   );
+  generationMs = nowMs() - generationStartedAt;
   if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
     return;
   }
 
   if (!result.ok) {
+    finishAiPipelineTimer("error", {
+      finalElapsedMs: nowMs() - startedAt,
+      lastLoadMs: loadMs,
+      lastGenerationMs: generationMs
+    });
     applyAiError(result.error as RendererAiError);
     void refreshAiModelStatus();
     return;
@@ -239,8 +433,19 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     error: null,
     modelStatus: result.value.modelStatus as RendererAiModelStatus,
     suggestion: result.value as RendererAiDocumentSuggestion,
-    suggestionDocumentPath: activeDocument.filePath
+    suggestionDocumentPath: activeDocument.filePath,
+    selection: buildAiSelectionFromSuggestion(
+      result.value as RendererAiDocumentSuggestion,
+      activeDocument.extension,
+      state.targetPath
+    )
   };
+  finishAiPipelineTimer("completed", {
+    finalElapsedMs: nowMs() - startedAt,
+    lastLoadMs: loadMs,
+    lastAnalysisMs: nowMs() - startedAt,
+    lastGenerationMs: generationMs
+  });
   render();
 }
 
@@ -291,10 +496,19 @@ function canRunAiSuggestion(): boolean {
     activeDocument &&
       activeDocument.status !== "missing" &&
       state.ai.status?.settings.enabled &&
-      state.ai.status.status === "ok" &&
+      state.ai.status.status !== "disabled" &&
+      state.ai.status.status !== "model-missing" &&
       !state.ai.dirty &&
-      !isAiBusy() &&
-      getActiveAiTextContext(activeDocument)
+      !isAiBusy()
+  );
+}
+
+function canPreloadAiModel(): boolean {
+  return Boolean(
+    state.ai.status?.settings.enabled &&
+      state.ai.status.status !== "disabled" &&
+      !state.ai.dirty &&
+      !isAiBusy()
   );
 }
 
@@ -316,6 +530,79 @@ function canUnloadAiModel(): boolean {
       state.ai.modelStatus &&
       (state.ai.modelStatus.status === "ready" || state.ai.modelStatus.status === "error")
   );
+}
+
+function selectAiFieldCandidate(field: AiSelectionFieldKey, value: string): void {
+  if (!state.ai.selection || !state.ai.suggestion) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  state.ai.selection = updateAiSelectionField(
+    state.ai.selection,
+    field,
+    value,
+    "candidate",
+    activeDocument?.extension ?? ".pdf",
+    state.targetPath
+  );
+  state.ai.message = "Candidat IA sélectionné. Prévisualisation recalculée.";
+  render();
+}
+
+function startAiFieldManualEdit(field: AiSelectionFieldKey): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  state.ai.selection = {
+    ...state.ai.selection,
+    editingField: state.ai.selection.editingField === field ? null : field
+  };
+  renderAiPanel();
+}
+
+function updateAiFieldManualValue(field: AiSelectionFieldKey, value: string): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  state.ai.selection = updateAiSelectionField(
+    state.ai.selection,
+    field,
+    value,
+    "manual",
+    activeDocument?.extension ?? ".pdf",
+    state.targetPath
+  );
+  state.ai.message = "Champ IA manuel modifié. Prévisualisation recalculée.";
+  renderNamingPanel(false);
+}
+
+function finishAiFieldManualEdit(): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  state.ai.selection = {
+    ...state.ai.selection,
+    editingField: null
+  };
+  render();
+}
+
+function selectAiFolderCandidate(relativePath: string): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  state.ai.selection = recalculateAiSelection({
+    ...state.ai.selection,
+    selectedFolder: relativePath.trim()
+  }, getActiveDocument()?.extension ?? ".pdf", state.targetPath);
+  state.ai.message = "Dossier IA sélectionné. Prévisualisation recalculée.";
+  render();
 }
 
 function applyAiSuggestionToEmptyFields(): void {
@@ -394,7 +681,8 @@ function ignoreAiSuggestion(): void {
     message: "Suggestion IA ignorée. Aucun champ n'a été modifié.",
     error: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
   render();
 }
@@ -409,7 +697,9 @@ function applyAiStatus(status: RendererAiStatus): void {
     dirty: false,
     modelStatus: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null,
+    timing: state.ai.timing
   };
   render();
 }
@@ -430,7 +720,8 @@ function aiStatusToDraft(status: RendererAiStatus): AiSettingsDraft {
     profileId: status.settings.profileId,
     baseUrl: status.settings.baseUrl || "http://localhost:11434/",
     model: status.settings.model,
-    timeoutMs: String(status.settings.timeoutMs || 30000)
+    timeoutMs: String(status.settings.timeoutMs || 30000),
+    keepAlive: status.settings.keepAlive || "30m"
   };
 }
 
@@ -448,6 +739,7 @@ function aiDraftToSettings(draft: AiSettingsDraft): RendererAiSettings | null {
     model: draft.model.trim(),
     think: draft.profileId === "gemma4-12b-thinking",
     timeoutMs,
+    keepAlive: draft.keepAlive || "30m",
     lastTestAt: null,
     lastStatus: draft.enabled ? null : "disabled",
     lastError: null
@@ -459,10 +751,89 @@ function isAiBusy(): boolean {
     state.ai.panelStatus === "loading" ||
     state.ai.panelStatus === "saving" ||
     state.ai.panelStatus === "testing" ||
+    state.ai.panelStatus === "preloading" ||
     state.ai.panelStatus === "unloading" ||
     state.ai.panelStatus === "analyzing" ||
     isClassificationBusy()
   );
+}
+
+function isAiModelReadyForCurrentSettings(): boolean {
+  const model = state.ai.status?.settings.model ?? state.ai.draft.model;
+  return Boolean(
+    state.ai.modelStatus?.status === "ready" &&
+      state.ai.modelStatus.model === model
+  );
+}
+
+function startAiPipelineTimer(stage: AiPipelineStage): void {
+  stopAiPipelineTimer();
+  const startedAtMs = nowMs();
+  state.ai.timing = {
+    ...state.ai.timing,
+    stage,
+    startedAtMs,
+    elapsedMs: 0,
+    finalElapsedMs: null,
+    model: state.ai.status?.settings.model ?? state.ai.draft.model,
+    profileId: state.ai.status?.settings.profileId ?? state.ai.draft.profileId,
+    think: state.ai.status?.settings.think ?? state.ai.draft.profileId === "gemma4-12b-thinking"
+  };
+  aiPipelineTimer = window.setInterval(() => {
+    if (!state.ai.timing.startedAtMs) {
+      return;
+    }
+    state.ai.timing = {
+      ...state.ai.timing,
+      elapsedMs: nowMs() - state.ai.timing.startedAtMs
+    };
+    renderAiPanel();
+  }, 100);
+}
+
+function updateAiPipelineStage(stage: AiPipelineStage): void {
+  state.ai.timing = {
+    ...state.ai.timing,
+    stage,
+    elapsedMs: state.ai.timing.startedAtMs ? nowMs() - state.ai.timing.startedAtMs : state.ai.timing.elapsedMs
+  };
+  renderAiPanel();
+}
+
+function finishAiPipelineTimer(
+  stage: "completed" | "error",
+  metrics: {
+    finalElapsedMs: number;
+    lastLoadMs?: number | null;
+    lastAnalysisMs?: number | null;
+    lastGenerationMs?: number | null;
+  }
+): void {
+  stopAiPipelineTimer();
+  state.ai.timing = {
+    ...state.ai.timing,
+    stage,
+    startedAtMs: null,
+    elapsedMs: metrics.finalElapsedMs,
+    finalElapsedMs: metrics.finalElapsedMs,
+    lastLoadMs: metrics.lastLoadMs ?? state.ai.timing.lastLoadMs,
+    lastAnalysisMs: metrics.lastAnalysisMs ?? state.ai.timing.lastAnalysisMs,
+    lastGenerationMs: metrics.lastGenerationMs ?? state.ai.timing.lastGenerationMs,
+    model: state.ai.status?.settings.model ?? state.ai.timing.model,
+    profileId: state.ai.status?.settings.profileId ?? state.ai.timing.profileId,
+    think: state.ai.status?.settings.think ?? state.ai.timing.think
+  };
+}
+
+function stopAiPipelineTimer(): void {
+  if (aiPipelineTimer !== null) {
+    window.clearInterval(aiPipelineTimer);
+    aiPipelineTimer = null;
+  }
+}
+
+function nowMs(): number {
+  return Date.now();
 }
 
 function getActiveAiTextContext(
@@ -679,4 +1050,274 @@ function createAiApplicationMessage(
   }
 
   return "Suggestion IA appliquée. Les champs manuels n'ont pas été modifiés.";
+}
+
+function buildAiSelectionFromSuggestion(
+  suggestion: RendererAiDocumentSuggestion,
+  extension: SupportedDocumentExtension,
+  targetRootPath: string | null
+): AiSelectionState {
+  const response = readAiMultiCandidateResponse(suggestion);
+  const fields: AiSelectionFields = {
+    dateToken: readAiSelectedField(response, suggestion, "dateToken"),
+    subject: readAiSelectedField(response, suggestion, "subject"),
+    target: readAiSelectedField(response, suggestion, "target"),
+    documentType: readAiSelectedField(response, suggestion, "documentType"),
+    issuer: readAiSelectedField(response, suggestion, "issuer"),
+    detail: readAiSelectedField(response, suggestion, "detail")
+  };
+  const selectedFolder =
+    suggestion.suggestion.targetFolder?.trim() ||
+    selectBestAiCandidate(response?.folderCandidates ?? [])?.value.trim() ||
+    "";
+
+  return recalculateAiSelection({
+    fields,
+    manualFields: {},
+    editingField: null,
+    selectedFolder,
+    previewFilename: "",
+    previewFilenameValid: false,
+    previewMessages: [],
+    previewDestinationFolder: ""
+  }, extension, targetRootPath);
+}
+
+function updateAiSelectionField(
+  selection: AiSelectionState,
+  field: AiSelectionFieldKey,
+  value: string,
+  source: AiSelectionFieldSource,
+  extension: SupportedDocumentExtension,
+  targetRootPath: string | null
+): AiSelectionState {
+  const nextManualFields: AiSelectionManualFields = { ...selection.manualFields };
+  if (source === "manual") {
+    nextManualFields[field] = true;
+  } else {
+    delete nextManualFields[field];
+  }
+
+  return recalculateAiSelection({
+    ...selection,
+    fields: {
+      ...selection.fields,
+      [field]: value
+    },
+    manualFields: nextManualFields
+  }, extension, targetRootPath);
+}
+
+function recalculateAiSelection(
+  selection: AiSelectionState,
+  extension: SupportedDocumentExtension,
+  targetRootPath: string | null
+): AiSelectionState {
+  const preview = buildAiSelectionPreview(selection.fields, extension);
+  return {
+    ...selection,
+    previewFilename: preview.filename,
+    previewFilenameValid: preview.isValid,
+    previewMessages: preview.messages,
+    previewDestinationFolder: formatAiPreviewDestinationFolder(targetRootPath, selection.selectedFolder)
+  };
+}
+
+function buildAiSelectionPreview(
+  fields: AiSelectionFields,
+  extension: SupportedDocumentExtension
+): { filename: string; isValid: boolean; messages: AiSelectionPreviewMessage[] } {
+  const messages: AiSelectionPreviewMessage[] = [];
+  const dateResult = normalizeAiPreviewDate(fields.dateToken);
+  const target = normalizeAiPreviewBlock(fields.target);
+  const documentType = normalizeAiPreviewBlock(fields.documentType);
+  const issuer = normalizeOptionalAiPreviewBlock(fields.issuer);
+  const detail = normalizeOptionalAiPreviewBlock(fields.detail);
+
+  if (dateResult.warning) {
+    messages.push({ level: "warning", message: dateResult.warning });
+  }
+  if (!dateResult.value) {
+    messages.push({ level: "error", message: "Date IA obligatoire : AAAA ou AAAA-MM-JJ." });
+  }
+  if (!target) {
+    messages.push({ level: "error", message: "Cible IA obligatoire pour générer le nom." });
+  }
+  if (!documentType) {
+    messages.push({ level: "error", message: "Type IA obligatoire pour générer le nom." });
+  }
+
+  const optionalParts = removeRedundantAiNameParts({
+    target,
+    documentType,
+    issuer,
+    detail
+  });
+  if (issuer && !optionalParts.issuer) {
+    messages.push({ level: "info", message: "Émetteur redondant ignoré dans le nom IA." });
+  }
+  if (detail && !optionalParts.detail) {
+    messages.push({ level: "info", message: "Détail redondant ignoré dans le nom IA." });
+  }
+
+  const isValid = Boolean(dateResult.value && target && documentType);
+  if (!isValid) {
+    return {
+      filename: "",
+      isValid: false,
+      messages
+    };
+  }
+
+  const parts = [
+    dateResult.value,
+    target,
+    documentType,
+    optionalParts.issuer,
+    optionalParts.detail
+  ].filter(Boolean);
+  const normalizedExtension = extension.toLowerCase();
+  const filename = `${parts.join("_")}${normalizedExtension}`.slice(0, 180 + normalizedExtension.length);
+
+  return {
+    filename,
+    isValid: true,
+    messages
+  };
+}
+
+function getAiNamingPreview(): {
+  filename: string;
+  filenameValid: boolean;
+  destinationFolder: string;
+  messages: AiSelectionPreviewMessage[];
+} | null {
+  const activeDocument = getActiveDocument();
+  if (
+    !activeDocument ||
+    !state.ai.selection ||
+    !state.ai.suggestion ||
+    state.ai.suggestionDocumentPath !== activeDocument.filePath
+  ) {
+    return null;
+  }
+
+  if (state.ai.selection.previewDestinationFolder !== formatAiPreviewDestinationFolder(
+    state.targetPath,
+    state.ai.selection.selectedFolder
+  )) {
+    state.ai.selection = recalculateAiSelection(
+      state.ai.selection,
+      activeDocument.extension,
+      state.targetPath
+    );
+  }
+
+  return {
+    filename: state.ai.selection.previewFilename,
+    filenameValid: state.ai.selection.previewFilenameValid,
+    destinationFolder: state.ai.selection.previewDestinationFolder,
+    messages: state.ai.selection.previewMessages
+  };
+}
+
+function readAiSelectedField(
+  response: AiMultiCandidateResponseView | null,
+  suggestion: RendererAiDocumentSuggestion,
+  field: AiSelectionFieldKey
+): string {
+  const selected = response?.fields?.[field]?.selected?.trim();
+  if (selected) {
+    return selected;
+  }
+
+  const value = suggestion.suggestion[field];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readAiMultiCandidateResponse(
+  suggestion: RendererAiDocumentSuggestion | null
+): AiMultiCandidateResponseView | null {
+  const value = suggestion?.responseJson;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as AiMultiCandidateResponseView
+    : null;
+}
+
+function selectBestAiCandidate(candidates: AiCandidateView[]): AiCandidateView | null {
+  return [...candidates].sort((left, right) =>
+    right.score - left.score || left.value.localeCompare(right.value, "fr", { sensitivity: "base" })
+  )[0] ?? null;
+}
+
+function normalizeAiPreviewDate(value: string): { value: string; warning: string } {
+  const trimmed = value.trim();
+  if (/^(19|20)\d{2}$/.test(trimmed)) {
+    return { value: trimmed, warning: "" };
+  }
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(trimmed)) {
+    return {
+      value: `${trimmed}-01`,
+      warning: "Date IA au mois convertie au premier jour du mois."
+    };
+  }
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)) {
+    return { value: trimmed, warning: "" };
+  }
+
+  return { value: "", warning: "" };
+}
+
+function normalizeAiPreviewBlock(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function normalizeOptionalAiPreviewBlock(value: string): string {
+  const normalized = normalizeAiPreviewBlock(value);
+  return normalized === "aucun" ||
+    normalized === "none" ||
+    normalized === "neant" ||
+    normalized === "n-a" ||
+    normalized === "sans"
+    ? ""
+    : normalized;
+}
+
+function removeRedundantAiNameParts(input: {
+  target: string;
+  documentType: string;
+  issuer: string;
+  detail: string;
+}): { issuer: string; detail: string } {
+  const blocked = new Set([input.target, input.documentType].filter(Boolean));
+  const issuer = blocked.has(input.issuer) ? "" : input.issuer;
+  if (issuer) {
+    blocked.add(issuer);
+  }
+
+  return {
+    issuer,
+    detail: blocked.has(input.detail) ? "" : input.detail
+  };
+}
+
+function formatAiPreviewDestinationFolder(targetRootPath: string | null, relativeFolder: string): string {
+  const folder = relativeFolder.trim();
+  if (!targetRootPath) {
+    return folder || "Aucun dossier cible sélectionné";
+  }
+
+  if (!folder) {
+    return targetRootPath;
+  }
+
+  const separator = targetRootPath.includes("\\") ? "\\" : "/";
+  return `${targetRootPath.replace(/[\\/]+$/, "")}${separator}${folder.replace(/^[\\/]+/, "")}`;
 }

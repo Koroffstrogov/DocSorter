@@ -154,7 +154,8 @@ const namingPanelView = DocSorterNamingPanel.createNamingPanel({
     targetFolder: state.targetFolder,
     naming: state.naming,
     destination: state.destination,
-    effectiveFilename: getEffectiveProposedFilename()
+    effectiveFilename: getEffectiveProposedFilename(),
+    aiPreview: getAiNamingPreview()
   }),
   onDraftChange: updateNamingDraftFromInputs,
   onResetDraft: () => {
@@ -218,9 +219,17 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onUnloadModel: () => {
     void unloadAiModelFromPanel();
   },
+  onPreloadModel: () => {
+    void preloadAiModelFromPanel();
+  },
   onRunSuggestion: () => {
     void runAiSuggestionForActiveDocument();
   },
+  onFieldCandidateSelect: selectAiFieldCandidate,
+  onFieldManualEditStart: startAiFieldManualEdit,
+  onFieldManualValueChange: updateAiFieldManualValue,
+  onFieldManualEditFinish: finishAiFieldManualEdit,
+  onFolderCandidateSelect: selectAiFolderCandidate,
   onApplySuggestionToEmptyFields: applyAiSuggestionToEmptyFields,
   onExportDiagnostic: () => {
     void exportAiDiagnosticForActiveDocument();
@@ -228,6 +237,7 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onIgnoreSuggestion: ignoreAiSuggestion,
   isActionsDisabled: isClassificationBusy,
   canRunSuggestion: canRunAiSuggestion,
+  canPreloadModel: canPreloadAiModel,
   canUnloadModel: canUnloadAiModel,
   canApplySuggestionToEmptyFields: canApplyAiSuggestionToEmptyFields,
   canExportDiagnostic: canExportAiDiagnostic,

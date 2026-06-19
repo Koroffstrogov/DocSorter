@@ -158,6 +158,7 @@ function createSettings(): AiSettings {
     model: "gemma3:4b",
     think: false,
     timeoutMs: 30_000,
+    keepAlive: "30m",
     lastTestAt: null,
     lastStatus: null,
     lastError: null

@@ -37,6 +37,7 @@ export type AiSettingsErrorCode =
 export interface AiSettingsError {
   code: AiSettingsErrorCode;
   message: string;
+  field?: string;
 }
 
 export type AiSettingsResult<T> = { ok: true; value: T } | { ok: false; error: AiSettingsError };
@@ -49,6 +50,7 @@ export interface AiSettings {
   model: string;
   think: boolean;
   timeoutMs: number;
+  keepAlive: string;
   lastTestAt: string | null;
   lastStatus: AiConnectionStatus | null;
   lastError: string | null;
@@ -66,9 +68,11 @@ export interface AiStatus {
 
 export const DEFAULT_AI_BASE_URL = "http://localhost:11434/";
 export const DEFAULT_AI_TIMEOUT_MS = 30_000;
+export const DEFAULT_AI_KEEP_ALIVE = "30m";
 const MIN_AI_TIMEOUT_MS = 1_000;
 const MAX_AI_TIMEOUT_MS = 120_000;
 const MAX_AI_MODEL_LENGTH = 120;
+const MAX_AI_KEEP_ALIVE_LENGTH = 12;
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 export function getAiSettingsPath(userDataPath: string): string {
@@ -85,6 +89,7 @@ export function createDefaultAiSettings(): AiSettings {
     model: profile.model,
     think: profile.think,
     timeoutMs: DEFAULT_AI_TIMEOUT_MS,
+    keepAlive: DEFAULT_AI_KEEP_ALIVE,
     lastTestAt: null,
     lastStatus: "disabled",
     lastError: null
@@ -195,6 +200,7 @@ export function normalizeAiSettings(value: unknown): AiSettingsResult<AiSettings
       model: sanitizeModelName(profile.model),
       think: profile.think,
       timeoutMs: normalizeTimeout(input.timeoutMs),
+      keepAlive: normalizeKeepAlive(input.keepAlive),
       lastTestAt: readOptionalNullableString(input.lastTestAt),
       lastStatus: readConnectionStatus(input.lastStatus),
       lastError: readOptionalNullableString(input.lastError)
@@ -369,6 +375,15 @@ function normalizeTimeout(value: unknown): number {
   }
 
   return Math.max(MIN_AI_TIMEOUT_MS, Math.min(MAX_AI_TIMEOUT_MS, Math.floor(numericValue)));
+}
+
+function normalizeKeepAlive(value: unknown): string {
+  const rawValue = typeof value === "string" ? value.trim().toLowerCase() : DEFAULT_AI_KEEP_ALIVE;
+  if (/^[1-9]\d{0,3}[smh]$/.test(rawValue)) {
+    return rawValue.slice(0, MAX_AI_KEEP_ALIVE_LENGTH);
+  }
+
+  return DEFAULT_AI_KEEP_ALIVE;
 }
 
 function readConnectionStatus(value: unknown): AiConnectionStatus | null {

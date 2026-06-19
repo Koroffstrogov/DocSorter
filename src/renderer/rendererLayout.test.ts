@@ -57,6 +57,9 @@ describe("renderer right panel layout", () => {
     expect(html).toContain("Mode : <strong>IA locale seule</strong>");
     expect(html).toContain('id="ai-quality-badges"');
     expect(html).toContain('id="run-ai-suggestion"');
+    expect(html).toContain('id="ai-quick-profile"');
+    expect(html).toContain('id="preload-ai-model"');
+    expect(html).toContain("Charger le modèle IA");
     expect(html).toContain('id="apply-ai-suggestion-empty"');
     expect(html).toContain('id="export-ai-diagnostic"');
     expect(html).toContain('id="ignore-ai-suggestion"');
@@ -94,6 +97,11 @@ describe("renderer right panel layout", () => {
     expect(aiPanel).toContain('createAiFieldRow("Émetteur"');
     expect(aiPanel).toContain('createAiFieldRow("Détail"');
     expect(aiPanel).toContain('textContent = "Modifier"');
+    expect(aiPanel).toContain("createCandidateButton");
+    expect(aiPanel).toContain("fieldCandidates.slice(0, 3)");
+    expect(aiPanel).toContain("folderCandidates = getFolderCandidates(suggestion).slice(0, 3)");
+    expect(aiPanel).toContain("onFolderCandidateSelect");
+    expect(aiPanel).toContain("requiresCreation");
   });
 
   it("does not present a saved Ollama success as a live connection in the IA panel", async () => {

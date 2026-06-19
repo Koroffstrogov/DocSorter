@@ -27,7 +27,8 @@ describe("Ollama provider preparation", () => {
       profileId: "gemma3-4b",
       model: "gemma3:4b",
       think: false,
-      timeoutMs: 30_000
+      timeoutMs: 30_000,
+      keepAlive: "30m"
     });
     expect(saved.ok).toBe(true);
     const fetchClient = createMockFetch([
@@ -52,6 +53,7 @@ describe("Ollama provider preparation", () => {
       model: "gemma3:4b",
       think: false,
       timeoutMs: 30_000,
+      keepAlive: "30m",
       lastTestAt: "2026-06-16T10:00:00.000Z",
       lastStatus: "ok",
       lastError: null
@@ -70,6 +72,7 @@ describe("Ollama provider preparation", () => {
       model: "gemma3:4b",
       think: false,
       timeoutMs: 30_000,
+      keepAlive: "30m",
       lastTestAt: null,
       lastStatus: null,
       lastError: null
@@ -102,7 +105,8 @@ describe("Ollama provider preparation", () => {
       profileId: "gemma3-4b",
       model: "gemma3:4b",
       think: false,
-      timeoutMs: 30_000
+      timeoutMs: 30_000,
+      keepAlive: "30m"
     });
     const fetchClient = createMockFetch([{ version: "0.5.1" }, { models: [{ name: "mistral" }] }]);
 
@@ -127,7 +131,8 @@ describe("Ollama provider preparation", () => {
       profileId: "gemma3-4b",
       model: "gemma3:4b",
       think: false,
-      timeoutMs: 30_000
+      timeoutMs: 30_000,
+      keepAlive: "30m"
     });
     const fetchClient = createMockFetch([]);
 
@@ -147,7 +152,8 @@ describe("Ollama provider preparation", () => {
       profileId: "gemma3-4b",
       model: "gemma3:4b",
       think: false,
-      timeoutMs: 30_000
+      timeoutMs: 30_000,
+      keepAlive: "30m"
     });
 
     const result = await testAiConnection(workspace.userData, {

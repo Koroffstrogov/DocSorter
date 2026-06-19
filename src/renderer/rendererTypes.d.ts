@@ -36,6 +36,7 @@ type AiPanelStatus =
   | "ready"
   | "saving"
   | "testing"
+  | "preloading"
   | "analyzing"
   | "unloading"
   | "suggestion-ready"
@@ -599,6 +600,7 @@ interface RendererAiError {
     | "AI_OUTPUT_INVALID"
     | "UNKNOWN_ERROR";
   message: string;
+  field?: string;
 }
 
 interface RendererAiSettings {
@@ -609,6 +611,7 @@ interface RendererAiSettings {
   model: string;
   think: boolean;
   timeoutMs: number;
+  keepAlive: string;
   lastTestAt: string | null;
   lastStatus: AiConnectionStatus | null;
   lastError: string | null;
@@ -638,6 +641,7 @@ interface AiSettingsDraft {
   baseUrl: string;
   model: string;
   timeoutMs: string;
+  keepAlive: string;
 }
 
 interface RendererAiClassificationSuggestion {
@@ -681,6 +685,52 @@ interface RendererAiDocumentTextContext {
   excerpt: string;
 }
 
+type AiSelectionFieldKey = "dateToken" | "subject" | "target" | "documentType" | "issuer" | "detail";
+
+type AiSelectionFieldSource = "candidate" | "manual";
+
+type AiSelectionFields = Record<AiSelectionFieldKey, string>;
+
+type AiSelectionManualFields = Partial<Record<AiSelectionFieldKey, true>>;
+
+interface AiSelectionPreviewMessage {
+  level: "error" | "warning" | "info";
+  message: string;
+}
+
+interface AiSelectionState {
+  fields: AiSelectionFields;
+  manualFields: AiSelectionManualFields;
+  editingField: AiSelectionFieldKey | null;
+  selectedFolder: string;
+  previewFilename: string;
+  previewFilenameValid: boolean;
+  previewMessages: AiSelectionPreviewMessage[];
+  previewDestinationFolder: string;
+}
+
+type AiPipelineStage =
+  | "idle"
+  | "connection"
+  | "model-loading"
+  | "text-extraction"
+  | "analysis"
+  | "completed"
+  | "error";
+
+interface AiPipelineTimingState {
+  stage: AiPipelineStage;
+  startedAtMs: number | null;
+  elapsedMs: number;
+  finalElapsedMs: number | null;
+  lastLoadMs: number | null;
+  lastAnalysisMs: number | null;
+  lastGenerationMs: number | null;
+  model: string;
+  profileId: AiModelProfileId | null;
+  think: boolean | null;
+}
+
 interface AiState {
   panelStatus: AiPanelStatus;
   status: RendererAiStatus | null;
@@ -691,6 +741,8 @@ interface AiState {
   modelStatus: RendererAiModelStatus | null;
   suggestion: RendererAiDocumentSuggestion | null;
   suggestionDocumentPath: string | null;
+  selection: AiSelectionState | null;
+  timing: AiPipelineTimingState;
 }
 
 interface ClassificationState {

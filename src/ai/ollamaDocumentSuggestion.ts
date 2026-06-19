@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type {
   AiClassificationInput,
+  AiClassificationValidationError,
   AiClassificationSuggestion,
   BoundedAiClassificationInput
 } from "./aiClassificationTypes";
@@ -147,12 +148,12 @@ export async function runOllamaSuggestionForDocument(
 
   const multiCandidateValidation = validateAiMultiCandidateResponse(parsed.value);
   if (multiCandidateValidation.status === "invalid") {
-    return aiFailure("AI_OUTPUT_INVALID", multiCandidateValidation.error.message);
+    return aiOutputValidationFailure(multiCandidateValidation.error);
   }
 
   const adapted = adaptMultiCandidateResponseToSuggestion(multiCandidateValidation.response);
   if (adapted.status !== "valid") {
-    return aiFailure("AI_OUTPUT_INVALID", adapted.error.message);
+    return aiOutputValidationFailure(adapted.error);
   }
 
   const sanitizedSuggestion = sanitizeAiSuggestion(adapted.suggestion, prompt.input);
@@ -578,6 +579,19 @@ function parseOllamaJson(value: string): AiSettingsResult<unknown> {
   } catch {
     return aiFailure("AI_OUTPUT_INVALID", "Suggestion IA invalide.");
   }
+}
+
+function aiOutputValidationFailure<T = never>(
+  error: AiClassificationValidationError
+): AiSettingsResult<T> {
+  return {
+    ok: false,
+    error: {
+      code: "AI_OUTPUT_INVALID",
+      message: error.message,
+      ...(error.field ? { field: error.field } : {})
+    }
+  };
 }
 
 function uniqueStrings(values: string[]): string[] {

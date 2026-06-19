@@ -7,6 +7,7 @@ import {
 } from "../ai/ollamaDocumentSuggestion";
 import {
   getConfiguredOllamaModelStatus as getConfiguredOllamaModelStatusService,
+  preloadConfiguredOllamaModel as preloadConfiguredOllamaModelService,
   unloadConfiguredOllamaModel as unloadConfiguredOllamaModelService,
   type OllamaModelStatus
 } from "../ai/ollamaModelManager";
@@ -219,6 +220,7 @@ export interface IpcHandlerServices {
   ) => Promise<AiSettingsResult<AiStatus>>;
   testAiConnection: (userDataPath: string) => Promise<AiSettingsResult<AiConnectionTestStatus>>;
   getAiModelStatus: (userDataPath: string) => Promise<AiSettingsResult<OllamaModelStatus>>;
+  preloadAiModel: (userDataPath: string) => Promise<AiSettingsResult<OllamaModelStatus>>;
   unloadAiModel: (userDataPath: string) => Promise<AiSettingsResult<OllamaModelStatus>>;
   runAiSuggestionForDocument: (options: {
     documentPath: string;
@@ -411,6 +413,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "getAiModelStatus"
   },
   {
+    channel: IPC_CHANNELS.aiPreloadModel,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "preloadAiModel"
+  },
+  {
     channel: IPC_CHANNELS.aiUnloadModel,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -520,6 +530,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   saveAiSettings: saveAiSettingsService,
   testAiConnection: testAiConnectionService,
   getAiModelStatus: getConfiguredOllamaModelStatusService,
+  preloadAiModel: preloadConfiguredOllamaModelService,
   unloadAiModel: unloadConfiguredOllamaModelService,
   runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
   writeAiDiagnostic: writeAiDiagnosticService
@@ -714,6 +725,9 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   );
   options.ipcMain.handle(IPC_CHANNELS.aiGetModelStatus, () =>
     services.getAiModelStatus(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.aiPreloadModel, () =>
+    services.preloadAiModel(options.app.getPath("userData"))
   );
   options.ipcMain.handle(IPC_CHANNELS.aiUnloadModel, () =>
     services.unloadAiModel(options.app.getPath("userData"))
@@ -973,13 +987,16 @@ function readAiDiagnosticResult(value: unknown): AiSettingsResult<AiDocumentSugg
   }
 
   if (candidate.ok === false && candidate.error && typeof candidate.error === "object") {
-    const error = candidate.error as { code?: unknown; message?: unknown };
+    const error = candidate.error as { code?: unknown; message?: unknown; field?: unknown };
     if (typeof error.code === "string" && typeof error.message === "string") {
       return {
         ok: false,
         error: {
           code: error.code,
-          message: error.message
+          message: error.message,
+          ...(typeof error.field === "string" && error.field.trim()
+            ? { field: error.field.trim().slice(0, 120) }
+            : {})
         }
       } as AiSettingsResult<AiDocumentSuggestion>;
     }

@@ -131,14 +131,32 @@ function createIdleAiState(): AiState {
       profileId: "gemma3-4b",
       baseUrl: "http://localhost:11434/",
       model: "gemma3:4b",
-      timeoutMs: "30000"
+      timeoutMs: "30000",
+      keepAlive: "30m"
     },
     message: "Chargement de la configuration IA locale...",
     error: null,
     dirty: false,
     modelStatus: null,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null,
+    timing: createIdleAiPipelineTimingState()
+  };
+}
+
+function createIdleAiPipelineTimingState(): AiPipelineTimingState {
+  return {
+    stage: "idle",
+    startedAtMs: null,
+    elapsedMs: 0,
+    finalElapsedMs: null,
+    lastLoadMs: null,
+    lastAnalysisMs: null,
+    lastGenerationMs: null,
+    model: "",
+    profileId: null,
+    think: null
   };
 }
 

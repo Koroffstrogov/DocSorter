@@ -37,6 +37,7 @@ const api: DocSorterApi = {
   saveAiSettings: (settings) => ipcRenderer.invoke("ai:saveSettings", settings),
   testAiConnection: () => ipcRenderer.invoke("ai:testConnection"),
   getAiModelStatus: () => ipcRenderer.invoke("ai:getModelStatus"),
+  preloadAiModel: () => ipcRenderer.invoke("ai:preloadModel"),
   unloadAiModel: () => ipcRenderer.invoke("ai:unloadModel"),
   runAiSuggestionForActiveDocument: (documentPath, textContext) =>
     ipcRenderer.invoke("ai:runSuggestion", documentPath, textContext),

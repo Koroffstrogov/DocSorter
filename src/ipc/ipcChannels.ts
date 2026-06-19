@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   aiSaveSettings: "ai:saveSettings",
   aiTestConnection: "ai:testConnection",
   aiGetModelStatus: "ai:getModelStatus",
+  aiPreloadModel: "ai:preloadModel",
   aiUnloadModel: "ai:unloadModel",
   aiRunSuggestion: "ai:runSuggestion",
   aiExportDiagnostic: "ai:exportDiagnostic",

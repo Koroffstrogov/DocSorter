@@ -45,7 +45,7 @@ export interface OllamaModelManagerOptions {
   now?: () => Date;
 }
 
-const KEEP_ALIVE_MS = 30 * 60 * 1000;
+const FALLBACK_KEEP_ALIVE_MS = 30 * 60 * 1000;
 
 export class OllamaModelManager implements OllamaModelManagerLike {
   private state: OllamaModelStatus = createIdleModelStatus("");
@@ -207,7 +207,9 @@ export class OllamaModelManager implements OllamaModelManagerLike {
       model: preload.value.model,
       message: "IA locale prête.",
       loadedAt,
-      keepAliveUntil: new Date(new Date(loadedAt).getTime() + KEEP_ALIVE_MS).toISOString(),
+      keepAliveUntil: new Date(
+        new Date(loadedAt).getTime() + keepAliveToMilliseconds(settings.keepAlive)
+      ).toISOString(),
       lastCheckedAt: loadedAt,
       error: null
     };
@@ -265,6 +267,18 @@ export async function getConfiguredOllamaModelStatus(
   };
 }
 
+export async function preloadConfiguredOllamaModel(
+  userDataPath: string,
+  manager: OllamaModelManagerLike = defaultOllamaModelManager
+): Promise<AiSettingsResult<OllamaModelStatus>> {
+  const settings = await loadAiSettings(userDataPath);
+  if (!settings.ok) {
+    return settings;
+  }
+
+  return manager.ensureModelReady(settings.value);
+}
+
 export async function unloadConfiguredOllamaModel(
   userDataPath: string,
   options: {
@@ -283,7 +297,30 @@ export async function unloadConfiguredOllamaModel(
 }
 
 function settingsKey(settings: AiSettings): string {
-  return `${settings.baseUrl}|${settings.model.trim()}`;
+  return `${settings.baseUrl}|${settings.model.trim()}|${settings.keepAlive}`;
+}
+
+function keepAliveToMilliseconds(value: string): number {
+  const match = value.match(/^(\d+)([smh])$/);
+  if (!match) {
+    return FALLBACK_KEEP_ALIVE_MS;
+  }
+
+  const count = Number(match[1]);
+  if (!Number.isFinite(count) || count <= 0) {
+    return FALLBACK_KEEP_ALIVE_MS;
+  }
+
+  switch (match[2]) {
+    case "s":
+      return count * 1000;
+    case "m":
+      return count * 60 * 1000;
+    case "h":
+      return count * 60 * 60 * 1000;
+    default:
+      return FALLBACK_KEEP_ALIVE_MS;
+  }
 }
 
 function createIdleModelStatus(model: string): OllamaModelStatus {

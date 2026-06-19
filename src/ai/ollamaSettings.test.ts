@@ -37,6 +37,7 @@ describe("Ollama AI settings", () => {
         model: "gemma3:4b",
         think: false,
         timeoutMs: 30_000,
+        keepAlive: "30m",
         lastTestAt: null,
         lastStatus: "disabled",
         lastError: null
@@ -66,6 +67,7 @@ describe("Ollama AI settings", () => {
       model: "gemma4:12b",
       think: true,
       timeoutMs: 30_000,
+      keepAlive: "30m",
       lastTestAt: "2026-06-16T10:00:00.000Z",
       lastStatus: "ok",
       lastError: null,
@@ -84,6 +86,7 @@ describe("Ollama AI settings", () => {
       model: "gemma4:12b",
       think: true,
       timeoutMs: 30_000,
+      keepAlive: "30m",
       lastTestAt: "2026-06-16T10:00:00.000Z",
       lastStatus: "ok",
       lastError: null
@@ -101,6 +104,7 @@ describe("Ollama AI settings", () => {
       model: "gemma3:4b",
       think: false,
       timeoutMs: 30_000,
+      keepAlive: "30m",
       lastTestAt: "2026-06-16T10:00:00.000Z",
       lastStatus: "ok",
       lastError: null

@@ -156,7 +156,7 @@ export async function generateOllamaCompletion(
         stream: false,
         format: options.format ?? "json",
         think: options.think ?? settings.think,
-        keep_alive: OLLAMA_MODEL_KEEP_ALIVE
+        keep_alive: settings.keepAlive || OLLAMA_MODEL_KEEP_ALIVE
       },
       timeoutMs: options.timeoutMs
     }
@@ -187,7 +187,7 @@ export async function preloadOllamaModel(
   settings: AiSettings,
   options: TestOllamaConnectionOptions = {}
 ): Promise<AiSettingsResult<OllamaModelLifecycle>> {
-  return postOllamaModelLifecycle(settings, OLLAMA_MODEL_KEEP_ALIVE, options);
+  return postOllamaModelLifecycle(settings, settings.keepAlive || OLLAMA_MODEL_KEEP_ALIVE, options);
 }
 
 export async function unloadOllamaModel(

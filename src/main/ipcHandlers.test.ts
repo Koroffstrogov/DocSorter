@@ -37,6 +37,16 @@ describe("sensitive IPC handler contract", () => {
       serviceName: "writeAiDiagnostic"
     });
   });
+
+  it("documents the bounded IA model preload channel", () => {
+    expect(contractFor(IPC_CHANNELS.aiPreloadModel)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainSource: false,
+      usesMainTarget: false,
+      usesUserDataPath: true,
+      serviceName: "preloadAiModel"
+    });
+  });
 });
 
 describe("registerIpcHandlers", () => {
@@ -87,6 +97,14 @@ describe("registerIpcHandlers", () => {
     });
   });
 
+  it("preloads the IA model only with userData from main state", async () => {
+    const harness = createHarness();
+
+    await harness.invoke(IPC_CHANNELS.aiPreloadModel);
+
+    expect(harness.services.preloadAiModel).toHaveBeenCalledWith(USER_DATA_PATH);
+  });
+
   it("exports IA diagnostics only for a document present in the scanned queue", async () => {
     const harness = createHarness();
 
@@ -97,7 +115,8 @@ describe("registerIpcHandlers", () => {
       ok: false,
       error: {
         code: "AI_OUTPUT_INVALID",
-        message: "Réponse IA invalide."
+        message: "Réponse IA invalide.",
+        field: "fields.documentType.selected"
       }
     });
 
@@ -119,7 +138,8 @@ describe("registerIpcHandlers", () => {
         ok: false,
         error: {
           code: "AI_OUTPUT_INVALID",
-          message: "Réponse IA invalide."
+          message: "Réponse IA invalide.",
+          field: "fields.documentType.selected"
         }
       }
     });
@@ -379,6 +399,7 @@ function createServices(): IpcHandlerServices {
       }
     })),
     getAiModelStatus: vi.fn(async () => ({ ok: true, value: createAiModelStatus() })),
+    preloadAiModel: vi.fn(async () => ({ ok: true, value: createAiModelStatus() })),
     unloadAiModel: vi.fn(async () => ({ ok: true, value: createAiModelStatus() })),
     runAiSuggestionForDocument: vi.fn(async () => ({
       ok: true,
@@ -449,6 +470,7 @@ function createAiStatus() {
       model: "gemma3:4b",
       think: false,
       timeoutMs: 30000,
+      keepAlive: "30m",
       lastTestAt: null,
       lastStatus: "ok" as const,
       lastError: null

@@ -30,7 +30,8 @@ function resetAiSuggestionState(): void {
         ? "ready"
         : state.ai.panelStatus,
     suggestion: null,
-    suggestionDocumentPath: null
+    suggestionDocumentPath: null,
+    selection: null
   };
 }
 

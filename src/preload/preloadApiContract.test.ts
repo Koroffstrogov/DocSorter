@@ -92,10 +92,12 @@ describe("preload API surface", () => {
       profileId: "gemma3-4b",
       model: "gemma3:4b",
       think: false,
-      timeoutMs: 30_000
+      timeoutMs: 30_000,
+      keepAlive: "30m"
     });
     await api.testAiConnection();
     await api.getAiModelStatus();
+    await api.preloadAiModel();
     await api.unloadAiModel();
     await api.runAiSuggestionForActiveDocument("C:\\source\\document.pdf", {
       source: "pdf-native",
@@ -146,6 +148,7 @@ describe("preload API surface", () => {
       IPC_CHANNELS.aiSaveSettings,
       IPC_CHANNELS.aiTestConnection,
       IPC_CHANNELS.aiGetModelStatus,
+      IPC_CHANNELS.aiPreloadModel,
       IPC_CHANNELS.aiUnloadModel,
       IPC_CHANNELS.aiRunSuggestion,
       IPC_CHANNELS.aiExportDiagnostic,

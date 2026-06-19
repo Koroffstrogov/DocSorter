@@ -272,6 +272,7 @@ function createSettings(): AiSettings {
     model: "llama3.2",
     think: false,
     timeoutMs: 30_000,
+    keepAlive: "30m",
     lastTestAt: null,
     lastStatus: null,
     lastError: null

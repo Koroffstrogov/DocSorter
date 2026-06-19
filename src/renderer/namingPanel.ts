@@ -5,6 +5,12 @@ interface NamingPanelState {
   naming: NamingState;
   destination: DestinationCheckState;
   effectiveFilename: string;
+  aiPreview: {
+    filename: string;
+    filenameValid: boolean;
+    destinationFolder: string;
+    messages: AiSelectionPreviewMessage[];
+  } | null;
 }
 
 interface NamingPanelOptions {
@@ -89,7 +95,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return;
       }
 
-      const { activeDocument, naming, effectiveFilename } = options.getState();
+      const { activeDocument, naming, effectiveFilename, aiPreview } = options.getState();
       elements.panel.hidden = !activeDocument;
       if (!activeDocument) {
         return;
@@ -100,24 +106,32 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       if (elements.proposedFilename) {
-        elements.proposedFilename.className = naming.proposal?.isValid ? "valid" : "invalid";
+        const displayFilename = aiPreview ? aiPreview.filename : effectiveFilename;
+        const displayIsValid = aiPreview ? aiPreview.filenameValid : Boolean(naming.proposal?.isValid);
+        elements.proposedFilename.className = displayIsValid ? "valid" : "invalid";
         elements.proposedFilename.replaceChildren(
-          naming.isLoading
+          !aiPreview && naming.isLoading
             ? "Calcul de la proposition..."
-            : effectiveFilename || "Nom impossible à générer"
+            : displayFilename || "Nom impossible à générer"
         );
-        elements.proposedFilename.title = effectiveFilename;
+        elements.proposedFilename.title = aiPreview
+          ? "Prévisualisation IA non appliquée au classement réel"
+          : effectiveFilename;
       }
 
       if (elements.messages) {
-        const messages = naming.proposal?.messages ?? [
-          {
-            level: "warning",
-            code: "DATE_REQUIRED",
-            message: "Date documentaire à confirmer."
-          }
-        ];
-        elements.messages.replaceChildren(...messages.map(createNamingMessageItem));
+        if (aiPreview) {
+          elements.messages.replaceChildren(...aiPreview.messages.map(createAiPreviewMessageItem));
+        } else {
+          const messages = naming.proposal?.messages ?? [
+            {
+              level: "warning",
+              code: "DATE_REQUIRED",
+              message: "Date documentaire à confirmer."
+            }
+          ];
+          elements.messages.replaceChildren(...messages.map(createNamingMessageItem));
+        }
       }
     }
 
@@ -131,8 +145,8 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return;
       }
 
-      const { activeDocument, targetPath, targetFolder, naming, destination } = options.getState();
-      const finalFolder = formatDestinationFolder(targetPath, targetFolder.selectedFolder);
+      const { activeDocument, targetPath, targetFolder, naming, destination, aiPreview } = options.getState();
+      const finalFolder = aiPreview?.destinationFolder || formatDestinationFolder(targetPath, targetFolder.selectedFolder);
       const targetLabel = targetPath ?? "Aucun dossier cible sélectionné";
       elements.destinationTarget.replaceChildren(targetLabel);
       elements.destinationTarget.title = targetLabel;
@@ -144,6 +158,17 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           statusText: "Aucun document actif",
           finalPath: "Aucun dossier final",
           alternative: "",
+          showAlternativeButton: false
+        });
+        return;
+      }
+
+      if (aiPreview) {
+        setDestinationState(elements, {
+          statusClass: aiPreview.filenameValid ? "status-neutral" : "status-warning",
+          statusText: aiPreview.filenameValid ? "Prévisualisation IA" : "Prévisualisation IA incomplète",
+          finalPath: finalFolder,
+          alternative: "Non appliqué au classement réel dans ce lot",
           showAlternativeButton: false
         });
         return;
@@ -388,6 +413,13 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
   }
 
   function createNamingMessageItem(message: NamingMessage): HTMLLIElement {
+    const item = document.createElement("li");
+    item.className = message.level;
+    item.textContent = message.message;
+    return item;
+  }
+
+  function createAiPreviewMessageItem(message: AiSelectionPreviewMessage): HTMLLIElement {
     const item = document.createElement("li");
     item.className = message.level;
     item.textContent = message.message;

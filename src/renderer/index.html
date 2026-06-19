@@ -161,11 +161,20 @@
                 <span class="quality-badge neutral">Dossier</span>
               </div>
               <p class="proposal-mode">Mode : <strong>IA locale seule</strong></p>
+              <label class="ai-quick-profile">
+                Profil IA
+                <select id="ai-quick-profile" name="quickProfileId">
+                  <option value="gemma3-4b">gemma3:4b</option>
+                  <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
+                  <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
+                </select>
+              </label>
               <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
               <div class="proposal-actions">
                 <button id="execute-classification" class="primary-action" type="button" disabled>
                   Valider et classer (Ctrl+Entrée)
                 </button>
+                <button id="preload-ai-model" type="button" disabled>Charger le modèle IA</button>
                 <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
                 <button id="prepare-classification" type="button" disabled>Vérifier avant classement (V)</button>
                 <button id="apply-ai-suggestion-empty" type="button" disabled hidden>

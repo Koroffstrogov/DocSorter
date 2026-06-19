@@ -75,6 +75,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "saveAiSettings",
   "testAiConnection",
   "getAiModelStatus",
+  "preloadAiModel",
   "unloadAiModel",
   "runAiSuggestionForActiveDocument",
   "exportAiDiagnostic",
@@ -186,6 +187,8 @@ export function createPreloadApi(ipc: IpcInvoker) {
       >,
     getAiModelStatus: (): Promise<AiSettingsResult<OllamaModelStatus>> =>
       ipc.invoke(IPC_CHANNELS.aiGetModelStatus) as Promise<AiSettingsResult<OllamaModelStatus>>,
+    preloadAiModel: (): Promise<AiSettingsResult<OllamaModelStatus>> =>
+      ipc.invoke(IPC_CHANNELS.aiPreloadModel) as Promise<AiSettingsResult<OllamaModelStatus>>,
     unloadAiModel: (): Promise<AiSettingsResult<OllamaModelStatus>> =>
       ipc.invoke(IPC_CHANNELS.aiUnloadModel) as Promise<AiSettingsResult<OllamaModelStatus>>,
     runAiSuggestionForActiveDocument: (

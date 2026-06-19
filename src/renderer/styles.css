@@ -803,6 +803,24 @@ details.detail-section[open] > summary {
   font-size: 12px;
 }
 
+.ai-quick-profile {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.ai-quick-profile select {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 9px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+}
+
 .proposal-mode strong {
   color: var(--ink);
 }
@@ -1045,6 +1063,11 @@ details.detail-section[open] > summary {
   background: #ffffff;
 }
 
+.ai-field-row.manual {
+  border-color: #d7bc5d;
+  background: #fffaf0;
+}
+
 .ai-field-title {
   display: flex;
   align-items: center;
@@ -1062,6 +1085,24 @@ details.detail-section[open] > summary {
   color: var(--muted);
   font-size: 11px;
   font-weight: 720;
+}
+
+.ai-field-badge {
+  flex: 0 0 auto;
+  border: 1px solid #ccd6e2;
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #f7fafc;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.ai-field-badge.manual {
+  border-color: #d7bc5d;
+  background: #fff4cf;
+  color: #765d13;
 }
 
 .ai-field-selected {
@@ -1099,8 +1140,36 @@ details.detail-section[open] > summary {
   white-space: nowrap;
 }
 
+.ai-candidate-chip:hover:not(:disabled),
+.ai-candidate-chip:focus-visible {
+  border-color: #7a9cc6;
+  color: var(--ink);
+  background: #edf5ff;
+}
+
+.ai-candidate-chip.selected {
+  border-color: #2f6b52;
+  color: #1f513e;
+  background: #e9f7ef;
+}
+
+.ai-candidate-chip.empty {
+  border-style: dashed;
+}
+
 .ai-field-row button {
   min-width: 72px;
+}
+
+.ai-field-manual-input {
+  grid-column: 1 / -1;
+  min-height: 32px;
+  border: 1px solid #d7bc5d;
+  border-radius: 6px;
+  padding: 0 9px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
 }
 
 .naming-manual-fields {
@@ -1143,8 +1212,32 @@ details.detail-section[open] > summary {
 .folder-candidate-card {
   display: grid;
   gap: 4px;
+  width: 100%;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
   padding: 9px;
+  text-align: left;
   background: #ffffff;
+}
+
+.folder-candidate-card:hover:not(:disabled),
+.folder-candidate-card:focus-visible {
+  border-color: #7a9cc6;
+  background: #f3f8ff;
+}
+
+.folder-candidate-card.selected {
+  border-color: #2f6b52;
+  background: #e9f7ef;
+}
+
+.folder-candidate-card.new {
+  border-style: dashed;
+}
+
+.folder-candidate-card.fallback {
+  border-color: #e0c173;
+  background: #fffaf0;
 }
 
 .folder-candidate-card strong {
