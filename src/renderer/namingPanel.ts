@@ -96,8 +96,23 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       const { activeDocument, naming, effectiveFilename, aiPreview } = options.getState();
-      elements.panel.hidden = !activeDocument;
+      elements.panel.hidden = false;
       if (!activeDocument) {
+        if (elements.proposedFilename) {
+          elements.proposedFilename.className = "invalid";
+          elements.proposedFilename.replaceChildren("Nom final non généré");
+          elements.proposedFilename.title = "";
+        }
+
+        if (elements.messages) {
+          elements.messages.replaceChildren(
+            createAiPreviewMessageItem({
+              level: "info",
+              message: "Sélectionnez un document à trier."
+            })
+          );
+        }
+
         return;
       }
 
@@ -112,7 +127,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         elements.proposedFilename.replaceChildren(
           !aiPreview && naming.isLoading
             ? "Calcul de la proposition..."
-            : displayFilename || "Nom impossible à générer"
+            : displayFilename || "Nom final non généré"
         );
         elements.proposedFilename.title = aiPreview
           ? "Prévisualisation IA non appliquée au classement réel"

@@ -43,6 +43,7 @@ type AiPanelStatus =
   | "error";
 type AiConnectionStatus = "disabled" | "not-tested" | "ok" | "model-missing" | "error" | "timeout";
 type AiModelProfileId = "gemma3-4b" | "gemma4-12b-nothink" | "gemma4-12b-thinking";
+type UiDisplayMode = "simple" | "advanced";
 type AiModelLifecycleStatus =
   | "unavailable"
   | "model_missing"
@@ -877,6 +878,7 @@ interface AppState {
   ocr: OcrState;
   ai: AiState;
   shortcutsHelpVisible: boolean;
+  uiMode: UiDisplayMode;
 }
 
 interface RefreshOptions {

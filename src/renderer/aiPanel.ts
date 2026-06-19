@@ -31,6 +31,7 @@ interface AiPanelApi {
 
 interface AiPanelElements {
   status: HTMLElement | null;
+  technicalStatus: HTMLElement | null;
   form: HTMLFormElement | null;
   enabledInput: HTMLInputElement | null;
   quickProfileInput: HTMLSelectElement | null;
@@ -146,7 +147,11 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       syncDraft(elements, state.draft);
 
       if (elements.status) {
-        elements.status.replaceChildren(...createStatusContent(state, options));
+        elements.status.replaceChildren(...createSimpleStatusContent(state));
+      }
+
+      if (elements.technicalStatus) {
+        elements.technicalStatus.replaceChildren(...createTechnicalStatusContent(state, options));
       }
 
       const busy =
@@ -251,6 +256,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
   function getAiPanelElements(root: ParentNode): AiPanelElements {
     return {
       status: root.querySelector<HTMLElement>("#ai-status"),
+      technicalStatus: root.querySelector<HTMLElement>("#ai-technical-status"),
       form: root.querySelector<HTMLFormElement>("#ai-settings-form"),
       enabledInput: root.querySelector<HTMLInputElement>("#ai-enabled"),
       quickProfileInput: root.querySelector<HTMLSelectElement>("#ai-quick-profile"),
@@ -321,7 +327,85 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     }
   }
 
-  function createStatusContent(state: AiState, options: AiPanelOptions): Node[] {
+  function createSimpleStatusContent(state: AiState): Node[] {
+    const lines: Node[] = [];
+    const summary = document.createElement("strong");
+    summary.textContent = `${simpleConnectionLabel(state)} · ${simpleModelLabel(state.modelStatus)}`;
+    lines.push(summary);
+
+    if (state.timing.stage !== "idle" || state.timing.finalElapsedMs !== null) {
+      lines.push(createMetaLine(`Chronomètre : ${formatDuration(state.timing.finalElapsedMs ?? state.timing.elapsedMs)}`));
+    } else if (state.timing.lastAnalysisMs !== null) {
+      lines.push(createMetaLine(`Dernière analyse : ${formatDuration(state.timing.lastAnalysisMs)}`));
+    } else if (state.timing.lastLoadMs !== null) {
+      lines.push(createMetaLine(`Dernier chargement : ${formatDuration(state.timing.lastLoadMs)}`));
+    }
+
+    if (state.dirty) {
+      lines.push(createWarningLine("Réglages IA modifiés."));
+    }
+
+    if (state.error) {
+      lines.push(createWarningLine(state.error.message));
+    }
+
+    return lines;
+  }
+
+  function simpleConnectionLabel(state: AiState): string {
+    if (state.panelStatus === "loading") {
+      return "IA locale";
+    }
+
+    if (state.panelStatus === "testing") {
+      return "Test Ollama";
+    }
+
+    if (state.status?.status === "disabled") {
+      return "IA désactivée";
+    }
+
+    if (state.status?.status === "ok") {
+      return "Ollama OK";
+    }
+
+    if (state.status?.status === "not-tested") {
+      return "Ollama à vérifier";
+    }
+
+    if (state.status?.status === "timeout") {
+      return "Ollama timeout";
+    }
+
+    if (state.status?.status === "model-missing") {
+      return "Ollama OK";
+    }
+
+    return "Ollama indisponible";
+  }
+
+  function simpleModelLabel(status: RendererAiModelStatus | null): string {
+    if (!status) {
+      return "modèle non chargé";
+    }
+
+    switch (status.status) {
+      case "ready":
+        return "modèle chargé";
+      case "loading":
+        return "chargement modèle";
+      case "model_missing":
+        return "modèle absent";
+      case "unavailable":
+        return "modèle indisponible";
+      case "error":
+        return "erreur modèle";
+      case "idle":
+        return "modèle non chargé";
+    }
+  }
+
+  function createTechnicalStatusContent(state: AiState, options: AiPanelOptions): Node[] {
     const lines: Node[] = [];
     const summary = document.createElement("strong");
     summary.textContent = statusLabel(state);
@@ -522,11 +606,17 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     container.className = "field-refinement-list";
 
     if (state.panelStatus === "analyzing") {
-      container.append(createMetaLine("Analyse du document actif en cours..."));
+      const empty = document.createElement("p");
+      empty.className = "compact-empty-state";
+      empty.textContent = "Analyse IA en cours. Les choix par champ apparaîtront ici.";
+      container.append(empty);
+      return [container];
     } else if (!state.suggestion) {
-      container.append(
-        createMetaLine("Aucune proposition IA prête. Lance l'analyse après extraction PDF ou OCR image.")
-      );
+      const empty = document.createElement("p");
+      empty.className = "compact-empty-state";
+      empty.textContent = "Analyse IA requise pour afficher les choix par champ.";
+      container.append(empty);
+      return [container];
     } else {
       const heading = document.createElement("div");
       const score = document.createElement("strong");
@@ -587,7 +677,9 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     scoreElement.textContent = selectedScore === null ? "Score non disponible" : `Score ${selectedScore}`;
     badge.className = `ai-field-badge ${isManual ? "manual" : "candidate"}`;
     badge.textContent = isManual ? "manuel" : "IA";
-    selected.textContent = selectedValue?.trim() || "Aucune suggestion";
+    selected.textContent = selectedValue?.trim()
+      ? `${selectedValue.trim()}${selectedScore === null ? "" : ` ${selectedScore}%`}`
+      : "à compléter";
     selected.title = selectedValue?.trim() || "";
     selected.className = selectedValue?.trim() ? "ai-field-selected" : "ai-field-selected empty";
     candidates.className = "ai-field-candidates";
@@ -604,8 +696,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
       }));
     }
     editButton.type = "button";
-    editButton.textContent = "Modifier";
+    editButton.className = "ai-field-edit";
+    editButton.textContent = "✎";
     editButton.disabled = !suggestion;
+    editButton.setAttribute("aria-label", `Modifier ${label.toLowerCase()} localement`);
     editButton.title = `Modifier ${label.toLowerCase()} localement`;
     editButton.addEventListener("click", () => {
       options.onFieldManualEditStart(key);
@@ -622,7 +716,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
         row.classList.add("manual");
         badge.className = "ai-field-badge manual";
         badge.textContent = "manuel";
-        selected.textContent = manualInput.value.trim() || "Aucune suggestion";
+        selected.textContent = manualInput.value.trim() || "à compléter";
         selected.title = manualInput.value.trim();
         selected.className = manualInput.value.trim() ? "ai-field-selected" : "ai-field-selected empty";
         options.onFieldManualValueChange(key, manualInput.value);
@@ -679,6 +773,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
   function createQualityBadges(state: AiState): HTMLElement[] {
     const suggestion = state.suggestion?.suggestion;
     const selection = state.selection;
+    if (!suggestion) {
+      return [];
+    }
+
     return [
       createQualityBadge("Date", Boolean(selection?.fields.dateToken || suggestion?.dateToken)),
       createQualityBadge("Type", Boolean(selection?.fields.documentType || suggestion?.documentType)),
@@ -698,6 +796,21 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     const container = document.createElement("div");
     const current = document.createElement("p");
     const cards = document.createElement("div");
+
+    if (state.panelStatus === "analyzing") {
+      const empty = document.createElement("p");
+      empty.className = "compact-empty-state";
+      empty.textContent = "Analyse IA en cours. Les dossiers proposés apparaîtront ici.";
+      return [empty];
+    }
+
+    if (!suggestion) {
+      const empty = document.createElement("p");
+      empty.className = "compact-empty-state";
+      empty.textContent = "Analyse IA requise pour proposer un dossier.";
+      return [empty];
+    }
+
     const folderCandidates = getFolderCandidates(suggestion).slice(0, 3);
     const selectedFolder = state.selection?.selectedFolder ?? suggestion?.suggestion.targetFolder ?? "";
 
@@ -737,9 +850,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     card.type = "button";
     card.className = `folder-candidate-card ${folderRoleClass(candidate)} ${selected ? "selected" : ""}`;
     card.setAttribute("aria-pressed", String(selected));
-    value.textContent = candidate.value;
+    value.textContent = selected ? `✓ ${candidate.value}` : candidate.value;
     value.title = candidate.value;
-    meta.textContent = `${selected ? "sélectionné · " : ""}${folderRoleLabel(candidate)} · score ${candidate.score}`;
+    meta.className = "folder-candidate-badge";
+    meta.textContent = `${folderRoleLabel(candidate)} · score ${candidate.score}`;
     reason.textContent = candidate.reason;
     card.addEventListener("click", onSelect);
     card.append(value, meta, reason);

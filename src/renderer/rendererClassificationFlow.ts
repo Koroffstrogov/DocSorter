@@ -91,6 +91,26 @@ async function executeClassificationAction(): Promise<void> {
   }
 }
 
+async function runSimpleClassificationAction(): Promise<void> {
+  if (isClassificationBusy()) {
+    return;
+  }
+
+  if (canExecuteClassification()) {
+    await executeClassificationAction();
+    return;
+  }
+
+  if (!canPrepareClassificationPlan()) {
+    return;
+  }
+
+  await prepareClassificationSimulation();
+  if (canExecuteClassification()) {
+    await executeClassificationAction();
+  }
+}
+
 async function undoLastClassificationAction(): Promise<void> {
   if (!state.lastUndoableAction || isClassificationBusy()) {
     return;
@@ -278,6 +298,10 @@ function canExecuteClassification(): boolean {
       getActiveDocument() &&
       !isClassificationBusy()
   );
+}
+
+function canRunSimpleClassificationAction(): boolean {
+  return Boolean(!isClassificationBusy() && (canPrepareClassificationPlan() || canExecuteClassification()));
 }
 
 function isClassificationBusy(): boolean {

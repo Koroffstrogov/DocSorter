@@ -140,6 +140,33 @@
         </div>
         <div class="detail-scroll">
           <section id="naming-panel" class="detail-section triage-workflow" aria-label="Interface de tri IA" hidden>
+            <section class="simple-mode-toolbar" aria-label="Mode d'affichage du volet droit">
+              <div class="mode-switch" role="group" aria-label="Mode d'affichage">
+                <button id="simple-mode-button" type="button" aria-pressed="true">Simple</button>
+                <button id="advanced-mode-button" type="button" aria-pressed="false">Avancé / diagnostic</button>
+              </div>
+            </section>
+
+            <section id="ai-control-panel" class="detail-section ai-control-panel" aria-label="Assistant IA">
+              <div class="section-heading">
+                <h3>Assistant IA</h3>
+                <span id="ai-text-status" class="ai-text-status">Sélectionnez un document à trier.</span>
+              </div>
+              <label class="ai-quick-profile">
+                Profil IA
+                <select id="ai-quick-profile" name="quickProfileId">
+                  <option value="gemma3-4b">gemma3:4b</option>
+                  <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
+                  <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
+                </select>
+              </label>
+              <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
+              <div class="ai-control-actions">
+                <button id="preload-ai-model" type="button" disabled>Charger le modèle IA</button>
+                <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
+              </div>
+            </section>
+
             <section id="sort-proposal-panel" class="sort-proposal-card" aria-label="Proposition de tri">
               <div class="section-heading">
                 <h3>Proposition de tri</h3>
@@ -161,34 +188,26 @@
                 <span class="quality-badge neutral">Dossier</span>
               </div>
               <p class="proposal-mode">Mode : <strong>IA locale seule</strong></p>
-              <label class="ai-quick-profile">
-                Profil IA
-                <select id="ai-quick-profile" name="quickProfileId">
-                  <option value="gemma3-4b">gemma3:4b</option>
-                  <option value="gemma4-12b-nothink">gemma4:12b no-think</option>
-                  <option value="gemma4-12b-thinking">gemma4:12b thinking</option>
-                </select>
-              </label>
-              <div id="ai-status" class="ai-status">Chargement de la configuration IA locale...</div>
               <div class="proposal-actions">
+                <button id="simple-classification-action" class="primary-action simple-classification-action" type="button" disabled>
+                  Vérifier et classer
+                </button>
                 <button id="execute-classification" class="primary-action" type="button" disabled>
                   Valider et classer (Ctrl+Entrée)
                 </button>
-                <button id="preload-ai-model" type="button" disabled>Charger le modèle IA</button>
-                <button id="run-ai-suggestion" type="button" disabled>Analyser avec IA locale</button>
                 <button id="prepare-classification" type="button" disabled>Vérifier avant classement (V)</button>
-                <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
-                  Appliquer aux champs vides
-                </button>
               </div>
             </section>
 
             <section id="field-refinement-panel" class="detail-section field-refinement-panel" aria-label="Affiner les champs">
               <div class="section-heading">
                 <h3>Affiner les champs</h3>
+                <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
+                  Appliquer aux champs vides
+                </button>
               </div>
               <div id="ai-suggestion-details" class="ai-suggestion-details">
-                Extrais le texte PDF ou lance l'OCR image, puis utilise le bouton d'analyse IA locale.
+                Analyse IA requise pour afficher les choix par champ.
               </div>
               <details class="naming-manual-fields">
                 <summary>Champs appliqués au classement réel</summary>
@@ -234,7 +253,7 @@
                 <button id="create-target-folder" type="button" hidden>Créer ce dossier</button>
               </div>
               <div id="ai-folder-candidates" class="folder-candidate-list">
-                Aucun dossier IA proposé pour le moment.
+                Analyse IA requise pour proposer un dossier.
               </div>
               <dl class="destination-details">
                 <div>
@@ -341,6 +360,7 @@
                 <button id="refresh-ai-status" type="button">Rafraîchir</button>
               </div>
               <p class="ai-note">Analyse locale explicite uniquement. Aucun classement automatique.</p>
+              <div id="ai-technical-status" class="ai-status">Détails IA non chargés.</div>
               <form id="ai-settings-form" class="ai-settings-form">
                 <label class="ai-checkbox">
                   <input id="ai-enabled" name="enabled" type="checkbox" />

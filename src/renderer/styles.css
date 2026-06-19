@@ -225,7 +225,7 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: 320px minmax(380px, 1fr) 360px;
+  grid-template-columns: 320px minmax(420px, 1fr) minmax(420px, 460px);
   gap: 16px;
   min-height: 0;
   padding: 16px;
@@ -696,10 +696,10 @@ h2 {
 .detail-scroll {
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 10px;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px;
 }
 
 .detail-section {
@@ -738,22 +738,73 @@ details.detail-section[open] > summary {
 
 .triage-workflow {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .triage-workflow[hidden] {
   display: none;
 }
 
+.simple-mode-toolbar,
+.ai-control-panel,
 .sort-proposal-card,
 .field-refinement-panel,
 .target-folder-panel {
   display: grid;
-  gap: 12px;
+  gap: 9px;
   border: 1px solid #ccd6e2;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   background: #ffffff;
+}
+
+.simple-mode-toolbar {
+  gap: 0;
+  border-color: #d7e0ec;
+  padding: 8px;
+  background: #f9fbfd;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+}
+
+.mode-switch button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.mode-switch button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.ai-control-panel {
+  border-color: #b7c7d9;
+  background: #fbfdff;
+}
+
+.ai-control-panel .ai-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  border-color: #d7e0ec;
+  padding: 8px 10px;
+  background: #ffffff;
+}
+
+.ai-control-panel .ai-status strong,
+.ai-control-panel .ai-status span {
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .sort-proposal-card {
@@ -763,7 +814,7 @@ details.detail-section[open] > summary {
 
 .proposal-summary {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
 }
 
@@ -821,6 +872,39 @@ details.detail-section[open] > summary {
   font: inherit;
 }
 
+.ai-text-status {
+  justify-self: end;
+  max-width: 190px;
+  border: 1px solid #d7e0ec;
+  border-radius: 999px;
+  padding: 3px 8px;
+  overflow: hidden;
+  color: var(--muted);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-control-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.ai-control-actions button {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 720;
+}
+
 .proposal-mode strong {
   color: var(--ink);
 }
@@ -829,6 +913,10 @@ details.detail-section[open] > summary {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.quality-badges:empty {
+  display: none;
 }
 
 .quality-badge {
@@ -857,6 +945,7 @@ details.detail-section[open] > summary {
 }
 
 .proposal-actions button,
+.section-heading > #apply-ai-suggestion-empty,
 .diagnostic-actions button,
 .folder-candidate-card,
 .ai-field-row button {
@@ -866,6 +955,7 @@ details.detail-section[open] > summary {
 }
 
 .proposal-actions button,
+.section-heading > #apply-ai-suggestion-empty,
 .diagnostic-actions button,
 .ai-field-row button {
   padding: 0 10px;
@@ -881,7 +971,20 @@ details.detail-section[open] > summary {
   background: var(--accent);
 }
 
+.proposal-actions .simple-classification-action {
+  grid-column: 1 / -1;
+  min-height: 38px;
+  font-size: 13px;
+}
+
+.proposal-actions .primary-action:disabled {
+  border-color: var(--border);
+  color: var(--muted);
+  background: #eef2f1;
+}
+
 .proposal-actions button[hidden],
+.section-heading > #apply-ai-suggestion-empty[hidden],
 .diagnostic-actions button[hidden] {
   display: none;
 }
@@ -1049,17 +1152,17 @@ details.detail-section[open] > summary {
 .field-refinement-list,
 .ai-field-list {
   display: grid;
-  gap: 9px;
+  gap: 7px;
 }
 
 .ai-field-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 7px 10px;
+  grid-template-columns: 68px minmax(0, 1fr) 30px;
+  gap: 5px 8px;
   align-items: center;
   border: 1px solid #d7e0ec;
   border-radius: 8px;
-  padding: 9px;
+  padding: 7px 8px;
   background: #ffffff;
 }
 
@@ -1069,10 +1172,9 @@ details.detail-section[open] > summary {
 }
 
 .ai-field-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
+  align-self: start;
   min-width: 0;
 }
 
@@ -1083,7 +1185,7 @@ details.detail-section[open] > summary {
 
 .ai-field-title span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 720;
 }
 
@@ -1106,35 +1208,46 @@ details.detail-section[open] > summary {
 }
 
 .ai-field-selected {
+  display: inline-flex;
+  justify-self: start;
+  max-width: 100%;
   min-width: 0;
   margin: 0;
+  border: 1px solid #badbcc;
+  border-radius: 999px;
+  padding: 2px 8px;
   overflow-wrap: anywhere;
-  color: var(--ink);
-  font-size: 13px;
+  color: #1f513e;
+  background: #e9f7ef;
+  font-size: 12px;
   font-weight: 720;
+  line-height: 1.25;
 }
 
 .ai-field-selected.empty {
+  border-color: #d7e0ec;
   color: var(--muted);
+  background: #f7fafc;
   font-weight: 560;
 }
 
 .ai-field-candidates {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  grid-column: 1 / -1;
+  gap: 4px;
+  grid-column: 2 / 3;
 }
 
 .ai-candidate-chip {
   max-width: 100%;
+  min-height: 22px !important;
   overflow: hidden;
   border: 1px solid #ccd6e2;
   border-radius: 999px;
-  padding: 2px 7px;
+  padding: 1px 6px;
   color: var(--muted);
   background: #f7fafc;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1157,12 +1270,22 @@ details.detail-section[open] > summary {
   border-style: dashed;
 }
 
-.ai-field-row button {
-  min-width: 72px;
+.ai-field-edit {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: end;
+  width: 28px;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  color: var(--blue);
+  background: transparent;
+  font-size: 14px;
 }
 
 .ai-field-manual-input {
-  grid-column: 1 / -1;
+  grid-column: 2 / 4;
   min-height: 32px;
   border: 1px solid #d7bc5d;
   border-radius: 6px;
@@ -1193,7 +1316,7 @@ details.detail-section[open] > summary {
 .folder-candidate-list,
 .folder-candidate-content {
   display: grid;
-  gap: 9px;
+  gap: 7px;
 }
 
 .folder-current {
@@ -1211,11 +1334,12 @@ details.detail-section[open] > summary {
 
 .folder-candidate-card {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
   width: 100%;
   border: 1px solid #d7e0ec;
   border-radius: 8px;
-  padding: 9px;
+  padding: 8px;
   text-align: left;
   background: #ffffff;
 }
@@ -1241,22 +1365,52 @@ details.detail-section[open] > summary {
 }
 
 .folder-candidate-card strong {
+  grid-column: 1;
   overflow-wrap: anywhere;
   color: var(--ink);
   font-size: 12px;
 }
 
 .folder-candidate-card span {
+  grid-column: 2;
+  justify-self: end;
   color: var(--muted);
   font-size: 11px;
   font-weight: 760;
 }
 
 .folder-candidate-card p {
+  grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.folder-candidate-badge {
+  border: 1px solid #ccd6e2;
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #f7fafc;
+  white-space: nowrap;
+}
+
+.folder-candidate-card.existing .folder-candidate-badge {
+  border-color: #badbcc;
+  color: #155724;
+  background: #eef8f1;
+}
+
+.folder-candidate-card.new .folder-candidate-badge {
+  border-color: #ead7a2;
+  color: var(--warning);
+  background: #fff4cf;
+}
+
+.folder-candidate-card.fallback .folder-candidate-badge {
+  border-color: #ead7a2;
+  color: #765d13;
+  background: #fff2bf;
 }
 
 .folder-candidate-card.existing {
@@ -1275,6 +1429,18 @@ details.detail-section[open] > summary {
 .folder-candidate-empty {
   color: var(--muted);
   font-size: 12px;
+}
+
+.compact-empty-state {
+  margin: 0;
+  border: 1px dashed #cbd5d0;
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--muted);
+  background: #fbfcfb;
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.35;
 }
 
 .ocr-panel,
@@ -1408,7 +1574,8 @@ details.detail-section[open] > summary {
   background: var(--accent);
 }
 
-#run-ai-suggestion {
+#run-ai-suggestion,
+.section-heading > #apply-ai-suggestion-empty {
   border-color: var(--accent);
   color: #ffffff;
   background: var(--accent);

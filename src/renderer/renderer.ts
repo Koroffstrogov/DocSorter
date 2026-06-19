@@ -17,7 +17,8 @@ const state: AppState = {
   textExtraction: createIdleTextExtractionState(),
   ocr: createIdleOcrState(),
   ai: createIdleAiState(),
-  shortcutsHelpVisible: false
+  shortcutsHelpVisible: false,
+  uiMode: "simple"
 };
 
 let previewRequestId = 0;
@@ -43,8 +44,14 @@ const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
 const prepareClassificationButton = document.querySelector<HTMLButtonElement>("#prepare-classification");
 const executeClassificationButton = document.querySelector<HTMLButtonElement>("#execute-classification");
+const simpleClassificationButton = document.querySelector<HTMLButtonElement>("#simple-classification-action");
 const undoLastActionButton = document.querySelector<HTMLButtonElement>("#undo-last-action");
 const refreshHistoryButton = document.querySelector<HTMLButtonElement>("#refresh-history");
+const simpleModeButton = document.querySelector<HTMLButtonElement>("#simple-mode-button");
+const advancedModeButton = document.querySelector<HTMLButtonElement>("#advanced-mode-button");
+const diagnosticPanel = document.querySelector<HTMLDetailsElement>("#diagnostic-panel");
+const advancedPanel = document.querySelector<HTMLDetailsElement>("#advanced-panel");
+const aiTextStatus = document.querySelector<HTMLElement>("#ai-text-status");
 
 const previewPanel = DocSorterPreviewPanel.createPreviewPanel({
   getState: () => ({
@@ -286,12 +293,24 @@ executeClassificationButton?.addEventListener("click", () => {
   void executeClassificationAction();
 });
 
+simpleClassificationButton?.addEventListener("click", () => {
+  void runSimpleClassificationAction();
+});
+
 undoLastActionButton?.addEventListener("click", () => {
   void undoLastClassificationAction();
 });
 
 refreshHistoryButton?.addEventListener("click", () => {
   void refreshRecentHistory();
+});
+
+simpleModeButton?.addEventListener("click", () => {
+  setUiDisplayMode("simple");
+});
+
+advancedModeButton?.addEventListener("click", () => {
+  setUiDisplayMode("advanced");
 });
 
 document.addEventListener("keydown", (event) => {
@@ -315,8 +334,10 @@ function render(): void {
   renderDetails();
   renderOcrPanel();
   renderAiPanel();
+  renderAiTextStatus();
   renderHistory();
   renderShortcutHelp();
+  renderUiDisplayMode();
 }
 
 function renderControls(): void {
@@ -342,11 +363,18 @@ function renderControls(): void {
   }
 
   if (prepareClassificationButton) {
+    prepareClassificationButton.hidden = state.uiMode === "simple";
     prepareClassificationButton.disabled = !canPrepareClassificationPlan();
   }
 
   if (executeClassificationButton) {
+    executeClassificationButton.hidden = state.uiMode === "simple";
     executeClassificationButton.disabled = !canExecuteClassification();
+  }
+
+  if (simpleClassificationButton) {
+    simpleClassificationButton.hidden = state.uiMode !== "simple";
+    simpleClassificationButton.disabled = !canRunSimpleClassificationAction();
   }
 
   if (undoLastActionButton) {
@@ -356,4 +384,78 @@ function renderControls(): void {
   if (refreshHistoryButton) {
     refreshHistoryButton.disabled = state.history.isLoading || isClassificationBusy();
   }
+}
+
+function setUiDisplayMode(mode: UiDisplayMode): void {
+  state.uiMode = mode;
+  if (mode === "advanced") {
+    if (diagnosticPanel) {
+      diagnosticPanel.open = true;
+    }
+    if (advancedPanel) {
+      advancedPanel.open = true;
+    }
+  } else {
+    if (diagnosticPanel) {
+      diagnosticPanel.open = false;
+    }
+    if (advancedPanel) {
+      advancedPanel.open = false;
+    }
+  }
+  render();
+}
+
+function renderUiDisplayMode(): void {
+  if (simpleModeButton) {
+    simpleModeButton.setAttribute("aria-pressed", String(state.uiMode === "simple"));
+  }
+
+  if (advancedModeButton) {
+    advancedModeButton.setAttribute("aria-pressed", String(state.uiMode === "advanced"));
+  }
+}
+
+function renderAiTextStatus(): void {
+  if (!aiTextStatus) {
+    return;
+  }
+
+  const status = aiTextStatusLabel();
+  aiTextStatus.textContent = status;
+  aiTextStatus.title = status;
+}
+
+function aiTextStatusLabel(): string {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument) {
+    return "Sélectionnez un document à trier.";
+  }
+
+  if (activeDocument.status === "missing") {
+    return "Document indisponible.";
+  }
+
+  const extraction = getTextExtractionState(activeDocument.filePath);
+  if (extraction.status === "extracting") {
+    return activeDocument.extension === ".pdf" ? "Extraction texte..." : "OCR en cours...";
+  }
+
+  if (extraction.status === "text-found") {
+    return "Texte OK.";
+  }
+
+  if (extraction.status === "empty") {
+    return "Texte non disponible. OCR nécessaire.";
+  }
+
+  if (extraction.status === "error") {
+    return extraction.error?.message ?? "Texte non disponible.";
+  }
+
+  if (activeDocument.extension === ".pdf") {
+    return "Texte non extrait. L'analyse IA peut l'extraire.";
+  }
+
+  return "Texte non extrait. OCR nécessaire.";
 }
