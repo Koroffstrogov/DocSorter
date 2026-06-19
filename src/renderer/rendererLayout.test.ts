@@ -110,11 +110,90 @@ describe("renderer right panel layout", () => {
     expect(advancedPanel).toContain("Libérer le modèle IA");
   });
 
+  it("keeps UX-1A critical right-panel IDs and design-system CSS available", async () => {
+    const html = await readRendererHtml();
+    const css = await readFile(path.join(process.cwd(), "src", "renderer", "styles.css"), "utf8");
+
+    for (const id of [
+      "ai-status",
+      "ai-quick-profile",
+      "preload-ai-model",
+      "run-ai-suggestion",
+      "proposed-filename",
+      "destination-final-path",
+      "simple-classification-action",
+      "execute-classification",
+      "prepare-classification",
+      "target-folder-input",
+      "diagnostic-panel",
+      "advanced-panel"
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+
+    expect(html).toContain('aria-pressed="true">Simple</button>');
+    expect(html).toContain("<summary>Diagnostic</summary>");
+    expect(html).toContain("<summary>Réglages avancés</summary>");
+    expect(html).toContain("Valider et classer (Ctrl+Entrée)");
+    expect(html).not.toMatch(/<details id="diagnostic-panel"[^>]*\sopen[\s>]/);
+    expect(html).not.toMatch(/<details id="advanced-panel"[^>]*\sopen[\s>]/);
+
+    for (const token of [
+      "--space-xs",
+      "--space-sm",
+      "--space-md",
+      "--space-lg",
+      "--radius-sm",
+      "--radius-md",
+      "--surface-panel",
+      "--surface-card",
+      "--surface-muted",
+      "--border-subtle",
+      "--border-strong",
+      "--text-main",
+      "--text-muted",
+      "--button-primary-bg",
+      "--button-secondary-bg",
+      "--badge-success-bg",
+      "--badge-warning-bg",
+      "--badge-fallback-bg",
+      "--candidate-pill-bg",
+      "--candidate-pill-selected-bg",
+      "--section-header-height"
+    ]) {
+      expect(css).toContain(token);
+    }
+
+    for (const className of [
+      ".ds-card",
+      ".ds-button",
+      ".ds-button-primary",
+      ".ds-button-secondary",
+      ".ds-badge",
+      ".ds-badge-success",
+      ".ds-badge-warning",
+      ".ds-badge-fallback",
+      ".ds-pill",
+      ".ds-pill-selected",
+      ".ds-section-header",
+      ".ds-compact-row"
+    ]) {
+      expect(css).toContain(className);
+    }
+
+    expect(css).toContain(".simple-mode-toolbar,");
+    expect(css).toContain(".sort-proposal-card,");
+    expect(css).toContain("border: 1px solid var(--border-subtle)");
+    expect(css).toContain("background: var(--surface-card)");
+    expect(css).toContain("background: var(--candidate-pill-selected-bg)");
+  });
+
   it("loads ai panel field helpers before the ai panel script", async () => {
     const html = await readRendererHtml();
 
     expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
-    expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiFieldRows.js"));
+    expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiStatusContent.js"));
+    expect(indexOf(html, "aiStatusContent.js")).toBeLessThan(indexOf(html, "aiFieldRows.js"));
     expect(indexOf(html, "aiFieldRows.js")).toBeLessThan(indexOf(html, "aiFolderCandidates.js"));
     expect(indexOf(html, "aiFolderCandidates.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
   });
@@ -163,12 +242,19 @@ describe("renderer right panel layout", () => {
 
   it("keeps technical Ollama details out of the simple IA status", async () => {
     const aiPanel = await readFile(path.join(process.cwd(), "src", "renderer", "aiPanel.ts"), "utf8");
+    const aiStatusContent = await readFile(
+      path.join(process.cwd(), "src", "renderer", "aiStatusContent.ts"),
+      "utf8"
+    );
     const aiPanelFormatters = await readFile(
       path.join(process.cwd(), "src", "renderer", "aiPanelFormatters.ts"),
       "utf8"
     );
 
-    const simpleStatus = extractFunctionBlock(aiPanel, "function createSimpleStatusContent");
+    expect(aiPanel).toContain("aiStatusContent.createSimpleStatusContent");
+    expect(aiPanel).toContain("aiStatusContent.createTechnicalStatusContent");
+
+    const simpleStatus = extractFunctionBlock(aiStatusContent, "function createSimpleStatusContent");
     expect(simpleStatus).toContain("aiFormatters.simpleConnectionLabel");
     expect(simpleStatus).toContain("aiFormatters.simpleModelLabel");
     expect(simpleStatus).not.toContain("URL :");
@@ -178,7 +264,7 @@ describe("renderer right panel layout", () => {
     expect(aiPanelFormatters).toContain("function simpleConnectionLabel");
     expect(aiPanelFormatters).toContain("function simpleModelLabel");
 
-    const technicalStatus = extractFunctionBlock(aiPanel, "function createTechnicalStatusContent");
+    const technicalStatus = extractFunctionBlock(aiStatusContent, "function createTechnicalStatusContent");
     expect(technicalStatus).toContain("URL :");
     expect(technicalStatus).toContain("Timeout :");
     expect(technicalStatus).toContain("Keep alive :");
