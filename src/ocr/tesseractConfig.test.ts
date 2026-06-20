@@ -62,7 +62,8 @@ describe("tesseract OCR configuration", () => {
       tesseractPath: workspace.tesseractPath,
       tessdataPath: workspace.tessdataPath,
       language: "fra",
-      psm: 3
+      psm: 3,
+      pdfQuality: "high"
     });
 
     expect(result.ok).toBe(true);
@@ -72,8 +73,24 @@ describe("tesseract OCR configuration", () => {
       tesseractPath: workspace.tesseractPath,
       tessdataPath: workspace.tessdataPath,
       language: "fra",
-      psm: 3
+      psm: 3,
+      pdfQuality: "high"
     });
+  });
+
+  it("migrates old OCR settings to standard PDF quality", async () => {
+    const workspace = await createWorkspace();
+    await mkdir(path.dirname(getOcrSettingsPath(workspace.userData)), { recursive: true });
+    await writeFile(getOcrSettingsPath(workspace.userData), JSON.stringify({
+      tesseractPath: workspace.tesseractPath,
+      tessdataPath: workspace.tessdataPath,
+      language: "fra",
+      psm: 3
+    }), "utf8");
+
+    const settings = await loadOcrSettings(workspace.userData);
+
+    expect(settings.ok && settings.value.pdfQuality).toBe("standard");
   });
 
   it("refuses an absent Tesseract path", async () => {

@@ -205,7 +205,8 @@ function ocrStatusToDraft(status: RendererOcrStatus): OcrSettingsDraft {
     tesseractPath: status.settings.tesseractPath || status.tesseractPath,
     tessdataPath: status.settings.tessdataPath || status.tessdataPath,
     language: status.settings.language || "fra",
-    psm: String(status.settings.psm || 3)
+    psm: String(status.settings.psm || 3),
+    pdfQuality: status.settings.pdfQuality || "standard"
   };
 }
 
@@ -220,6 +221,7 @@ function ocrDraftToSettings(draft: OcrSettingsDraft): RendererOcrSettings | null
     tessdataPath: draft.tessdataPath.trim(),
     language: draft.language.trim() || "fra",
     psm,
+    pdfQuality: draft.pdfQuality,
     lastTestedAt: state.ocr.status?.lastTestedAt ?? null,
     detectedVersion: state.ocr.status?.detectedVersion ?? null
   };

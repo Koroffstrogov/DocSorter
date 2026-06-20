@@ -1491,6 +1491,8 @@ function createDiagnosticPdfOcrSummary(pdfOcr: PdfOcrSummary): Record<string, un
     failedPages: pdfOcr.failedPages,
     durationMs: pdfOcr.durationMs,
     ocrCharacterCount: pdfOcr.ocrCharacterCount,
+    qualityScore: pdfOcr.qualityScore,
+    qualityLabel: pdfOcr.qualityLabel,
     renderer: pdfOcr.renderer,
     dpi: pdfOcr.dpi,
     pages: pdfOcr.pages.map((page) => ({

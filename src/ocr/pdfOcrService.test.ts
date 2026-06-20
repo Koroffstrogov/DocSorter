@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildPdfOcrExtraction,
   getPdfOcrStatus,
+  resolvePdfOcrDpi,
   runPdfOcrForDocument,
+  scorePdfOcrQuality,
   selectPdfPagesForOcr,
   type PdfOcrStatus
 } from "./pdfOcrService";
@@ -93,7 +95,9 @@ describe("pdf OCR service", () => {
         requestedPages: [2],
         succeededPages: [2],
         failedPages: [],
-        ocrCharacterCount: 19
+        ocrCharacterCount: 19,
+        qualityScore: expect.any(Number),
+        qualityLabel: "bonne"
       }
     });
     expect(extraction.text).toContain("mot0");
@@ -157,6 +161,9 @@ describe("pdf OCR service", () => {
       expect(result.value.source).toBe("pdf-hybrid");
       expect(result.value.text).toContain("Texte OCR page deux");
       expect(result.value.pdfOcr?.requestedPages).toEqual([2]);
+      expect(result.value.pdfOcr?.dpi).toBe(300);
+      expect(result.value.pdfOcr?.qualityScore).toBeGreaterThanOrEqual(0);
+      expect(result.value.pdfOcr?.qualityScore).toBeLessThanOrEqual(100);
       expect(result.value.fromCache).toBe(false);
     }
     expect(progress).toEqual(["OCR PDF page 1/1"]);
@@ -198,7 +205,10 @@ describe("pdf OCR service", () => {
       source: "pdf-native",
       pdfOcr: {
         failedPages: [1],
-        warnings: ["Page 1 : Erreur OCR."]
+        warnings: [
+          "Page 1 : Erreur OCR.",
+          "Qualité OCR faible : vérifiez le texte extrait avant analyse IA."
+        ]
       }
     });
     expect(extraction.text).toBe("texte faible");
@@ -248,6 +258,52 @@ describe("pdf OCR service", () => {
       expect(result.value.pdfOcr?.warnings).toContain("Page 2 : OCR PDF interrompu : délai dépassé.");
     }
   });
+
+  it("resolves PDF OCR DPI from quality with safety fallback", () => {
+    expect(resolvePdfOcrDpi({
+      quality: "fast",
+      fileSizeBytes: 1_000,
+      pageCountToOcr: 1
+    })).toEqual({ dpi: 200, warnings: [] });
+    expect(resolvePdfOcrDpi({
+      quality: "standard",
+      fileSizeBytes: 1_000,
+      pageCountToOcr: 1
+    })).toEqual({ dpi: 300, warnings: [] });
+    expect(resolvePdfOcrDpi({
+      quality: "high",
+      fileSizeBytes: 1_000,
+      pageCountToOcr: 1
+    })).toEqual({ dpi: 400, warnings: [] });
+    expect(resolvePdfOcrDpi({
+      quality: "high",
+      fileSizeBytes: 16 * 1024 * 1024,
+      pageCountToOcr: 1
+    })).toEqual({
+      dpi: 200,
+      warnings: ["Qualité OCR PDF réduite à 200 DPI : PDF long ou volumineux."]
+    });
+    expect(resolvePdfOcrDpi({
+      quality: "high",
+      fileSizeBytes: 1_000,
+      pageCountToOcr: 11
+    }).dpi).toBe(200);
+    expect(resolvePdfOcrDpi({
+      quality: "high",
+      fileSizeBytes: 16 * 1024 * 1024,
+      pageCountToOcr: 11,
+      overrideDpi: 350
+    })).toEqual({ dpi: 350, warnings: [] });
+  });
+
+  it("scores PDF OCR quality", () => {
+    expect(scorePdfOcrQuality([
+      { page: 1, status: "success", text: "Texte OCR exploitable avec plusieurs mots utiles", durationMs: 20 }
+    ], "Texte OCR exploitable avec plusieurs mots utiles").qualityLabel).toBe("correcte");
+    expect(scorePdfOcrQuality([
+      { page: 1, status: "failed", text: "", durationMs: 20, warning: "Erreur OCR." }
+    ], "").qualityLabel).toBe("faible");
+  });
 });
 
 function createConfiguredOcrStatus(): OcrStatus {
@@ -259,6 +315,7 @@ function createConfiguredOcrStatus(): OcrStatus {
       tessdataPath: "C:\\Tools\\tessdata",
       language: "fra",
       psm: 3,
+      pdfQuality: "standard",
       lastTestedAt: "2026-06-20T10:00:00.000Z",
       detectedVersion: "5.4.0"
     },

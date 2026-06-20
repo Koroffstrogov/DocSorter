@@ -50,6 +50,7 @@ import {
   type OcrError,
   type OcrResult,
   type OcrSettings,
+  type PdfOcrQuality,
   type OcrStatus
 } from "./ocrTypes";
 
@@ -118,7 +119,7 @@ export interface RunPdfOcrForDocumentOptions {
   onProgress?: (progress: PdfOcrProgress) => void;
 }
 
-interface PdfOcrPageResult {
+export interface PdfOcrPageResult {
   page: number;
   status: "success" | "failed" | "skipped";
   text: string;
@@ -127,6 +128,16 @@ interface PdfOcrPageResult {
 }
 
 const MAX_TESSERACT_PDF_OUTPUT_BYTES = 160_000;
+const PDF_OCR_STANDARD_DPI = 300;
+const PDF_OCR_HIGH_DPI = 400;
+const PDF_OCR_SAFETY_DPI = PDF_OCR_DPI;
+const PDF_OCR_LARGE_FILE_BYTES = 15 * 1024 * 1024;
+const PDF_OCR_LONG_DOCUMENT_PAGES = 10;
+
+export interface PdfOcrDpiResolution {
+  dpi: number;
+  warnings: string[];
+}
 
 export async function getPdfOcrStatus(
   userDataPath: string,
@@ -238,6 +249,12 @@ export async function runPdfOcrForDocument(
 
   const getTimeMs = options.getTimeMs ?? Date.now;
   const timeoutMs = options.timeoutMs ?? PDF_OCR_TIMEOUT_MS;
+  const dpiResolution = resolvePdfOcrDpi({
+    quality: status.tesseractSettings?.pdfQuality ?? "standard",
+    fileSizeBytes: fileCheck.stats.size,
+    pageCountToOcr: pagesToOcr.pages.length,
+    overrideDpi: options.dpi
+  });
   const startedAt = getTimeMs();
   const extractedAt = (options.now ?? (() => new Date()))().toISOString();
   const tempDirectory = await (options.makeTempDirectory ?? ((prefix) => mkdtemp(prefix)))(
@@ -283,7 +300,7 @@ export async function runPdfOcrForDocument(
         pdfPath: normalizedDocumentPath,
         page,
         outputDirectory: tempDirectory,
-        dpi: options.dpi ?? PDF_OCR_DPI,
+        dpi: dpiResolution.dpi,
         timeoutMs: options.pageTimeoutMs ?? PDF_OCR_PAGE_TIMEOUT_MS
       });
       if (!rendered.ok) {
@@ -342,10 +359,11 @@ export async function runPdfOcrForDocument(
       extractedAt,
       durationMs,
       renderer: "pdftoppm",
-      dpi: options.dpi ?? PDF_OCR_DPI,
+      dpi: dpiResolution.dpi,
       maxTextChars: options.maxTextChars ?? MAX_EXTRACTED_TEXT_CHARS,
       maxExcerptLength: options.maxExcerptLength ?? MAX_EXTRACTED_TEXT_PREVIEW_CHARS,
-      truncatedOcrPages: pagesToOcr.truncatedPages
+      truncatedOcrPages: pagesToOcr.truncatedPages,
+      warnings: dpiResolution.warnings
     });
     const cacheWritten = await writePdfOcrCacheEntry(normalizedDocumentPath, fileCheck.stats, extraction, {
       userDataPath: options.userDataPath,
@@ -367,6 +385,50 @@ export async function runPdfOcrForDocument(
     await (options.removeDirectory ?? ((directoryPath) => rm(directoryPath, { recursive: true, force: true })))(
       tempDirectory
     ).catch(() => undefined);
+  }
+}
+
+export function resolvePdfOcrDpi(options: {
+  quality: PdfOcrQuality;
+  fileSizeBytes: number;
+  pageCountToOcr: number;
+  overrideDpi?: number;
+}): PdfOcrDpiResolution {
+  if (typeof options.overrideDpi === "number" && Number.isFinite(options.overrideDpi) && options.overrideDpi > 0) {
+    return {
+      dpi: Math.round(options.overrideDpi),
+      warnings: []
+    };
+  }
+
+  const requestedDpi = pdfOcrQualityDpi(options.quality);
+  if (
+    requestedDpi > PDF_OCR_SAFETY_DPI &&
+    (options.fileSizeBytes > PDF_OCR_LARGE_FILE_BYTES ||
+      options.pageCountToOcr > PDF_OCR_LONG_DOCUMENT_PAGES)
+  ) {
+    return {
+      dpi: PDF_OCR_SAFETY_DPI,
+      warnings: [
+        "Qualité OCR PDF réduite à 200 DPI : PDF long ou volumineux."
+      ]
+    };
+  }
+
+  return {
+    dpi: requestedDpi,
+    warnings: []
+  };
+}
+
+function pdfOcrQualityDpi(quality: PdfOcrQuality): number {
+  switch (quality) {
+    case "fast":
+      return PDF_OCR_DPI;
+    case "standard":
+      return PDF_OCR_STANDARD_DPI;
+    case "high":
+      return PDF_OCR_HIGH_DPI;
   }
 }
 
@@ -396,6 +458,7 @@ export function buildPdfOcrExtraction(
     maxTextChars: number;
     maxExcerptLength: number;
     truncatedOcrPages: number[];
+    warnings?: string[];
   }
 ): PdfTextExtraction {
   const pageResultsByPage = new Map(pageResults.map((result) => [result.page, result]));
@@ -420,12 +483,17 @@ export function buildPdfOcrExtraction(
   const ocrCharacterCount = pageResults
     .filter((result) => result.status === "success")
     .reduce((total, result) => total + result.text.length, 0);
+  const ocrQuality = scorePdfOcrQuality(pageResults, text);
   const warnings = [
+    ...(options.warnings ?? []),
     ...pageResults
       .filter((result) => result.warning)
       .map((result) => `Page ${result.page} : ${result.warning}`),
     ...(options.truncatedOcrPages.length > 0
       ? [`OCR PDF limité : ${options.truncatedOcrPages.length} page(s) non traitée(s).`]
+      : []),
+    ...(ocrQuality.qualityLabel === "faible"
+      ? ["Qualité OCR faible : vérifiez le texte extrait avant analyse IA."]
       : [])
   ];
   const pdfOcr: PdfOcrSummary = {
@@ -434,6 +502,8 @@ export function buildPdfOcrExtraction(
     failedPages,
     durationMs: options.durationMs,
     ocrCharacterCount,
+    qualityScore: ocrQuality.qualityScore,
+    qualityLabel: ocrQuality.qualityLabel,
     renderer: options.renderer,
     dpi: options.dpi,
     pages: pageResults.map((result): PdfOcrPageSummary => ({
@@ -461,6 +531,30 @@ export function buildPdfOcrExtraction(
     pdfOcr,
     warnings
   };
+}
+
+export function scorePdfOcrQuality(
+  pageResults: PdfOcrPageResult[],
+  mergedText: string
+): { qualityScore: number; qualityLabel: "faible" | "correcte" | "bonne" } {
+  if (pageResults.length === 0) {
+    return { qualityScore: 0, qualityLabel: "faible" };
+  }
+
+  const successCount = pageResults.filter((result) => result.status === "success").length;
+  const successRatio = successCount / pageResults.length;
+  const usefulTextChars = countUsefulTextChars(mergedText);
+  const characterScore = Math.min(40, Math.round(usefulTextChars / 12));
+  const qualityScore = clampQualityScore(Math.round(successRatio * 60 + characterScore));
+
+  return {
+    qualityScore,
+    qualityLabel: qualityScore >= 75 ? "bonne" : qualityScore >= 45 ? "correcte" : "faible"
+  };
+}
+
+function clampQualityScore(value: number): number {
+  return Math.max(0, Math.min(100, value));
 }
 
 function createTesseractToolStatus(status: OcrStatus): PdfOcrToolStatus & { settings?: OcrSettings } {

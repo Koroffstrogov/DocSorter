@@ -81,6 +81,8 @@ export interface PdfOcrSummary {
   failedPages: number[];
   durationMs: number;
   ocrCharacterCount: number;
+  qualityScore: number;
+  qualityLabel: "faible" | "correcte" | "bonne";
   renderer: "pdftoppm";
   dpi: number;
   pages: PdfOcrPageSummary[];

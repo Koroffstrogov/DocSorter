@@ -119,6 +119,36 @@ describe("textExtractionPanel", () => {
     expect(pdfOcrButton.title).toBe("OCR non configuré");
   });
 
+  it("renders PDF OCR quality label when OCR text is available", async () => {
+    const { api, details } = await createPanelHarness(createReadyState({
+      source: "pdf-ocr",
+      finalTextSource: "pdf-ocr",
+      pdfOcr: {
+        requestedPages: [1],
+        succeededPages: [1],
+        failedPages: [],
+        durationMs: 120,
+        ocrCharacterCount: 42,
+        qualityScore: 82,
+        qualityLabel: "bonne",
+        renderer: "pdftoppm",
+        dpi: 300,
+        pages: [
+          {
+            page: 1,
+            status: "success",
+            usefulTextChars: 42
+          }
+        ],
+        warnings: []
+      }
+    }));
+
+    api.render();
+
+    expect(details.getText()).toContain("Texte OCR PDF - Qualité OCR : bonne");
+  });
+
   it("hides manual PDF OCR for native text PDFs", async () => {
     const { api, pdfOcrButton } = await createPanelHarness(createReadyState({
       pdfTextQuality: {

@@ -498,6 +498,8 @@ interface PdfOcrSummary {
   failedPages: number[];
   durationMs: number;
   ocrCharacterCount: number;
+  qualityScore: number;
+  qualityLabel: "faible" | "correcte" | "bonne";
   renderer: "pdftoppm";
   dpi: number;
   pages: PdfOcrPageSummary[];
@@ -574,9 +576,12 @@ interface RendererOcrSettings {
   tessdataPath: string;
   language: string;
   psm: number;
+  pdfQuality: PdfOcrQuality;
   lastTestedAt: string | null;
   detectedVersion: string | null;
 }
+
+type PdfOcrQuality = "fast" | "standard" | "high";
 
 interface RendererOcrStatus {
   status: "not-configured" | "configured" | "error";
@@ -599,6 +604,7 @@ interface OcrSettingsDraft {
   tessdataPath: string;
   language: string;
   psm: string;
+  pdfQuality: PdfOcrQuality;
 }
 
 interface OcrState {

@@ -5,12 +5,14 @@ import path from "node:path";
 import {
   DEFAULT_OCR_LANGUAGE,
   DEFAULT_OCR_PSM,
+  DEFAULT_PDF_OCR_QUALITY,
   createOcrError,
   ocrFailure,
   type OcrError,
   type OcrResult,
   type OcrSettings,
   type OcrSettingsInput,
+  type PdfOcrQuality,
   type OcrStatus
 } from "./ocrTypes";
 
@@ -30,6 +32,7 @@ export function createDefaultOcrSettings(): OcrSettings {
     tessdataPath: "",
     language: DEFAULT_OCR_LANGUAGE,
     psm: DEFAULT_OCR_PSM,
+    pdfQuality: DEFAULT_PDF_OCR_QUALITY,
     lastTestedAt: null,
     detectedVersion: null
   };
@@ -330,6 +333,11 @@ export function normalizeOcrSettings(value: unknown): OcrResult<OcrSettings> {
   const psm = typeof input.psm === "number" && Number.isInteger(input.psm)
     ? input.psm
     : DEFAULT_OCR_PSM;
+  const pdfQuality = normalizePdfOcrQuality(input.pdfQuality);
+
+  if (!pdfQuality.ok) {
+    return pdfQuality;
+  }
 
   if (!/^[A-Za-z0-9_+\-/]+$/.test(language)) {
     return ocrFailure("OCR_CONFIG_WRITE_FAILED", "La langue OCR configurée est invalide.");
@@ -346,10 +354,23 @@ export function normalizeOcrSettings(value: unknown): OcrResult<OcrSettings> {
       tessdataPath: readOptionalString(input.tessdataPath),
       language,
       psm,
+      pdfQuality: pdfQuality.value,
       lastTestedAt: readOptionalNullableString(input.lastTestedAt),
       detectedVersion: readOptionalNullableString(input.detectedVersion)
     }
   };
+}
+
+function normalizePdfOcrQuality(value: unknown): OcrResult<PdfOcrQuality> {
+  if (value === undefined) {
+    return { ok: true, value: DEFAULT_PDF_OCR_QUALITY };
+  }
+
+  if (value === "fast" || value === "standard" || value === "high") {
+    return { ok: true, value };
+  }
+
+  return ocrFailure("OCR_CONFIG_WRITE_FAILED", "La qualité OCR PDF configurée est invalide.");
 }
 
 function createStatus(options: {

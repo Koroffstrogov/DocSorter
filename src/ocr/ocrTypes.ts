@@ -33,11 +33,14 @@ export interface OcrSettings {
   tessdataPath: string;
   language: string;
   psm: number;
+  pdfQuality: PdfOcrQuality;
   lastTestedAt: string | null;
   detectedVersion: string | null;
 }
 
 export type OcrSettingsInput = Partial<OcrSettings>;
+
+export type PdfOcrQuality = "fast" | "standard" | "high";
 
 export type OcrStatusKind = "not-configured" | "configured" | "error";
 
@@ -63,6 +66,7 @@ export interface OcrPathSelection {
 
 export const DEFAULT_OCR_LANGUAGE = "fra";
 export const DEFAULT_OCR_PSM = 3;
+export const DEFAULT_PDF_OCR_QUALITY: PdfOcrQuality = "standard";
 
 export function createOcrError(code: OcrErrorCode, message = ocrErrorMessage(code)): OcrError {
   return {

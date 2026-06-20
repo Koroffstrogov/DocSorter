@@ -368,6 +368,17 @@
                     </span>
                     <input id="ocr-psm" name="psm" type="number" min="0" max="13" step="1" value="3" />
                   </label>
+                  <label>
+                    <span class="field-label">
+                      Qualité OCR PDF
+                      <span class="field-help" tabindex="0" title="Plus la qualité est haute, plus l'OCR PDF est lent. Aucun OCR n'est lancé automatiquement.">i</span>
+                    </span>
+                    <select id="ocr-pdf-quality" name="pdfQuality">
+                      <option value="fast">Rapide (200 DPI)</option>
+                      <option value="standard" selected>Standard (300 DPI)</option>
+                      <option value="high">Haute qualité (400 DPI)</option>
+                    </select>
+                  </label>
                 </div>
                 <div class="ocr-actions">
                   <button id="save-ocr-settings" type="button" disabled>Sauvegarder</button>

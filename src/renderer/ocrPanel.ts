@@ -22,6 +22,7 @@ interface OcrPanelElements {
   tessdataPathInput: HTMLInputElement | null;
   languageInput: HTMLInputElement | null;
   psmInput: HTMLInputElement | null;
+  pdfQualitySelect: HTMLSelectElement | null;
   chooseTesseractButton: HTMLButtonElement | null;
   chooseTessdataButton: HTMLButtonElement | null;
   saveButton: HTMLButtonElement | null;
@@ -47,7 +48,8 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       elements.tesseractPathInput,
       elements.tessdataPathInput,
       elements.languageInput,
-      elements.psmInput
+      elements.psmInput,
+      elements.pdfQualitySelect
     ];
 
     inputs.forEach((input) => {
@@ -129,6 +131,7 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       tessdataPathInput: root.querySelector<HTMLInputElement>("#ocr-tessdata-path"),
       languageInput: root.querySelector<HTMLInputElement>("#ocr-language"),
       psmInput: root.querySelector<HTMLInputElement>("#ocr-psm"),
+      pdfQualitySelect: root.querySelector<HTMLSelectElement>("#ocr-pdf-quality"),
       chooseTesseractButton: root.querySelector<HTMLButtonElement>("#choose-tesseract"),
       chooseTessdataButton: root.querySelector<HTMLButtonElement>("#choose-tessdata"),
       saveButton: root.querySelector<HTMLButtonElement>("#save-ocr-settings"),
@@ -143,7 +146,8 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       tesseractPath: elements.tesseractPathInput?.value ?? "",
       tessdataPath: elements.tessdataPathInput?.value ?? "",
       language: elements.languageInput?.value ?? "fra",
-      psm: elements.psmInput?.value ?? "3"
+      psm: elements.psmInput?.value ?? "3",
+      pdfQuality: readPdfQuality(elements.pdfQualitySelect?.value)
     };
   }
 
@@ -152,11 +156,18 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
     syncInputValue(elements.tessdataPathInput, draft.tessdataPath);
     syncInputValue(elements.languageInput, draft.language);
     syncInputValue(elements.psmInput, draft.psm);
+    syncSelectValue(elements.pdfQualitySelect, draft.pdfQuality);
   }
 
   function syncInputValue(input: HTMLInputElement | null, value: string): void {
     if (input && input.value !== value) {
       input.value = value;
+    }
+  }
+
+  function syncSelectValue(select: HTMLSelectElement | null, value: string): void {
+    if (select && select.value !== value) {
+      select.value = value;
     }
   }
 
@@ -175,6 +186,7 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       lines.push(createPathLine("Tessdata", state.status.tessdataPath || "Non configuré"));
       lines.push(createMetaLine(`Langue : ${state.status.language || "fra"}`));
       lines.push(createMetaLine(`PSM : ${state.status.psm}`));
+      lines.push(createMetaLine(`Qualité PDF : ${pdfQualityLabel(state.status.settings.pdfQuality)}`));
 
       if (state.status.detectedVersion) {
         lines.push(createMetaLine(`Version : ${state.status.detectedVersion}`));
@@ -267,10 +279,30 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       draft.tesseractPath.trim().length > 0 &&
       draft.tessdataPath.trim().length > 0 &&
       draft.language.trim().length > 0 &&
+      isPdfQuality(draft.pdfQuality) &&
       Number.isInteger(psm) &&
       psm >= 0 &&
       psm <= 13
     );
+  }
+
+  function readPdfQuality(value: string | undefined): PdfOcrQuality {
+    return isPdfQuality(value) ? value : "standard";
+  }
+
+  function isPdfQuality(value: unknown): value is PdfOcrQuality {
+    return value === "fast" || value === "standard" || value === "high";
+  }
+
+  function pdfQualityLabel(value: PdfOcrQuality): string {
+    switch (value) {
+      case "fast":
+        return "Rapide (200 DPI)";
+      case "standard":
+        return "Standard (300 DPI)";
+      case "high":
+        return "Haute qualité (400 DPI)";
+    }
   }
 
   globalThis.DocSorterOcrPanel = {

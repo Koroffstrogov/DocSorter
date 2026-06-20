@@ -130,7 +130,8 @@ function createIdleOcrState(): OcrState {
       tesseractPath: "",
       tessdataPath: "",
       language: "fra",
-      psm: "3"
+      psm: "3",
+      pdfQuality: "standard"
     },
     message: "Chargement de la configuration OCR locale...",
     error: null,

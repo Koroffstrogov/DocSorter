@@ -317,8 +317,12 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     }
 
     const status = document.createElement("span");
-    status.textContent =
+    const sourceLabel =
       extraction.finalTextSource === "pdf-hybrid" ? "Texte fusionné PDF + OCR" : "Texte OCR PDF";
+    const qualityLabel = extraction.pdfOcr?.qualityLabel
+      ? ` - Qualité OCR : ${extraction.pdfOcr.qualityLabel}`
+      : "";
+    status.textContent = `${sourceLabel}${qualityLabel}`;
     return status;
   }
 

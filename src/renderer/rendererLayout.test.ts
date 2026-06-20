@@ -131,6 +131,8 @@ describe("renderer right panel layout", () => {
     const advancedPanel = extractElementBlock(html, '<details id="advanced-panel"', "</details>");
     expect(advancedPanel).not.toContain('id="run-ai-suggestion"');
     expect(advancedPanel).toContain('id="ocr-panel"');
+    expect(advancedPanel).toContain('id="ocr-pdf-quality"');
+    expect(advancedPanel).toContain("Standard (300 DPI)");
     expect(advancedPanel).toContain('id="ai-panel"');
     expect(advancedPanel).toContain('id="ai-technical-status"');
     expect(advancedPanel).toContain('id="ai-profile"');

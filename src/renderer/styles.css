@@ -2126,6 +2126,7 @@ details.detail-section[open] > summary {
 }
 
 .ocr-settings-form input,
+.ocr-settings-form select,
 .ai-settings-form input,
 .ai-settings-form select {
   min-width: 0;
@@ -2157,7 +2158,7 @@ details.detail-section[open] > summary {
 
 .ocr-inline-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 82px;
+  grid-template-columns: minmax(0, 1fr) 82px minmax(150px, 1fr);
   gap: var(--space-sm);
 }
 
