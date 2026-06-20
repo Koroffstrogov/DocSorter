@@ -57,6 +57,23 @@ describe("sensitive IPC handler contract", () => {
       serviceName: "listTargetFolderNames + getFolderLearningPreferenceForFolder"
     });
   });
+
+  it("documents the bounded OCR PDF channels", () => {
+    expect(contractFor(IPC_CHANNELS.ocrGetPdfStatus)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainSource: false,
+      usesMainTarget: false,
+      usesUserDataPath: true,
+      serviceName: "getPdfOcrStatus"
+    });
+    expect(contractFor(IPC_CHANNELS.ocrRunPdf)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesMainTarget: false,
+      usesUserDataPath: true,
+      serviceName: "runPdfOcrForDocument"
+    });
+  });
 });
 
 describe("registerIpcHandlers", () => {
@@ -82,6 +99,48 @@ describe("registerIpcHandlers", () => {
       queuedDocumentPaths: harness.state.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH
     });
+  });
+
+  it("reads PDF OCR readiness only from userData", async () => {
+    const harness = createHarness();
+
+    await harness.invoke(IPC_CHANNELS.ocrGetPdfStatus);
+
+    expect(harness.services.getPdfOcrStatus).toHaveBeenCalledWith(USER_DATA_PATH);
+  });
+
+  it("runs PDF OCR manually with queue, userData and bounded progress events", async () => {
+    const sent: Array<{ channel: IpcChannel; value: unknown }> = [];
+    const harness = createHarness();
+
+    await harness.invokeWithSender(IPC_CHANNELS.ocrRunPdf, sent, DOCUMENT_PATH);
+
+    expect(harness.services.runPdfOcrForDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      queuedDocumentPaths: harness.state.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      onProgress: expect.any(Function)
+    });
+    const options = vi.mocked(harness.services.runPdfOcrForDocument).mock.calls[0]?.[0];
+    options?.onProgress?.({
+      documentPath: DOCUMENT_PATH,
+      page: 2,
+      pageIndex: 1,
+      pageCount: 3,
+      message: "OCR PDF page 1/3"
+    });
+    expect(sent).toEqual([
+      {
+        channel: IPC_CHANNELS.ocrPdfProgress,
+        value: {
+          page: 2,
+          pageIndex: 1,
+          pageCount: 3,
+          message: "OCR PDF page 1/3"
+        }
+      }
+    ]);
+    expect(JSON.stringify(sent)).not.toContain(DOCUMENT_PATH);
   });
 
   it("runs IA suggestions with queue, userData and target folders from main state", async () => {
@@ -281,6 +340,11 @@ function contractFor(channel: IpcChannel) {
 
 function createHarness(overrides: Partial<IpcHandlerServices> = {}): {
   invoke: (channel: IpcChannel, ...args: unknown[]) => Promise<unknown>;
+  invokeWithSender: (
+    channel: IpcChannel,
+    sent: Array<{ channel: IpcChannel; value: unknown }>,
+    ...args: unknown[]
+  ) => Promise<unknown>;
   services: IpcHandlerServices;
   state: MainProcessAppState;
 } {
@@ -319,6 +383,19 @@ function createHarness(overrides: Partial<IpcHandlerServices> = {}): {
         throw new Error(`No handler registered for ${channel}`);
       }
       return listener({}, ...args) as Promise<unknown>;
+    },
+    invokeWithSender: async (channel, sent, ...args) => {
+      const listener = handlers.get(channel);
+      if (!listener) {
+        throw new Error(`No handler registered for ${channel}`);
+      }
+      return listener({
+        sender: {
+          send: (eventChannel: IpcChannel, value: unknown) => {
+            sent.push({ channel: eventChannel, value });
+          }
+        }
+      }, ...args) as Promise<unknown>;
     }
   };
 }
@@ -510,6 +587,26 @@ function createServices(): IpcHandlerServices {
     getOcrStatus: vi.fn(async () => ({ ok: true, value: createOcrStatus() })),
     saveOcrSettings: vi.fn(async () => ({ ok: true, value: createOcrStatus() })),
     testOcrEngine: vi.fn(async () => ({ ok: true, value: createOcrStatus() })),
+    getPdfOcrStatus: vi.fn(async () => ({
+      ok: true,
+      value: {
+        status: "ready",
+        message: "OCR PDF prêt.",
+        tesseract: {
+          status: "ready",
+          path: "C:\\Tools\\tesseract.exe",
+          message: "Tesseract disponible.",
+          version: "5.4.0"
+        },
+        renderer: {
+          status: "ready",
+          path: "C:\\Tools\\pdftoppm.exe",
+          message: "Rendu PDF disponible.",
+          version: "24.02.0"
+        },
+        error: null
+      }
+    })),
     runImageOcrForDocument: vi.fn(async () => ({
       ok: true,
       value: {
@@ -526,6 +623,23 @@ function createServices(): IpcHandlerServices {
         extractedAt: "2026-06-18T10:00:00.000Z",
         fromCache: false,
         warnings: []
+      }
+    })),
+    runPdfOcrForDocument: vi.fn(async () => ({
+      ok: true,
+      value: {
+        status: "text-found",
+        source: "pdf-hybrid",
+        pageCount: 2,
+        pagesAnalyzed: 2,
+        text: "texte extrait OCR PDF",
+        characterCount: 22,
+        excerpt: "texte extrait OCR PDF",
+        excerptCharacterCount: 22,
+        truncated: false,
+        extractedAt: "2026-06-18T10:00:00.000Z",
+        finalTextSource: "pdf-hybrid",
+        fromCache: false
       }
     })),
     getAiStatus: vi.fn(async () => ({ ok: true, value: createAiStatus() })),

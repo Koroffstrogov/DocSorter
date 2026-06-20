@@ -1579,6 +1579,13 @@ details.detail-section[open] > summary {
   display: none;
 }
 
+.text-extraction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .text-extraction-details {
   display: grid;
   gap: 8px;

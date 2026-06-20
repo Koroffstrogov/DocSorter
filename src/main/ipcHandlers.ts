@@ -103,6 +103,12 @@ import {
   type ImageOcrResult
 } from "../ocr/imageOcrService";
 import {
+  getPdfOcrStatus as getPdfOcrStatusService,
+  runPdfOcrForDocument as runPdfOcrForDocumentService,
+  type PdfOcrResult,
+  type PdfOcrStatus
+} from "../ocr/pdfOcrService";
+import {
   getOcrStatus as getOcrStatusService,
   saveOcrSettings as saveOcrSettingsService
 } from "../ocr/tesseractConfig";
@@ -232,11 +238,24 @@ export interface IpcHandlerServices {
     settings: OcrSettingsInput
   ) => Promise<OcrResult<OcrStatus>>;
   testOcrEngine: (userDataPath: string) => Promise<OcrResult<OcrStatus>>;
+  getPdfOcrStatus: (userDataPath: string) => Promise<OcrResult<PdfOcrStatus>>;
   runImageOcrForDocument: (options: {
     documentPath: string;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
   }) => Promise<ImageOcrResult>;
+  runPdfOcrForDocument: (options: {
+    documentPath: string;
+    queuedDocumentPaths: Iterable<string>;
+    userDataPath: string;
+    onProgress?: (progress: {
+      documentPath: string;
+      page: number;
+      pageIndex: number;
+      pageCount: number;
+      message: string;
+    }) => void;
+  }) => Promise<PdfOcrResult>;
   getAiStatus: (userDataPath: string) => Promise<AiSettingsResult<AiStatus>>;
   loadAiSettings: (userDataPath: string) => Promise<AiSettingsResult<AiSettings>>;
   saveAiSettings: (
@@ -406,6 +425,22 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "runImageOcrForDocument"
   },
   {
+    channel: IPC_CHANNELS.ocrGetPdfStatus,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "getPdfOcrStatus"
+  },
+  {
+    channel: IPC_CHANNELS.ocrRunPdf,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "runPdfOcrForDocument"
+  },
+  {
     channel: IPC_CHANNELS.aiGetStatus,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -560,7 +595,9 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   getOcrStatus: getOcrStatusService,
   saveOcrSettings: saveOcrSettingsService,
   testOcrEngine: testOcrEngineService,
+  getPdfOcrStatus: getPdfOcrStatusService,
   runImageOcrForDocument: runImageOcrForDocumentService,
+  runPdfOcrForDocument: runPdfOcrForDocumentService,
   getAiStatus: getAiStatusService,
   loadAiSettings: loadAiSettingsService,
   saveAiSettings: saveAiSettingsService,
@@ -766,11 +803,30 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   options.ipcMain.handle(IPC_CHANNELS.ocrTestEngine, () =>
     services.testOcrEngine(options.app.getPath("userData"))
   );
+  options.ipcMain.handle(IPC_CHANNELS.ocrGetPdfStatus, () =>
+    services.getPdfOcrStatus(options.app.getPath("userData"))
+  );
   options.ipcMain.handle(IPC_CHANNELS.ocrRunImage, async (_event, documentPath: unknown) =>
     services.runImageOcrForDocument({
       documentPath: typeof documentPath === "string" ? documentPath : "",
       queuedDocumentPaths: state.queuedDocumentPaths,
       userDataPath: options.app.getPath("userData")
+    })
+  );
+  options.ipcMain.handle(IPC_CHANNELS.ocrRunPdf, async (event, documentPath: unknown) =>
+    services.runPdfOcrForDocument({
+      documentPath: typeof documentPath === "string" ? documentPath : "",
+      queuedDocumentPaths: state.queuedDocumentPaths,
+      userDataPath: options.app.getPath("userData"),
+      onProgress: (progress) => {
+        const sender = readIpcSender(event);
+        sender?.send(IPC_CHANNELS.ocrPdfProgress, {
+          page: progress.page,
+          pageIndex: progress.pageIndex,
+          pageCount: progress.pageCount,
+          message: progress.message
+        });
+      }
     })
   );
   options.ipcMain.handle(IPC_CHANNELS.aiGetStatus, () =>
@@ -1019,7 +1075,12 @@ function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null
 
   const candidate = value as Partial<AiDocumentTextContext>;
   if (
-    (candidate.source !== "pdf-native" && candidate.source !== "tesseract-cli") ||
+    (
+      candidate.source !== "pdf-native" &&
+      candidate.source !== "pdf-ocr" &&
+      candidate.source !== "pdf-hybrid" &&
+      candidate.source !== "tesseract-cli"
+    ) ||
     typeof candidate.excerpt !== "string"
   ) {
     return null;
@@ -1029,6 +1090,22 @@ function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null
     source: candidate.source,
     excerpt: candidate.excerpt
   };
+}
+
+function readIpcSender(event: unknown): { send: (channel: IpcChannel, value: unknown) => void } | null {
+  if (!event || typeof event !== "object") {
+    return null;
+  }
+
+  const sender = (event as { sender?: unknown }).sender;
+  if (!sender || typeof sender !== "object") {
+    return null;
+  }
+
+  const send = (sender as { send?: unknown }).send;
+  return typeof send === "function"
+    ? { send: send.bind(sender) as (channel: IpcChannel, value: unknown) => void }
+    : null;
 }
 
 function readAiDiagnosticResult(value: unknown): AiSettingsResult<AiDocumentSuggestion> | null {

@@ -125,6 +125,7 @@ function createIdleOcrState(): OcrState {
   return {
     panelStatus: "loading",
     status: null,
+    pdfStatus: null,
     draft: {
       tesseractPath: "",
       tessdataPath: "",

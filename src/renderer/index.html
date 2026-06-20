@@ -288,7 +288,10 @@
             <section id="text-extraction-panel" class="detail-section text-extraction-panel" aria-label="Texte extrait" hidden>
               <div class="section-heading">
                 <h3>Texte extrait</h3>
-                <button id="extract-pdf-text" type="button" disabled>Extraire le texte PDF</button>
+                <div class="text-extraction-actions">
+                  <button id="extract-pdf-text" type="button" disabled>Extraire le texte PDF</button>
+                  <button id="run-pdf-ocr" type="button" disabled hidden>Lancer OCR PDF</button>
+                </div>
               </div>
               <div id="text-extraction-details" class="text-extraction-details">Texte non analysé</div>
             </section>

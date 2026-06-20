@@ -406,7 +406,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
   renderAiPanel();
 
   const generationStartedAt = nowMs();
-  const pdfTextQuality = getActivePdfTextQuality(activeDocument);
+  const pdfExtractionMetadata = getActivePdfExtractionMetadata(activeDocument);
   const result = await window.docSorter.runAiSuggestionForActiveDocument(
     activeDocument.filePath,
     textContext
@@ -422,14 +422,14 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
       lastLoadMs: loadMs,
       lastGenerationMs: generationMs
     });
-    applyAiError(attachPdfTextQualityToAiError(result.error as RendererAiError, pdfTextQuality));
+    applyAiError(attachPdfExtractionMetadataToAiError(result.error as RendererAiError, pdfExtractionMetadata));
     void refreshAiModelStatus();
     return;
   }
 
-  const suggestion = attachPdfTextQualityToAiSuggestion(
+  const suggestion = attachPdfExtractionMetadataToAiSuggestion(
     result.value as RendererAiDocumentSuggestion,
-    pdfTextQuality
+    pdfExtractionMetadata
   );
   const aiSelection = buildAiSelectionFromSuggestion(
     suggestion,
@@ -548,25 +548,32 @@ function buildContentAiAnalysisStep(
 ): AiDiagnosticPipelineStep {
   if (!aiResult.ok) {
     const pdfTextQuality = aiResult.error.pdfTextQuality;
+    const pdfOcr = aiResult.error.pdfOcr;
     return {
       id: "content-ai-analysis",
       status: "blocked",
       inputs: {
         documentPathKnown: Boolean(state.ai.suggestionDocumentPath || state.activeDocumentPath),
-        pdfTextQualityDecision: pdfTextQuality?.decision ?? ""
+        pdfTextQualityDecision: pdfTextQuality?.decision ?? "",
+        finalTextSource: aiResult.error.finalTextSource ?? ""
       },
       variables: {
         code: aiResult.error.code,
         pdfPageCount: pdfTextQuality?.pageCount ?? 0,
         pdfUsefulTextChars: pdfTextQuality?.usefulTextChars ?? 0,
-        pdfAffectedPageCount: countPdfTextQualityAffectedPages(pdfTextQuality)
+        pdfAffectedPageCount: countPdfTextQualityAffectedPages(pdfTextQuality),
+        pdfOcrRequestedPageCount: pdfOcr?.requestedPages.length ?? 0,
+        pdfOcrSucceededPageCount: pdfOcr?.succeededPages.length ?? 0,
+        pdfOcrFailedPageCount: pdfOcr?.failedPages.length ?? 0
       },
       output: {
         error: aiResult.error.message,
-        ...(pdfTextQuality ? { pdfTextQuality: createDiagnosticPdfTextQuality(pdfTextQuality) } : {})
+        ...(pdfTextQuality ? { pdfTextQuality: createDiagnosticPdfTextQuality(pdfTextQuality) } : {}),
+        ...(pdfOcr ? { pdfOcr: createDiagnosticPdfOcrSummary(pdfOcr) } : {})
       },
       warnings: [
         ...(pdfTextQuality?.warnings ?? []),
+        ...(pdfOcr?.warnings ?? []),
         ...(isPdfTextQualityIncomplete(pdfTextQuality)
           ? ["Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."]
           : [])
@@ -582,22 +589,32 @@ function buildContentAiAnalysisStep(
       documentName: aiResult.value.documentName,
       textSource: aiResult.value.textSource,
       promptCharacterCount: aiResult.value.promptCharacterCount,
-      pdfTextQualityDecision: aiResult.value.pdfTextQuality?.decision ?? ""
+      pdfTextQualityDecision: aiResult.value.pdfTextQuality?.decision ?? "",
+      finalTextSource: aiResult.value.finalTextSource ?? aiResult.value.textSource
     },
     variables: {
       model: aiResult.value.model,
       confidence: aiResult.value.suggestion.confidence,
       pdfPageCount: aiResult.value.pdfTextQuality?.pageCount ?? 0,
       pdfUsefulTextChars: aiResult.value.pdfTextQuality?.usefulTextChars ?? 0,
-      pdfAffectedPageCount: countPdfTextQualityAffectedPages(aiResult.value.pdfTextQuality)
+      pdfAffectedPageCount: countPdfTextQualityAffectedPages(aiResult.value.pdfTextQuality),
+      pdfOcrRequestedPageCount: aiResult.value.pdfOcr?.requestedPages.length ?? 0,
+      pdfOcrSucceededPageCount: aiResult.value.pdfOcr?.succeededPages.length ?? 0,
+      pdfOcrFailedPageCount: aiResult.value.pdfOcr?.failedPages.length ?? 0
     },
-    output: aiResult.value.pdfTextQuality
-      ? {
-          analysis: "Analyse IA validée.",
-          pdfTextQuality: createDiagnosticPdfTextQuality(aiResult.value.pdfTextQuality)
-        }
-      : "Analyse IA validée.",
-    warnings: aiResult.value.suggestion.warnings
+    output: {
+      analysis: "Analyse IA validée.",
+      ...(aiResult.value.pdfTextQuality
+        ? { pdfTextQuality: createDiagnosticPdfTextQuality(aiResult.value.pdfTextQuality) }
+        : {}),
+      ...(aiResult.value.pdfOcr
+        ? { pdfOcr: createDiagnosticPdfOcrSummary(aiResult.value.pdfOcr) }
+        : {})
+    },
+    warnings: uniqueAiStrings([
+      ...aiResult.value.suggestion.warnings,
+      ...(aiResult.value.pdfOcr?.warnings ?? [])
+    ])
   };
 }
 
@@ -1340,20 +1357,36 @@ function getActiveAiTextContext(
   };
 }
 
-function getActivePdfTextQuality(documentItem: DocumentItem | null): PdfTextQuality | undefined {
-  if (!documentItem || documentItem.extension !== ".pdf") {
-    return undefined;
-  }
-
-  return getTextExtractionState(documentItem.filePath).result?.pdfTextQuality;
+interface ActivePdfExtractionMetadata {
+  pdfTextQuality?: PdfTextQuality;
+  finalTextSource?: PdfTextExtractionSource;
+  pdfOcr?: PdfOcrSummary;
 }
 
-function attachPdfTextQualityToAiSuggestion(
+function getActivePdfExtractionMetadata(documentItem: DocumentItem | null): ActivePdfExtractionMetadata {
+  if (!documentItem || documentItem.extension !== ".pdf") {
+    return {};
+  }
+
+  const extraction = getTextExtractionState(documentItem.filePath).result;
+  return {
+    pdfTextQuality: extraction?.pdfTextQuality,
+    finalTextSource: extraction?.finalTextSource,
+    pdfOcr: extraction?.pdfOcr
+  };
+}
+
+function attachPdfExtractionMetadataToAiSuggestion(
   suggestion: RendererAiDocumentSuggestion,
-  pdfTextQuality: PdfTextQuality | undefined
+  metadata: ActivePdfExtractionMetadata
 ): RendererAiDocumentSuggestion {
+  const { pdfTextQuality, finalTextSource, pdfOcr } = metadata;
   if (!pdfTextQuality) {
-    return suggestion;
+    return {
+      ...suggestion,
+      ...(finalTextSource ? { finalTextSource } : {}),
+      ...(pdfOcr ? { pdfOcr } : {})
+    };
   }
 
   const warning = isPdfTextQualityIncomplete(pdfTextQuality)
@@ -1368,6 +1401,8 @@ function attachPdfTextQualityToAiSuggestion(
   return {
     ...suggestion,
     pdfTextQuality,
+    ...(finalTextSource ? { finalTextSource } : {}),
+    ...(pdfOcr ? { pdfOcr } : {}),
     responseJson: addPdfTextQualityWarningToResponseJson(suggestion.responseJson, warning),
     suggestion: {
       ...suggestion.suggestion,
@@ -1379,17 +1414,20 @@ function attachPdfTextQualityToAiSuggestion(
   };
 }
 
-function attachPdfTextQualityToAiError(
+function attachPdfExtractionMetadataToAiError(
   error: RendererAiError,
-  pdfTextQuality: PdfTextQuality | undefined
+  metadata: ActivePdfExtractionMetadata
 ): RendererAiError {
-  if (!pdfTextQuality) {
+  const { pdfTextQuality, finalTextSource, pdfOcr } = metadata;
+  if (!pdfTextQuality && !finalTextSource && !pdfOcr) {
     return error;
   }
 
   return {
     ...error,
-    pdfTextQuality
+    ...(pdfTextQuality ? { pdfTextQuality } : {}),
+    ...(finalTextSource ? { finalTextSource } : {}),
+    ...(pdfOcr ? { pdfOcr } : {})
   };
 }
 
@@ -1443,6 +1481,25 @@ function createDiagnosticPdfTextQuality(pdfTextQuality: PdfTextQuality): Record<
       readableCharRatio: page.readableCharRatio,
       status: page.status
     }))
+  };
+}
+
+function createDiagnosticPdfOcrSummary(pdfOcr: PdfOcrSummary): Record<string, unknown> {
+  return {
+    requestedPages: pdfOcr.requestedPages,
+    succeededPages: pdfOcr.succeededPages,
+    failedPages: pdfOcr.failedPages,
+    durationMs: pdfOcr.durationMs,
+    ocrCharacterCount: pdfOcr.ocrCharacterCount,
+    renderer: pdfOcr.renderer,
+    dpi: pdfOcr.dpi,
+    pages: pdfOcr.pages.map((page) => ({
+      page: page.page,
+      status: page.status,
+      usefulTextChars: page.usefulTextChars,
+      ...(page.warning ? { warning: page.warning } : {})
+    })),
+    warnings: pdfOcr.warnings
   };
 }
 

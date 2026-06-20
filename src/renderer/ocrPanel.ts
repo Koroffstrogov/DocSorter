@@ -191,6 +191,13 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       }
     }
 
+    if (state.pdfStatus) {
+      lines.push(createMetaLine(`OCR PDF : ${state.pdfStatus.message}`));
+      if (state.pdfStatus.renderer.status !== "ready") {
+        lines.push(createWarningLine(state.pdfStatus.renderer.message));
+      }
+    }
+
     if (state.dirty) {
       lines.push(createWarningLine("Configuration modifiée non sauvegardée."));
     }

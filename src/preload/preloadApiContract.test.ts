@@ -84,6 +84,10 @@ describe("preload API surface", () => {
     });
     await api.testOcrEngine();
     await api.runOcrForActiveImage("C:\\source\\image.png");
+    await api.getPdfOcrStatus();
+    await api.runOcrForActivePdf("C:\\source\\document.pdf");
+    const unsubscribePdfOcrProgress = api.onPdfOcrProgress(() => undefined);
+    unsubscribePdfOcrProgress();
     await api.getAiStatus();
     await api.getAiSettings();
     await api.saveAiSettings({
@@ -145,6 +149,9 @@ describe("preload API surface", () => {
       IPC_CHANNELS.ocrSaveSettings,
       IPC_CHANNELS.ocrTestEngine,
       IPC_CHANNELS.ocrRunImage,
+      IPC_CHANNELS.ocrGetPdfStatus,
+      IPC_CHANNELS.ocrRunPdf,
+      IPC_CHANNELS.ocrPdfProgress,
       IPC_CHANNELS.aiGetStatus,
       IPC_CHANNELS.aiGetSettings,
       IPC_CHANNELS.aiSaveSettings,
@@ -180,7 +187,7 @@ describe("preload runtime", () => {
   it("keeps runtime IPC channels aligned with the reviewed channel list", async () => {
     const preloadSource = await readPreloadRuntimeSource();
     const runtimeChannels = [
-      ...preloadSource.matchAll(/ipcRenderer\.invoke\("([^"]+)"/g)
+      ...preloadSource.matchAll(/ipcRenderer\.(?:invoke|on)\("([^"]+)"/g)
     ].map((match) => match[1]);
 
     expect(runtimeChannels).toEqual([...ALLOWED_IPC_CHANNELS]);
@@ -203,6 +210,10 @@ function createRecordingInvoker(): {
       invoke: (channel, ...args) => {
         calls.push({ channel, args });
         return Promise.resolve(null);
+      },
+      on: (channel) => {
+        calls.push({ channel, args: [] });
+        return () => undefined;
       }
     }
   };

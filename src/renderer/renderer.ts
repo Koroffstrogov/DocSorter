@@ -146,11 +146,16 @@ const historyPanel = DocSorterHistoryPanel.createHistoryPanel({
 const textExtractionPanel = DocSorterTextExtractionPanel.createTextExtractionPanel({
   getState: () => ({
     activeDocument: getActiveDocument(),
-    textExtraction: state.textExtraction
+    textExtraction: state.textExtraction,
+    pdfOcrStatus: state.ocr.pdfStatus
   }),
   canExtract: (documentItem) => canExtractTextFromActiveDocument(documentItem ?? getActiveDocument()),
+  canRunPdfOcr: (documentItem) => canRunOcrForActivePdf(documentItem ?? getActiveDocument()),
   onExtract: () => {
     void extractTextFromActiveDocument();
+  },
+  onRunPdfOcr: () => {
+    void runOcrForActivePdf();
   },
   onTextChange: updateExtractedTextForDocument,
   formatDate
@@ -263,6 +268,7 @@ void window.docSorter.getVersion().then((value) => {
 
 void refreshLastUndoableAction();
 void refreshRecentHistory();
+registerPdfOcrProgressListener();
 void refreshOcrStatus();
 void refreshAiStatus();
 

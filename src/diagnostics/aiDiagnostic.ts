@@ -259,6 +259,13 @@ function createDiagnosticText(
     };
   }
 
+  if (textContext.source === "pdf-ocr" || textContext.source === "pdf-hybrid") {
+    return {
+      source: textContext.source,
+      truncated: textContext.excerpt.length > 0
+    };
+  }
+
   const redacted = redactSensitiveText(textContext.excerpt).slice(0, 500);
   return {
     source: textContext.source,

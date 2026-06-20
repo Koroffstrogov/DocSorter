@@ -10,6 +10,7 @@ import {
 } from "../config/processingLimits";
 
 export type PdfTextExtractionStatus = "text-found" | "empty";
+export type PdfTextExtractionSource = "pdf-native" | "pdf-ocr" | "pdf-hybrid";
 
 export type PdfPageTextQualityStatus = "text-ok" | "text-empty" | "text-weak" | "unknown";
 
@@ -51,15 +52,39 @@ export type PdfTextExtractionErrorCode =
 
 export interface PdfTextExtraction {
   status: PdfTextExtractionStatus;
+  source?: PdfTextExtractionSource;
   pageCount: number;
   pagesAnalyzed: number;
+  text?: string;
   characterCount: number;
   excerpt: string;
   excerptCharacterCount: number;
   truncated: boolean;
   extractedAt: string;
   pdfTextQuality?: PdfTextQuality;
+  finalTextSource?: PdfTextExtractionSource;
+  pdfOcr?: PdfOcrSummary;
   fromCache?: boolean;
+  warnings?: string[];
+}
+
+export interface PdfOcrPageSummary {
+  page: number;
+  status: "success" | "failed" | "skipped";
+  usefulTextChars: number;
+  warning?: string;
+}
+
+export interface PdfOcrSummary {
+  requestedPages: number[];
+  succeededPages: number[];
+  failedPages: number[];
+  durationMs: number;
+  ocrCharacterCount: number;
+  renderer: "pdftoppm";
+  dpi: number;
+  pages: PdfOcrPageSummary[];
+  warnings: string[];
 }
 
 export type PdfTextExtractionResult =
@@ -194,6 +219,7 @@ export function buildPdfTextExtraction(
 
   return {
     status: text.length > 0 ? "text-found" : "empty",
+    source: "pdf-native",
     pageCount: rawExtraction.pageCount,
     pagesAnalyzed: rawExtraction.pagesAnalyzed,
     characterCount: text.length,
@@ -204,6 +230,7 @@ export function buildPdfTextExtraction(
       boundedText.truncated ||
       excerpt.length < text.length,
     extractedAt: options.extractedAt,
+    finalTextSource: "pdf-native",
     pdfTextQuality
   };
 }
@@ -400,7 +427,7 @@ export function pdfTextExtractionFailure(
   };
 }
 
-async function extractNativePdfText(
+export async function extractNativePdfText(
   documentPath: string,
   options: { maxPages: number }
 ): Promise<RawPdfTextExtraction> {

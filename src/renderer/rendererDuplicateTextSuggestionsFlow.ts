@@ -213,6 +213,52 @@ async function runOcrForActiveImage(): Promise<void> {
   render();
 }
 
+async function runOcrForActivePdf(): Promise<void> {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || !canRunOcrForActivePdf(activeDocument)) {
+    return;
+  }
+
+  const requestId = ++textExtractionRequestId;
+  const currentState = getTextExtractionState(activeDocument.filePath);
+  resetAiSuggestionState();
+  setTextExtractionState(activeDocument.filePath, {
+    status: "extracting",
+    result: currentState.result,
+    error: null,
+    progressMessage: "OCR PDF en cours..."
+  });
+  render();
+
+  const result = await window.docSorter.runOcrForActivePdf(activeDocument.filePath);
+  if (requestId !== textExtractionRequestId) {
+    return;
+  }
+
+  if (!result.ok) {
+    if (result.error.code === "OCR_INPUT_NOT_FOUND") {
+      markDocumentUnavailable(activeDocument.filePath);
+    }
+
+    setTextExtractionState(activeDocument.filePath, {
+      status: "error",
+      result: currentState.result,
+      error: result.error as PdfTextExtractionError
+    });
+    render();
+    return;
+  }
+
+  const extraction = result.value as PdfTextExtraction;
+  resetAiSuggestionState();
+  setTextExtractionState(activeDocument.filePath, {
+    status: extraction.status,
+    result: extraction,
+    error: null
+  });
+  render();
+}
+
 function extractTextFromActiveDocument(): Promise<void> {
   const activeDocument = getActiveDocument();
   if (!activeDocument) {
@@ -259,6 +305,23 @@ function canRunOcrForActiveImage(documentItem = getActiveDocument()): boolean {
   );
 }
 
+function canRunOcrForActivePdf(documentItem = getActiveDocument()): boolean {
+  if (!documentItem) {
+    return false;
+  }
+
+  const extractionState = getTextExtractionState(documentItem.filePath);
+  const decision = extractionState.result?.pdfTextQuality?.decision;
+  return (
+    documentItem.extension === ".pdf" &&
+    documentItem.status !== "missing" &&
+    extractionState.status !== "extracting" &&
+    (decision === "ocr-recommended" || decision === "hybrid-ocr-recommended") &&
+    state.ocr.pdfStatus?.status === "ready" &&
+    !isClassificationBusy()
+  );
+}
+
 function canExtractTextFromActiveDocument(documentItem = getActiveDocument()): boolean {
   return canExtractTextFromActivePdf(documentItem) || canRunOcrForActiveImage(documentItem);
 }
@@ -274,6 +337,26 @@ function setTextExtractionState(filePath: string, value: TextExtractionDocumentS
       [filePath]: value
     }
   };
+}
+
+function registerPdfOcrProgressListener(): void {
+  window.docSorter.onPdfOcrProgress((progress) => {
+    const activeDocument = getActiveDocument();
+    if (!activeDocument || activeDocument.extension !== ".pdf") {
+      return;
+    }
+
+    const extractionState = getTextExtractionState(activeDocument.filePath);
+    if (extractionState.status !== "extracting") {
+      return;
+    }
+
+    setTextExtractionState(activeDocument.filePath, {
+      ...extractionState,
+      progressMessage: progress.message || `OCR PDF page ${progress.pageIndex + 1}/${progress.pageCount}`
+    });
+    renderTextExtractionPanel();
+  });
 }
 
 function updateExtractedTextForDocument(documentItem: DocumentItem, text: string): void {

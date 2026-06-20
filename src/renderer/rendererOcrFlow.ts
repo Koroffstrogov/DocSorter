@@ -19,6 +19,7 @@ async function refreshOcrStatus(): Promise<void> {
   }
 
   applyOcrStatus(result.value as RendererOcrStatus);
+  await refreshPdfOcrStatus();
 }
 
 async function selectTesseractExecutableForOcr(): Promise<void> {
@@ -97,6 +98,7 @@ async function saveOcrSettingsFromPanel(): Promise<void> {
   }
 
   applyOcrStatus(result.value as RendererOcrStatus);
+  await refreshPdfOcrStatus();
 }
 
 async function testOcrEngineFromPanel(): Promise<void> {
@@ -124,6 +126,7 @@ async function testOcrEngineFromPanel(): Promise<void> {
   }
 
   applyOcrStatus(result.value as RendererOcrStatus);
+  await refreshPdfOcrStatus();
 }
 
 function updateOcrDraft(draft: OcrSettingsDraft): void {
@@ -146,6 +149,7 @@ function applyOcrStatus(status: RendererOcrStatus): void {
   state.ocr = {
     panelStatus: "ready",
     status,
+    pdfStatus: state.ocr.pdfStatus,
     draft: ocrStatusToDraft(status),
     message: status.message,
     error: status.error,
@@ -160,6 +164,38 @@ function applyOcrError(error: RendererOcrError): void {
     panelStatus: "error",
     message: error.message,
     error
+  };
+  render();
+}
+
+async function refreshPdfOcrStatus(): Promise<void> {
+  const result = await window.docSorter.getPdfOcrStatus();
+  if (!result.ok) {
+    state.ocr = {
+      ...state.ocr,
+      pdfStatus: {
+        status: "error",
+        message: result.error.message,
+        tesseract: {
+          status: "error",
+          path: "",
+          message: result.error.message
+        },
+        renderer: {
+          status: "error",
+          path: "",
+          message: result.error.message
+        },
+        error: result.error as RendererOcrError
+      }
+    };
+    render();
+    return;
+  }
+
+  state.ocr = {
+    ...state.ocr,
+    pdfStatus: result.value as RendererPdfOcrStatus
   };
   render();
 }

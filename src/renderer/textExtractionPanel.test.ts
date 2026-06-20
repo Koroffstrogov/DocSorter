@@ -89,16 +89,73 @@ describe("textExtractionPanel", () => {
       "Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."
     );
   });
+
+  it("shows manual PDF OCR only for recommended PDFs and disables it when tools are absent", async () => {
+    const { api, pdfOcrButton } = await createPanelHarness(createReadyState({
+      pdfTextQuality: {
+        pageCount: 1,
+        nativeTextChars: 0,
+        usefulTextChars: 0,
+        decision: "ocr-recommended",
+        reason: "PDF sans texte natif.",
+        warnings: [],
+        pages: [
+          {
+            page: 1,
+            rawTextChars: 0,
+            usefulTextChars: 0,
+            approximateWordCount: 0,
+            readableCharRatio: 0,
+            status: "text-empty"
+          }
+        ]
+      }
+    }, null));
+
+    api.render();
+
+    expect(pdfOcrButton.hidden).toBe(false);
+    expect(pdfOcrButton.disabled).toBe(true);
+    expect(pdfOcrButton.title).toBe("OCR non configuré");
+  });
+
+  it("hides manual PDF OCR for native text PDFs", async () => {
+    const { api, pdfOcrButton } = await createPanelHarness(createReadyState({
+      pdfTextQuality: {
+        pageCount: 1,
+        nativeTextChars: 260,
+        usefulTextChars: 250,
+        decision: "native-ok",
+        reason: "Texte PDF natif exploitable.",
+        warnings: [],
+        pages: [
+          {
+            page: 1,
+            rawTextChars: 260,
+            usefulTextChars: 250,
+            approximateWordCount: 40,
+            readableCharRatio: 0.9,
+            status: "text-ok"
+          }
+        ]
+      }
+    }));
+
+    api.render();
+
+    expect(pdfOcrButton.hidden).toBe(true);
+  });
 });
 
 async function createPanelHarness(
   state: TextExtractionPanelState,
-  callbacks: Partial<Pick<TextExtractionPanelOptions, "onTextChange" | "onExtract">> = {}
+  callbacks: Partial<Pick<TextExtractionPanelOptions, "onTextChange" | "onExtract" | "onRunPdfOcr" | "canRunPdfOcr">> = {}
 ) {
   const panel = new FakeElement("section", "text-extraction-panel");
   const extractButton = new FakeElement("button", "extract-pdf-text");
+  const pdfOcrButton = new FakeElement("button", "run-pdf-ocr");
   const details = new FakeElement("div", "text-extraction-details");
-  const document = new FakeDocument([panel, extractButton, details]);
+  const document = new FakeDocument([panel, extractButton, pdfOcrButton, details]);
   const context: Record<string, unknown> = {
     document
   };
@@ -119,12 +176,15 @@ async function createPanelHarness(
       root: document as unknown as ParentNode,
       getState: () => state,
       canExtract: () => true,
+      canRunPdfOcr: callbacks.canRunPdfOcr ?? (() => false),
       onExtract: callbacks.onExtract ?? (() => undefined),
+      onRunPdfOcr: callbacks.onRunPdfOcr ?? (() => undefined),
       onTextChange: callbacks.onTextChange ?? (() => undefined),
       formatDate: (value) => value
     }),
     details,
     extractButton,
+    pdfOcrButton,
     panel
   };
 }
@@ -133,7 +193,10 @@ function panelSourcePath(): string {
   return path.join(process.cwd(), "src", "renderer", "textExtractionPanel.ts");
 }
 
-function createReadyState(overrides: Partial<PdfTextExtraction> = {}): TextExtractionPanelState {
+function createReadyState(
+  overrides: Partial<PdfTextExtraction> = {},
+  pdfOcrStatus: RendererPdfOcrStatus | null = createReadyPdfOcrStatus()
+): TextExtractionPanelState {
   return {
     activeDocument: {
       name: "document.pdf",
@@ -165,7 +228,28 @@ function createReadyState(overrides: Partial<PdfTextExtraction> = {}): TextExtra
           }
         }
       }
-    }
+    },
+    pdfOcrStatus
+  };
+}
+
+function createReadyPdfOcrStatus(): RendererPdfOcrStatus {
+  return {
+    status: "ready",
+    message: "OCR PDF prêt.",
+    tesseract: {
+      status: "ready",
+      path: "C:\\Tools\\tesseract.exe",
+      message: "Tesseract disponible.",
+      version: "5.4.0"
+    },
+    renderer: {
+      status: "ready",
+      path: "C:\\Tools\\pdftoppm.exe",
+      message: "Rendu PDF disponible.",
+      version: "24.02.0"
+    },
+    error: null
   };
 }
 
@@ -197,6 +281,7 @@ class FakeElement {
   public disabled = false;
   public textContent = "";
   public value = "";
+  public title = "";
   public spellcheck = true;
   private readonly children: Array<FakeElement | string> = [];
   private readonly listeners = new Map<string, Array<() => void>>();

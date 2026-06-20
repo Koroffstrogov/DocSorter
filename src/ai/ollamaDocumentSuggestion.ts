@@ -36,7 +36,7 @@ import {
 } from "../naming/documentNameV2";
 import { isFilenameLikeTarget } from "./aiSuggestionSafety";
 
-export type AiDocumentTextSource = "pdf-native" | "tesseract-cli";
+export type AiDocumentTextSource = "pdf-native" | "pdf-ocr" | "pdf-hybrid" | "tesseract-cli";
 
 export interface AiDocumentTextContext {
   source: AiDocumentTextSource;

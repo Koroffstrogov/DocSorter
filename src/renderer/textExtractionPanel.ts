@@ -1,13 +1,16 @@
 interface TextExtractionPanelState {
   activeDocument: DocumentItem | null;
   textExtraction: TextExtractionState;
+  pdfOcrStatus: RendererPdfOcrStatus | null;
 }
 
 interface TextExtractionPanelOptions {
   root?: ParentNode;
   getState: () => TextExtractionPanelState;
   canExtract: (documentItem?: DocumentItem | null) => boolean;
+  canRunPdfOcr: (documentItem?: DocumentItem | null) => boolean;
   onExtract: () => void;
+  onRunPdfOcr: () => void;
   onTextChange: (documentItem: DocumentItem, text: string) => void;
   formatDate: (value: string) => string;
 }
@@ -20,6 +23,7 @@ interface TextExtractionPanelApi {
 interface TextExtractionPanelElements {
   panel: HTMLElement | null;
   extractButton: HTMLButtonElement | null;
+  pdfOcrButton: HTMLButtonElement | null;
   details: HTMLElement | null;
 }
 
@@ -41,12 +45,17 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
       options.onExtract();
     });
 
+    elements.pdfOcrButton?.addEventListener("click", () => {
+      options.onRunPdfOcr();
+    });
+
     function render(): void {
       if (!elements.panel || !elements.details) {
         return;
       }
 
-      const activeDocument = options.getState().activeDocument;
+      const panelState = options.getState();
+      const activeDocument = panelState.activeDocument;
       if (!activeDocument || !supportsTextExtractionPanel(activeDocument)) {
         elements.panel.hidden = true;
         elements.details.replaceChildren();
@@ -64,6 +73,8 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
             : "Lancer OCR sur cette image";
       }
 
+      renderPdfOcrButton(elements.pdfOcrButton, activeDocument, extractionState, panelState, options);
+
       if (extractionState.status === "idle") {
         elements.details.replaceChildren(
           activeDocument.extension === ".pdf" ? "Texte non analysé" : "OCR non lancé"
@@ -73,7 +84,8 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
 
       if (extractionState.status === "extracting") {
         elements.details.replaceChildren(
-          activeDocument.extension === ".pdf" ? "Extraction du texte..." : "OCR en cours..."
+          extractionState.progressMessage ??
+            (activeDocument.extension === ".pdf" ? "Extraction du texte..." : "OCR en cours...")
         );
         return;
       }
@@ -173,6 +185,11 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         meta.append(qualityStatus);
       }
 
+      const pdfOcrStatus = createPdfOcrStatusNode(extraction);
+      if (pdfOcrStatus) {
+        meta.append(pdfOcrStatus);
+      }
+
       return meta;
     }
 
@@ -186,8 +203,33 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     return {
       panel: root.querySelector<HTMLElement>("#text-extraction-panel"),
       extractButton: root.querySelector<HTMLButtonElement>("#extract-pdf-text"),
+      pdfOcrButton: root.querySelector<HTMLButtonElement>("#run-pdf-ocr"),
       details: root.querySelector<HTMLElement>("#text-extraction-details")
     };
+  }
+
+  function renderPdfOcrButton(
+    button: HTMLButtonElement | null,
+    activeDocument: DocumentItem,
+    extractionState: TextExtractionDocumentState,
+    panelState: TextExtractionPanelState,
+    options: TextExtractionPanelOptions
+  ): void {
+    if (!button) {
+      return;
+    }
+
+    const visible = shouldShowPdfOcrButton(activeDocument, extractionState);
+    button.hidden = !visible;
+    if (!visible) {
+      return;
+    }
+
+    const canRun = options.canRunPdfOcr(activeDocument);
+    button.disabled = !canRun;
+    button.textContent =
+      extractionState.status === "extracting" ? "OCR PDF en cours..." : "Lancer OCR PDF";
+    button.title = canRun ? "OCR PDF local explicite" : pdfOcrDisabledReason(panelState.pdfOcrStatus);
   }
 
   function createTextExtractionEditor(
@@ -269,6 +311,17 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     return status;
   }
 
+  function createPdfOcrStatusNode(extraction: PdfTextExtraction): HTMLSpanElement | null {
+    if (!extraction.finalTextSource || extraction.finalTextSource === "pdf-native") {
+      return null;
+    }
+
+    const status = document.createElement("span");
+    status.textContent =
+      extraction.finalTextSource === "pdf-hybrid" ? "Texte fusionné PDF + OCR" : "Texte OCR PDF";
+    return status;
+  }
+
   function pdfTextQualityLabel(decision: PdfTextQualityDecision): string {
     switch (decision) {
       case "native-ok":
@@ -289,6 +342,34 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     }
 
     return [];
+  }
+
+  function shouldShowPdfOcrButton(
+    documentItem: DocumentItem,
+    extractionState: TextExtractionDocumentState
+  ): boolean {
+    if (documentItem.extension !== ".pdf" || !extractionState.result) {
+      return false;
+    }
+
+    const decision = extractionState.result.pdfTextQuality?.decision;
+    return decision === "ocr-recommended" || decision === "hybrid-ocr-recommended";
+  }
+
+  function pdfOcrDisabledReason(status: RendererPdfOcrStatus | null): string {
+    if (!status) {
+      return "OCR non configuré";
+    }
+
+    if (status.tesseract.status !== "ready") {
+      return status.tesseract.status === "missing" ? "Tesseract introuvable" : status.tesseract.message;
+    }
+
+    if (status.renderer.status !== "ready") {
+      return "Rendu PDF indisponible";
+    }
+
+    return status.message;
   }
 
   function uniqueStrings(values: string[]): string[] {

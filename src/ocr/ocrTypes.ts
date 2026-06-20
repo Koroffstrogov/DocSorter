@@ -9,6 +9,9 @@ export type OcrErrorCode =
   | "OCR_INPUT_NOT_SUPPORTED"
   | "OCR_INPUT_NOT_FOUND"
   | "OCR_INPUT_TOO_LARGE"
+  | "OCR_PDF_RENDERER_NOT_FOUND"
+  | "OCR_PDF_RENDER_FAILED"
+  | "OCR_PDF_NO_PAGES"
   | "OCR_TIMEOUT"
   | "OCR_PROCESS_FAILED"
   | "OCR_TEXT_EMPTY"
@@ -100,6 +103,12 @@ export function ocrErrorMessage(code: OcrErrorCode): string {
       return "Image indisponible pour OCR.";
     case "OCR_INPUT_TOO_LARGE":
       return "OCR non lancé : image trop volumineuse.";
+    case "OCR_PDF_RENDERER_NOT_FOUND":
+      return "Rendu PDF indisponible.";
+    case "OCR_PDF_RENDER_FAILED":
+      return "Rendu PDF impossible.";
+    case "OCR_PDF_NO_PAGES":
+      return "Aucune page PDF à OCRiser.";
     case "OCR_TIMEOUT":
       return "Timeout OCR.";
     case "OCR_PROCESS_FAILED":

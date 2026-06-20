@@ -588,6 +588,67 @@ describe("rendererAiFlow V2 application helpers", () => {
     );
   });
 
+  it("uses fused PDF OCR text as the next IA context", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const run = context.runAiSuggestionForActiveDocument as () => Promise<void>;
+    let capturedTextContext: RendererAiDocumentTextContext | null = null;
+    state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+      status: "text-found",
+      result: {
+        status: "text-found",
+        source: "pdf-hybrid",
+        finalTextSource: "pdf-hybrid",
+        text: "Texte natif conservé\nTexte OCR page deux",
+        excerpt: "Texte natif conservé\nTexte OCR page deux",
+        characterCount: 39,
+        excerptCharacterCount: 39,
+        pdfTextQuality: createHybridPdfTextQuality(),
+        pdfOcr: {
+          requestedPages: [2],
+          succeededPages: [2],
+          failedPages: [],
+          durationMs: 120,
+          ocrCharacterCount: 19,
+          renderer: "pdftoppm",
+          dpi: 200,
+          pages: [
+            {
+              page: 2,
+              status: "success",
+              usefulTextChars: 16
+            }
+          ],
+          warnings: []
+        }
+      },
+      error: null
+    };
+    (context.window as { docSorter: Record<string, unknown> }).docSorter = {
+      testAiConnection: async () => ({ ok: true, value: state.ai?.status }),
+      preloadAiModel: async () => ({ ok: true, value: createReadyModelStatus() }),
+      runAiSuggestionForActiveDocument: async (_documentPath: string, textContext: RendererAiDocumentTextContext) => {
+        capturedTextContext = textContext;
+        return { ok: true, value: createAiSuggestion() };
+      }
+    };
+
+    await run();
+
+    expect(capturedTextContext).toEqual({
+      source: "pdf-hybrid",
+      excerpt: "Texte natif conservé\nTexte OCR page deux"
+    });
+    expect(state.ai?.suggestion).toMatchObject({
+      finalTextSource: "pdf-hybrid",
+      pdfOcr: {
+        requestedPages: [2],
+        succeededPages: [2],
+        failedPages: []
+      }
+    });
+  });
+
   it("does not launch OCR automatically when image text is missing", async () => {
     const context = await loadAiFlow();
     const calls: string[] = [];

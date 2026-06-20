@@ -319,6 +319,59 @@ describe("AI diagnostics", () => {
     expect(JSON.stringify(log)).not.toContain("123456789012");
     expect(JSON.stringify(log)).not.toContain("12/05/2026");
   });
+
+  it("does not expose raw PDF OCR text in redacted diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "document-ocr.pdf",
+      extension: ".pdf",
+      textContext: {
+        source: "pdf-hybrid",
+        excerpt: "Texte OCR brut avec nom sensible et numero 123456789012"
+      },
+      aiResult: {
+        ok: true,
+        value: {
+          ...createAiDiagnosticSuggestion(),
+          textSource: "pdf-hybrid",
+          finalTextSource: "pdf-hybrid",
+          pdfOcr: {
+            requestedPages: [2],
+            succeededPages: [2],
+            failedPages: [],
+            durationMs: 120,
+            ocrCharacterCount: 19,
+            renderer: "pdftoppm",
+            dpi: 200,
+            pages: [
+              {
+                page: 2,
+                status: "success",
+                usefulTextChars: 16
+              }
+            ],
+            warnings: []
+          }
+        }
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.text).toEqual({
+      source: "pdf-hybrid",
+      truncated: true
+    });
+    expect(JSON.stringify(log)).not.toContain("Texte OCR brut");
+    expect(JSON.stringify(log)).not.toContain("123456789012");
+  });
 });
 
 function createAiDiagnosticSuggestion(): any {

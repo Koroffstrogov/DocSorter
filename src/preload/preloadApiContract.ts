@@ -27,6 +27,11 @@ import type {
   ImageOcrResult
 } from "../ocr/imageOcrService";
 import type {
+  PdfOcrProgress,
+  PdfOcrResult,
+  PdfOcrStatus
+} from "../ocr/pdfOcrService";
+import type {
   OcrPathSelection,
   OcrResult,
   OcrSettingsInput,
@@ -45,6 +50,10 @@ interface DirectorySelection {
 
 export interface IpcInvoker {
   invoke: (channel: IpcChannel, ...args: unknown[]) => Promise<unknown>;
+  on?: (
+    channel: IpcChannel,
+    listener: (event: unknown, value: unknown) => void
+  ) => () => void;
 }
 
 export const ALLOWED_PRELOAD_API_METHODS = [
@@ -72,6 +81,9 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "saveOcrSettings",
   "testOcrEngine",
   "runOcrForActiveImage",
+  "getPdfOcrStatus",
+  "runOcrForActivePdf",
+  "onPdfOcrProgress",
   "getAiStatus",
   "getAiSettings",
   "saveAiSettings",
@@ -179,6 +191,16 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.ocrTestEngine) as Promise<OcrResult<OcrStatus>>,
     runOcrForActiveImage: (documentPath: string): Promise<ImageOcrResult> =>
       ipc.invoke(IPC_CHANNELS.ocrRunImage, documentPath) as Promise<ImageOcrResult>,
+    getPdfOcrStatus: (): Promise<OcrResult<PdfOcrStatus>> =>
+      ipc.invoke(IPC_CHANNELS.ocrGetPdfStatus) as Promise<OcrResult<PdfOcrStatus>>,
+    runOcrForActivePdf: (documentPath: string): Promise<PdfOcrResult> =>
+      ipc.invoke(IPC_CHANNELS.ocrRunPdf, documentPath) as Promise<PdfOcrResult>,
+    onPdfOcrProgress: (listener: (progress: Omit<PdfOcrProgress, "documentPath">) => void): (() => void) =>
+      ipc.on?.(IPC_CHANNELS.ocrPdfProgress, (_event, value) => {
+        if (isPdfOcrProgress(value)) {
+          listener(value);
+        }
+      }) ?? (() => undefined),
     getAiStatus: (): Promise<AiSettingsResult<AiStatus>> =>
       ipc.invoke(IPC_CHANNELS.aiGetStatus) as Promise<AiSettingsResult<AiStatus>>,
     getAiSettings: (): Promise<AiSettingsResult<AiSettings>> =>
@@ -223,3 +245,17 @@ export function createPreloadApi(ipc: IpcInvoker) {
 }
 
 export type DocSorterApi = ReturnType<typeof createPreloadApi>;
+
+function isPdfOcrProgress(value: unknown): value is Omit<PdfOcrProgress, "documentPath"> {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<Omit<PdfOcrProgress, "documentPath">>;
+  return (
+    typeof candidate.page === "number" &&
+    typeof candidate.pageIndex === "number" &&
+    typeof candidate.pageCount === "number" &&
+    typeof candidate.message === "string"
+  );
+}

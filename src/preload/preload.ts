@@ -33,6 +33,26 @@ const api: DocSorterApi = {
   saveOcrSettings: (settings) => ipcRenderer.invoke("ocr:saveSettings", settings),
   testOcrEngine: () => ipcRenderer.invoke("ocr:testEngine"),
   runOcrForActiveImage: (documentPath) => ipcRenderer.invoke("ocr:runImage", documentPath),
+  getPdfOcrStatus: () => ipcRenderer.invoke("ocr:getPdfStatus"),
+  runOcrForActivePdf: (documentPath) => ipcRenderer.invoke("ocr:runPdf", documentPath),
+  onPdfOcrProgress: (listener) => {
+    const callback = (_event: Electron.IpcRendererEvent, progress: unknown) => {
+      if (
+        progress &&
+        typeof progress === "object" &&
+        typeof (progress as { page?: unknown }).page === "number" &&
+        typeof (progress as { pageIndex?: unknown }).pageIndex === "number" &&
+        typeof (progress as { pageCount?: unknown }).pageCount === "number" &&
+        typeof (progress as { message?: unknown }).message === "string"
+      ) {
+        listener(progress as Parameters<typeof listener>[0]);
+      }
+    };
+    ipcRenderer.on("ocr:pdfProgress", callback);
+    return () => {
+      ipcRenderer.removeListener("ocr:pdfProgress", callback);
+    };
+  },
   getAiStatus: () => ipcRenderer.invoke("ai:getStatus"),
   getAiSettings: () => ipcRenderer.invoke("ai:getSettings"),
   saveAiSettings: (settings) => ipcRenderer.invoke("ai:saveSettings", settings),

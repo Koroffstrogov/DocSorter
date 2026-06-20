@@ -421,6 +421,7 @@ interface DuplicateAnalysisState {
 type TextExtractionStatus = "idle" | "extracting" | "text-found" | "empty" | "error";
 
 type PdfPageTextQualityStatus = "text-ok" | "text-empty" | "text-weak" | "unknown";
+type PdfTextExtractionSource = "pdf-native" | "pdf-ocr" | "pdf-hybrid";
 type PdfTextQualityDecision =
   | "native-ok"
   | "ocr-recommended"
@@ -448,7 +449,7 @@ interface PdfTextQuality {
 
 interface PdfTextExtraction {
   status: "text-found" | "empty";
-  source?: "pdf-native" | "tesseract-cli";
+  source?: PdfTextExtractionSource | "tesseract-cli";
   pageCount?: number;
   pagesAnalyzed?: number;
   language?: string;
@@ -461,8 +462,29 @@ interface PdfTextExtraction {
   durationMs?: number;
   extractedAt: string;
   pdfTextQuality?: PdfTextQuality;
+  finalTextSource?: PdfTextExtractionSource;
+  pdfOcr?: PdfOcrSummary;
   fromCache?: boolean;
   warnings?: string[];
+}
+
+interface PdfOcrPageSummary {
+  page: number;
+  status: "success" | "failed" | "skipped";
+  usefulTextChars: number;
+  warning?: string;
+}
+
+interface PdfOcrSummary {
+  requestedPages: number[];
+  succeededPages: number[];
+  failedPages: number[];
+  durationMs: number;
+  ocrCharacterCount: number;
+  renderer: "pdftoppm";
+  dpi: number;
+  pages: PdfOcrPageSummary[];
+  warnings: string[];
 }
 
 interface PdfTextExtractionError {
@@ -483,6 +505,9 @@ interface PdfTextExtractionError {
     | "OCR_INPUT_TOO_LARGE"
     | "OCR_TIMEOUT"
     | "OCR_PROCESS_FAILED"
+    | "OCR_PDF_RENDERER_NOT_FOUND"
+    | "OCR_PDF_RENDER_FAILED"
+    | "OCR_PDF_NO_PAGES"
     | "OCR_TEXT_EMPTY"
     | "OCR_CACHE_READ_FAILED"
     | "OCR_CACHE_WRITE_FAILED"
@@ -494,6 +519,7 @@ interface TextExtractionDocumentState {
   status: TextExtractionStatus;
   result: PdfTextExtraction | null;
   error: PdfTextExtractionError | null;
+  progressMessage?: string;
 }
 
 interface TextExtractionState {
@@ -514,6 +540,9 @@ interface RendererOcrError {
     | "OCR_INPUT_TOO_LARGE"
     | "OCR_TIMEOUT"
     | "OCR_PROCESS_FAILED"
+    | "OCR_PDF_RENDERER_NOT_FOUND"
+    | "OCR_PDF_RENDER_FAILED"
+    | "OCR_PDF_NO_PAGES"
     | "OCR_TEXT_EMPTY"
     | "OCR_CACHE_READ_FAILED"
     | "OCR_CACHE_WRITE_FAILED"
@@ -558,10 +587,29 @@ interface OcrSettingsDraft {
 interface OcrState {
   panelStatus: OcrPanelStatus;
   status: RendererOcrStatus | null;
+  pdfStatus: RendererPdfOcrStatus | null;
   draft: OcrSettingsDraft;
   message: string;
   error: RendererOcrError | null;
   dirty: boolean;
+}
+
+type RendererPdfOcrStatusKind = "ready" | "not-configured" | "error";
+type RendererPdfOcrToolStatusKind = "ready" | "missing" | "error";
+
+interface RendererPdfOcrToolStatus {
+  status: RendererPdfOcrToolStatusKind;
+  path: string;
+  message: string;
+  version?: string;
+}
+
+interface RendererPdfOcrStatus {
+  status: RendererPdfOcrStatusKind;
+  message: string;
+  tesseract: RendererPdfOcrToolStatus;
+  renderer: RendererPdfOcrToolStatus;
+  error: RendererOcrError | null;
 }
 
 interface RendererAiError {
@@ -584,6 +632,8 @@ interface RendererAiError {
   message: string;
   field?: string;
   pdfTextQuality?: PdfTextQuality;
+  finalTextSource?: PdfTextExtractionSource;
+  pdfOcr?: PdfOcrSummary;
   validationErrors?: Array<{
     field?: string;
     rawValue?: string;
@@ -654,7 +704,7 @@ interface RendererAiDocumentSuggestion {
   extension: string;
   model: string;
   suggestedAt: string;
-  textSource: "pdf-native" | "tesseract-cli";
+  textSource: "pdf-native" | "pdf-ocr" | "pdf-hybrid" | "tesseract-cli";
   modelStatus: RendererAiModelStatus;
   profile: {
     id: AiModelProfileId;
@@ -666,6 +716,8 @@ interface RendererAiDocumentSuggestion {
   folderLearningPipeline?: FolderLearningPipelineStep[];
   diagnosticPipeline?: AiDiagnosticPipelineStep[];
   pdfTextQuality?: PdfTextQuality;
+  finalTextSource?: PdfTextExtractionSource;
+  pdfOcr?: PdfOcrSummary;
   thinking: string | null;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;
@@ -673,7 +725,7 @@ interface RendererAiDocumentSuggestion {
 }
 
 interface RendererAiDocumentTextContext {
-  source: "pdf-native" | "tesseract-cli";
+  source: "pdf-native" | "pdf-ocr" | "pdf-hybrid" | "tesseract-cli";
   excerpt: string;
 }
 
