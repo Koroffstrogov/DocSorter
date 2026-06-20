@@ -3,3 +3,12 @@ dist/
 coverage/
 *.log
 npm-debug.log*
+/resources/poppler/*
+!/resources/poppler/.gitkeep
+!/resources/poppler/README.md
+resources/poppler/.gitkeep
+resources/poppler/README.md
+
+/resources/tesseract/*
+!/resources/tesseract/.gitkeep
+!/resources/tesseract/README.md
