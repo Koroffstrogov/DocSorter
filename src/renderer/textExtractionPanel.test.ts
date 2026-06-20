@@ -91,7 +91,7 @@ describe("textExtractionPanel", () => {
   });
 
   it("shows manual PDF OCR only for recommended PDFs and disables it when tools are absent", async () => {
-    const { api, pdfOcrButton } = await createPanelHarness(createReadyState({
+    const { api, pdfOcrButton, details } = await createPanelHarness(createReadyState({
       pdfTextQuality: {
         pageCount: 1,
         nativeTextChars: 0,
@@ -116,7 +116,8 @@ describe("textExtractionPanel", () => {
 
     expect(pdfOcrButton.hidden).toBe(false);
     expect(pdfOcrButton.disabled).toBe(true);
-    expect(pdfOcrButton.title).toBe("OCR non configuré");
+    expect(pdfOcrButton.title).toBe("statut OCR PDF non chargé");
+    expect(details.getText()).toContain("OCR PDF indisponible : statut OCR PDF non chargé");
   });
 
   it("renders PDF OCR quality label when OCR text is available", async () => {

@@ -101,7 +101,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         elements.details.replaceChildren(
           createTextExtractionMeta(extractionState.result),
           ...createTextExtractionLimitNoticeNodes(extractionState.result),
-          ...createTextExtractionWarningNodes(extractionState.result),
+          ...createTextExtractionWarningNodes(extractionState.result, panelState.pdfOcrStatus),
           activeDocument.extension === ".pdf"
             ? "Aucun texte exploitable détecté — OCR nécessaire plus tard."
             : "Aucun texte exploitable détecté."
@@ -112,7 +112,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
       elements.details.replaceChildren(
         createTextExtractionMeta(extractionState.result),
         ...createTextExtractionLimitNoticeNodes(extractionState.result),
-        ...createTextExtractionWarningNodes(extractionState.result),
+        ...createTextExtractionWarningNodes(extractionState.result, panelState.pdfOcrStatus),
         createTextExtractionEditor(activeDocument, extractionState.result, options)
       );
     }
@@ -275,10 +275,14 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     return [notice];
   }
 
-  function createTextExtractionWarningNodes(extraction: PdfTextExtraction | null): HTMLElement[] {
+  function createTextExtractionWarningNodes(
+    extraction: PdfTextExtraction | null,
+    pdfOcrStatus: RendererPdfOcrStatus | null
+  ): HTMLElement[] {
     const warnings = [
       ...(extraction?.warnings ?? []),
-      ...createPdfTextQualityWarnings(extraction)
+      ...createPdfTextQualityWarnings(extraction),
+      ...createPdfOcrAvailabilityWarnings(extraction, pdfOcrStatus)
     ];
     if (warnings.length === 0) {
       return [];
@@ -348,6 +352,22 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     return [];
   }
 
+  function createPdfOcrAvailabilityWarnings(
+    extraction: PdfTextExtraction | null,
+    status: RendererPdfOcrStatus | null
+  ): string[] {
+    const decision = extraction?.pdfTextQuality?.decision;
+    if (decision !== "ocr-recommended" && decision !== "hybrid-ocr-recommended") {
+      return [];
+    }
+
+    if (status?.status === "ready") {
+      return [];
+    }
+
+    return [`OCR PDF indisponible : ${pdfOcrDisabledReason(status)}`];
+  }
+
   function shouldShowPdfOcrButton(
     documentItem: DocumentItem,
     extractionState: TextExtractionDocumentState
@@ -362,7 +382,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
 
   function pdfOcrDisabledReason(status: RendererPdfOcrStatus | null): string {
     if (!status) {
-      return "OCR non configuré";
+      return "statut OCR PDF non chargé";
     }
 
     if (status.tesseract.status !== "ready") {
