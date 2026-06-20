@@ -11,6 +11,7 @@ const REVIEWED_IPC_CHANNELS = [
   "target:createFolder",
   "folderLearning:listNames",
   "documents:refreshSource",
+  "documents:discard",
   "preview:getData",
   "naming:createInitialDraft",
   "naming:buildProposal",

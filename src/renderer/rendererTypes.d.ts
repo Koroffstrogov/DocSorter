@@ -30,6 +30,7 @@ type TargetFolderStatus =
   | "error";
 type ClassificationPlanCheckStatus = "ok" | "blocking" | "not-run";
 type DuplicateAnalysisStatus = "idle" | "analyzing" | "ready" | "error";
+type DocumentDiscardMode = "trash" | "permanent";
 type OcrPanelStatus = "loading" | "ready" | "saving" | "testing" | "error";
 type AiPanelStatus =
   | "loading"
@@ -407,6 +408,22 @@ interface ExactDuplicateAnalysis {
   matches: ExactDuplicateMatch[];
   fileErrors: ExactDuplicateFileError[];
   ignoredHistoryCount: number;
+}
+
+interface DocumentDiscardFailure {
+  filePath: string;
+  name: string;
+  code: string;
+  message: string;
+}
+
+interface DocumentDiscardSummary {
+  mode: DocumentDiscardMode;
+  requestedCount: number;
+  discardedFilePaths: string[];
+  discardedCount: number;
+  failures: DocumentDiscardFailure[];
+  message: string;
 }
 
 interface DuplicateAnalysisState {

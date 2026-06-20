@@ -16,6 +16,10 @@ import type { DocumentDiscoveryResult, Result } from "../documents/documentDisco
 import type { ExactDuplicateAnalysisResult } from "../duplicates/exactDuplicates";
 import type { PdfTextExtractionResult } from "../extraction/pdfTextExtraction";
 import type { ExecuteClassificationResult, UndoClassificationResult } from "../file-ops/classifyFile";
+import type {
+  DocumentDiscardMode,
+  DocumentDiscardResult
+} from "../file-ops/discardDocuments";
 import type { FolderLearningTargetFolderNamesResult } from "../folder-learning/targetFolderNameListing";
 import type { ActionJournalReadResult } from "../history/actionJournal";
 import type { UndoableClassificationAction } from "../history/historyTypes";
@@ -65,6 +69,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "createTargetFolder",
   "listTargetFolderNames",
   "refreshSourceDocuments",
+  "discardDocuments",
   "getPreviewData",
   "createInitialNamingDraft",
   "buildNamingProposal",
@@ -124,6 +129,15 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.folderLearningListNames) as Promise<FolderLearningTargetFolderNamesResult>,
     refreshSourceDocuments: (): Promise<Result<DocumentDiscoveryResult>> =>
       ipc.invoke(IPC_CHANNELS.documentsRefreshSource) as Promise<Result<DocumentDiscoveryResult>>,
+    discardDocuments: (
+      documentPaths: string[],
+      mode: DocumentDiscardMode,
+      confirmed: boolean
+    ): Promise<DocumentDiscardResult> =>
+      ipc.invoke(
+        IPC_CHANNELS.documentsDiscard,
+        { documentPaths, mode, confirmed }
+      ) as Promise<DocumentDiscardResult>,
     getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>
       ipc.invoke(IPC_CHANNELS.previewGetData, documentPath) as Promise<Result<PreviewData>>,
     createInitialNamingDraft: (originalName: string): Promise<NamingDraft> =>

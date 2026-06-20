@@ -58,6 +58,16 @@ describe("sensitive IPC handler contract", () => {
     });
   });
 
+  it("documents the bounded document discard channel", () => {
+    expect(contractFor(IPC_CHANNELS.documentsDiscard)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesMainTarget: false,
+      usesUserDataPath: false,
+      serviceName: "discardDocuments"
+    });
+  });
+
   it("documents the bounded OCR PDF channels", () => {
     expect(contractFor(IPC_CHANNELS.ocrGetPdfStatus)).toMatchObject({
       acceptsRendererPath: false,
@@ -99,6 +109,32 @@ describe("registerIpcHandlers", () => {
       queuedDocumentPaths: harness.state.queuedDocumentPaths,
       userDataPath: USER_DATA_PATH
     });
+  });
+
+  it("discards documents only through main-state queue and updates queue state", async () => {
+    const harness = createHarness();
+
+    const result = await harness.invoke(IPC_CHANNELS.documentsDiscard, {
+      documentPaths: [DOCUMENT_PATH],
+      mode: "trash",
+      confirmed: true
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        discardedFilePaths: [path.resolve(DOCUMENT_PATH)]
+      }
+    });
+    expect(harness.services.discardDocuments).toHaveBeenCalledWith({
+      documentPaths: [DOCUMENT_PATH],
+      mode: "trash",
+      confirmed: true,
+      queuedDocumentPaths: expect.any(Set),
+      trashItem: undefined
+    });
+    expect(harness.state.queuedDocumentPaths.has(path.resolve(DOCUMENT_PATH))).toBe(false);
+    expect(harness.state.queuedDocuments).toEqual([]);
   });
 
   it("reads PDF OCR readiness only from userData", async () => {
@@ -409,6 +445,17 @@ function createServices(): IpcHandlerServices {
         documents: [],
         skippedEntries: [],
         scannedAt: "2026-06-18T10:00:00.000Z"
+      }
+    })),
+    discardDocuments: vi.fn(async () => ({
+      ok: true,
+      value: {
+        mode: "trash",
+        requestedCount: 1,
+        discardedFilePaths: [path.resolve(DOCUMENT_PATH)],
+        discardedCount: 1,
+        failures: [],
+        message: "1 document mis à la corbeille."
       }
     })),
     createInitialNamingDraft: vi.fn(() => ({

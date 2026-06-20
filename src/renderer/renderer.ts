@@ -42,6 +42,10 @@ const selectTargetButton = document.querySelector<HTMLButtonElement>("#select-ta
 const shortcutHelpToggleButton = document.querySelector<HTMLButtonElement>("#shortcut-help-toggle");
 const shortcutHelpPanel = document.querySelector<HTMLElement>("#shortcut-help");
 const analyzeDuplicatesButton = document.querySelector<HTMLButtonElement>("#analyze-duplicates");
+const trashActiveDocumentButton = document.querySelector<HTMLButtonElement>("#trash-active-document");
+const deleteActiveDocumentButton = document.querySelector<HTMLButtonElement>("#delete-active-document");
+const trashDuplicateDocumentsButton = document.querySelector<HTMLButtonElement>("#trash-duplicate-documents");
+const deleteDuplicateDocumentsButton = document.querySelector<HTMLButtonElement>("#delete-duplicate-documents");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
 const prepareClassificationButton = document.querySelector<HTMLButtonElement>("#prepare-classification");
@@ -131,7 +135,21 @@ const queuePanel = DocSorterQueuePanel.createQueuePanel<DocumentItem>({
   onSortDirectionChange: (sortDirection) => {
     state.queueView.sortDirection = sortDirection;
   },
+  onTrashActiveDocument: () => {
+    void discardActiveDocument("trash");
+  },
+  onDeleteActiveDocument: () => {
+    void discardActiveDocument("permanent");
+  },
+  onTrashDuplicateDocuments: () => {
+    void discardDuplicateDocuments("trash");
+  },
+  onDeleteDuplicateDocuments: () => {
+    void discardDuplicateDocuments("permanent");
+  },
   hasVisibleDuplicate: documentHasVisibleDuplicate,
+  getDuplicateDiscardCount: () => getDuplicateDiscardCandidates().length,
+  isActionsDisabled: isClassificationBusy,
   getStatusLabel: documentQueueStatusLabel
 });
 

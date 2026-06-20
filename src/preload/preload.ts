@@ -11,6 +11,8 @@ const api: DocSorterApi = {
   createTargetFolder: (targetFolder) => ipcRenderer.invoke("target:createFolder", targetFolder),
   listTargetFolderNames: () => ipcRenderer.invoke("folderLearning:listNames"),
   refreshSourceDocuments: () => ipcRenderer.invoke("documents:refreshSource"),
+  discardDocuments: (documentPaths, mode, confirmed) =>
+    ipcRenderer.invoke("documents:discard", { documentPaths, mode, confirmed }),
   getPreviewData: (documentPath) => ipcRenderer.invoke("preview:getData", documentPath),
   createInitialNamingDraft: (originalName) =>
     ipcRenderer.invoke("naming:createInitialDraft", originalName),

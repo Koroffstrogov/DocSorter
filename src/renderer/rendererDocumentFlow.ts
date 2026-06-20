@@ -234,6 +234,23 @@ function setControlsDisabled(disabled: boolean): void {
     analyzeDuplicatesButton.disabled =
       shouldDisable || !state.sourcePath || state.documents.length === 0 || state.duplicates.status === "analyzing";
   }
+
+  if (trashActiveDocumentButton) {
+    trashActiveDocumentButton.disabled = shouldDisable || !getActiveDocument();
+  }
+
+  if (deleteActiveDocumentButton) {
+    deleteActiveDocumentButton.disabled = shouldDisable || !getActiveDocument();
+  }
+
+  const duplicateDiscardCount = getDuplicateDiscardCandidates().length;
+  if (trashDuplicateDocumentsButton) {
+    trashDuplicateDocumentsButton.disabled = shouldDisable || duplicateDiscardCount === 0;
+  }
+
+  if (deleteDuplicateDocumentsButton) {
+    deleteDuplicateDocumentsButton.disabled = shouldDisable || duplicateDiscardCount === 0;
+  }
 }
 
 function refreshQueueMessage(activeDocumentLost: boolean, successMessage: string): string {

@@ -441,6 +441,52 @@ describe("rendererAiFlow V2 application helpers", () => {
     ]);
   });
 
+  it("applies the currently selected AI folder instead of the initial suggestion folder", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const buildSelection = context.buildAiSelectionFromSuggestion as (
+      suggestion: Record<string, unknown>,
+      extension: string,
+      targetRootPath: string | null
+    ) => TestAiSelection;
+    const applySuggestion = context.applyAiSuggestionToEmptyFields as () => void;
+    const suggestion = createAiSuggestion();
+
+    state.ai = {
+      ...state.ai,
+      suggestion,
+      suggestionDocumentPath: "Z:\\source\\document.pdf",
+      selection: {
+        ...buildSelection(suggestion, ".pdf", "Z:\\cible"),
+        selectedFolder: "Vehicules/Captur/Entretien"
+      }
+    };
+    state.naming = {
+      draft: {
+        documentDate: "2024-03-15",
+        subject: "captur",
+        documentType: "facture",
+        keywords: "renault vidange"
+      },
+      origins: createAutoOrigins("manual"),
+      isLoading: false,
+      overrideFilename: null,
+      overrideFilenameOrigin: null
+    };
+
+    applySuggestion();
+
+    expect(context.targetFolderUpdates).toContainEqual({
+      folder: "Vehicules/Captur/Entretien",
+      origin: "ai-v2"
+    });
+    expect(context.targetFolderUpdates).not.toContainEqual({
+      folder: "Vehicules/Captur",
+      origin: "ai-v2"
+    });
+    expect(state.targetFolder.selectedFolder).toBe("Vehicules/Captur/Entretien");
+  });
+
   it("resets modified AI choices to the initial suggestion values", async () => {
     const context = await loadAiFlow();
     const state = context.state as TestState;
@@ -789,6 +835,18 @@ async function loadAiFlow(): Promise<Record<string, unknown>> {
     },
     activeDocumentPath: "Z:\\source\\document.pdf",
     ai: createTestAiState(),
+    naming: {
+      draft: {
+        documentDate: "",
+        subject: "",
+        documentType: "",
+        keywords: ""
+      },
+      origins: createAutoOrigins("fallback"),
+      isLoading: false,
+      overrideFilename: null,
+      overrideFilenameOrigin: null
+    },
     folderLearning: {
       pipeline: []
     },
@@ -868,6 +926,13 @@ interface TestState {
     origin: string;
   };
   ai: Record<string, unknown>;
+  naming: {
+    draft: Record<string, string>;
+    origins: Record<string, string>;
+    isLoading: boolean;
+    overrideFilename: string | null;
+    overrideFilenameOrigin: string | null;
+  };
   folderLearning: {
     pipeline: FolderLearningPipelineStep[];
   };

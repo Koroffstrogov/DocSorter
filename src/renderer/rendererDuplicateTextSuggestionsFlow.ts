@@ -63,6 +63,32 @@ function ignoreActiveDuplicateForSession(): void {
   render();
 }
 
+async function discardActiveDocument(mode: DocumentDiscardMode): Promise<void> {
+  const activeDocument = getActiveDocument();
+  if (!activeDocument || activeDocument.status === "missing" || isClassificationBusy()) {
+    return;
+  }
+
+  if (!confirmDocumentDiscard([activeDocument.name], mode, "ce document")) {
+    return;
+  }
+
+  await discardDocuments([activeDocument.filePath], mode);
+}
+
+async function discardDuplicateDocuments(mode: DocumentDiscardMode): Promise<void> {
+  const candidates = getDuplicateDiscardCandidates();
+  if (candidates.length === 0 || isClassificationBusy()) {
+    return;
+  }
+
+  if (!confirmDocumentDiscard(candidates.map((candidate) => candidate.name), mode, "les doublons proposés")) {
+    return;
+  }
+
+  await discardDocuments(candidates.map((candidate) => candidate.filePath), mode);
+}
+
 function renderDuplicatePanel(): void {
   duplicatePanel.render();
 }
@@ -125,6 +151,100 @@ function countDuplicateSourceDocuments(matches: ExactDuplicateMatch[]): number {
   }
 
   return filePaths.size;
+}
+
+function getDuplicateDiscardCandidates(): DuplicateFileReference[] {
+  if (state.duplicates.status !== "ready") {
+    return [];
+  }
+
+  const availableDocuments = new Map(
+    state.documents
+      .filter((documentItem) => documentItem.status !== "missing")
+      .map((documentItem) => [documentItem.filePath, documentItem])
+  );
+  const candidates = new Map<string, DuplicateFileReference>();
+
+  for (const match of state.duplicates.matches) {
+    if (match.type === "source-queue") {
+      const availableFiles = match.files
+        .filter((file) => availableDocuments.has(file.filePath))
+        .sort((left, right) => left.filePath.localeCompare(right.filePath));
+      for (const file of availableFiles.slice(1)) {
+        candidates.set(file.filePath, file);
+      }
+      continue;
+    }
+
+    if (availableDocuments.has(match.sourceFile.filePath)) {
+      candidates.set(match.sourceFile.filePath, match.sourceFile);
+    }
+  }
+
+  return Array.from(candidates.values()).sort((left, right) =>
+    left.name.localeCompare(right.name)
+  );
+}
+
+async function discardDocuments(documentPaths: string[], mode: DocumentDiscardMode): Promise<void> {
+  const result = await window.docSorter.discardDocuments(documentPaths, mode, true);
+  if (!result.ok) {
+    state.queueMessage = result.error.message;
+    render();
+    return;
+  }
+
+  applyDiscardSummary(result.value as DocumentDiscardSummary);
+}
+
+function applyDiscardSummary(summary: DocumentDiscardSummary): void {
+  const discarded = new Set(summary.discardedFilePaths);
+  if (discarded.size > 0) {
+    state.documents = state.documents.filter((documentItem) => !discarded.has(documentItem.filePath));
+    state.textExtraction = {
+      byDocumentPath: Object.fromEntries(
+        Object.entries(state.textExtraction.byDocumentPath).filter(([filePath]) => !discarded.has(filePath))
+      )
+    };
+
+    if (state.activeDocumentPath && discarded.has(state.activeDocumentPath)) {
+      clearPreviewResources();
+      state.activeDocumentPath = null;
+      state.preview = createIdlePreviewState();
+      resetNamingState();
+      resetAiSuggestionState();
+      state.folderLearning = createIdleFolderLearningState();
+    }
+  }
+
+  resetClassificationState();
+  resetDuplicateAnalysisState();
+  state.queueMessage = summary.message;
+  render();
+}
+
+function confirmDocumentDiscard(
+  names: string[],
+  mode: DocumentDiscardMode,
+  subject: string
+): boolean {
+  const preview = names.slice(0, 6).join("\n");
+  const remaining = names.length > 6 ? `\n... et ${names.length - 6} autre(s)` : "";
+  const action = mode === "trash" ? "mettre à la corbeille" : "supprimer définitivement";
+  const warning = mode === "trash"
+    ? "Les fichiers pourront être récupérés depuis la corbeille si le système le permet."
+    : "Cette action contourne la corbeille et ne pourra pas être annulée par DocSorter.";
+
+  const accepted = window.confirm(
+    `Voulez-vous ${action} ${subject} ?\n\n${preview}${remaining}\n\n${warning}`
+  );
+  if (!accepted || mode === "trash") {
+    return accepted;
+  }
+
+  return window.confirm(
+    `Confirmation requise : suppression définitive de ${names.length} document(s).\n\nAucune récupération automatique ne sera possible. Continuer ?`
+  );
 }
 
 async function extractTextFromActivePdf(): Promise<void> {

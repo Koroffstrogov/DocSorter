@@ -55,6 +55,11 @@ import {
   type UndoClassificationResult
 } from "../file-ops/classifyFile";
 import {
+  discardDocuments as discardDocumentsService,
+  type DocumentDiscardMode,
+  type DocumentDiscardResult
+} from "../file-ops/discardDocuments";
+import {
   listTargetFolderNames as listTargetFolderNamesService,
   type FolderLearningTargetFolderNamesResult
 } from "../folder-learning/targetFolderNameListing";
@@ -146,6 +151,7 @@ export interface DialogLike {
 
 export interface ShellLike {
   openPath: (path: string) => Promise<string>;
+  trashItem?: (path: string) => Promise<void>;
 }
 
 export interface MainProcessAppState {
@@ -162,6 +168,13 @@ export interface IpcHandlerServices {
   discoverDocuments: (
     sourcePath: string | undefined
   ) => Promise<Result<DocumentDiscoveryResult>>;
+  discardDocuments: (options: {
+    documentPaths: string[];
+    mode: DocumentDiscardMode;
+    confirmed: boolean;
+    queuedDocumentPaths: Iterable<string>;
+    trashItem?: (filePath: string) => Promise<void>;
+  }) => Promise<DocumentDiscardResult>;
   createInitialNamingDraft: (originalName: string) => NamingDraft;
   isNamingDraft: (value: unknown) => value is NamingDraft;
   buildProposedFilename: (draft: NamingDraft, originalExtension: string) => ProposedFilename;
@@ -359,6 +372,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     usesMainTarget: false,
     usesUserDataPath: false,
     serviceName: "discoverDocuments"
+  },
+  {
+    channel: IPC_CHANNELS.documentsDiscard,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: false,
+    usesUserDataPath: false,
+    serviceName: "discardDocuments"
   },
   {
     channel: IPC_CHANNELS.previewGetData,
@@ -572,6 +593,7 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
 
 export const defaultIpcHandlerServices: IpcHandlerServices = {
   discoverDocuments: discoverDocumentsService,
+  discardDocuments: discardDocumentsService,
   createInitialNamingDraft: createInitialNamingDraftService,
   isNamingDraft: isNamingDraftService,
   buildProposedFilename: buildProposedFilenameService,
@@ -636,6 +658,22 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   options.ipcMain.handle(IPC_CHANNELS.documentsRefreshSource, () =>
     refreshSelectedSourceDocuments(state, services)
   );
+  options.ipcMain.handle(IPC_CHANNELS.documentsDiscard, async (_event, payload: unknown) => {
+    const request = readDocumentDiscardRequest(payload);
+    const result = await services.discardDocuments({
+      documentPaths: request.documentPaths,
+      mode: request.mode,
+      confirmed: request.confirmed,
+      queuedDocumentPaths: state.queuedDocumentPaths,
+      trashItem: options.shell?.trashItem
+    });
+
+    if (result.ok) {
+      removeDiscardedDocumentsFromMainState(state, result.value.discardedFilePaths);
+    }
+
+    return result;
+  });
   options.ipcMain.handle(IPC_CHANNELS.targetListFolders, () =>
     services.listTargetSubdirectories(state.selectedTargetPath)
   );
@@ -1090,6 +1128,50 @@ function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null
     source: candidate.source,
     excerpt: candidate.excerpt
   };
+}
+
+function readDocumentDiscardRequest(value: unknown): {
+  documentPaths: string[];
+  mode: DocumentDiscardMode;
+  confirmed: boolean;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      documentPaths: [],
+      mode: "trash",
+      confirmed: false
+    };
+  }
+
+  const candidate = value as {
+    documentPaths?: unknown;
+    mode?: unknown;
+    confirmed?: unknown;
+  };
+  return {
+    documentPaths: Array.isArray(candidate.documentPaths)
+      ? candidate.documentPaths.filter((entry): entry is string => typeof entry === "string")
+      : [],
+    mode: candidate.mode === "permanent" ? "permanent" : "trash",
+    confirmed: candidate.confirmed === true
+  };
+}
+
+function removeDiscardedDocumentsFromMainState(
+  state: MainProcessAppState,
+  discardedFilePaths: string[]
+): void {
+  const discarded = new Set(discardedFilePaths.map((filePath) => path.resolve(filePath)));
+  if (discarded.size === 0) {
+    return;
+  }
+
+  state.queuedDocuments = state.queuedDocuments.filter(
+    (documentItem) => !discarded.has(path.resolve(documentItem.filePath))
+  );
+  state.queuedDocumentPaths = new Set(
+    Array.from(state.queuedDocumentPaths).filter((filePath) => !discarded.has(path.resolve(filePath)))
+  );
 }
 
 function readIpcSender(event: unknown): { send: (channel: IpcChannel, value: unknown) => void } | null {

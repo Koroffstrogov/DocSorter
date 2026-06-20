@@ -22,8 +22,14 @@ interface QueuePanelOptions<TDocument extends QueuePanelDocument> {
   onFilterChange: (filter: QueueViewFilter) => void;
   onSortChange: (sortKey: QueueViewSortKey) => void;
   onSortDirectionChange: (sortDirection: QueueViewSortDirection) => void;
+  onTrashActiveDocument: () => void;
+  onDeleteActiveDocument: () => void;
+  onTrashDuplicateDocuments: () => void;
+  onDeleteDuplicateDocuments: () => void;
   hasVisibleDuplicate: (filePath: string) => boolean;
   getStatusLabel: (documentItem: TDocument) => string;
+  getDuplicateDiscardCount: () => number;
+  isActionsDisabled: () => boolean;
 }
 
 interface QueuePanelApi<TDocument extends QueuePanelDocument> {
@@ -54,6 +60,10 @@ interface QueuePanelElements {
   sortDirectionButton: HTMLButtonElement | null;
   previousButton: HTMLButtonElement | null;
   nextButton: HTMLButtonElement | null;
+  trashActiveButton: HTMLButtonElement | null;
+  deleteActiveButton: HTMLButtonElement | null;
+  trashDuplicatesButton: HTMLButtonElement | null;
+  deleteDuplicatesButton: HTMLButtonElement | null;
 }
 
 interface Window {
@@ -110,6 +120,22 @@ var DocSorterQueuePanel: QueuePanelFactoryApi;
 
     elements.nextButton?.addEventListener("click", () => {
       navigate("next");
+    });
+
+    elements.trashActiveButton?.addEventListener("click", () => {
+      options.onTrashActiveDocument();
+    });
+
+    elements.deleteActiveButton?.addEventListener("click", () => {
+      options.onDeleteActiveDocument();
+    });
+
+    elements.trashDuplicatesButton?.addEventListener("click", () => {
+      options.onTrashDuplicateDocuments();
+    });
+
+    elements.deleteDuplicatesButton?.addEventListener("click", () => {
+      options.onDeleteDuplicateDocuments();
     });
 
     function render(): QueueViewResult<TDocument> {
@@ -270,6 +296,12 @@ var DocSorterQueuePanel: QueuePanelFactoryApi;
       viewState: QueuePanelState<TDocument>
     ): void {
       const toolsDisabled = viewState.documents.length === 0 || viewState.isLoading;
+      const actionsDisabled = toolsDisabled || options.isActionsDisabled();
+      const activeDocument = viewState.documents.find(
+        (documentItem) => documentItem.filePath === viewState.activeDocumentPath
+      );
+      const canDiscardActive = Boolean(activeDocument && activeDocument.status !== "missing");
+      const duplicateDiscardCount = options.getDuplicateDiscardCount();
 
       if (elements.searchInput) {
         elements.searchInput.disabled = toolsDisabled;
@@ -315,6 +347,28 @@ var DocSorterQueuePanel: QueuePanelFactoryApi;
       }
       if (elements.nextButton) {
         elements.nextButton.disabled = toolsDisabled || !nextPath;
+      }
+
+      if (elements.trashActiveButton) {
+        elements.trashActiveButton.disabled = actionsDisabled || !canDiscardActive;
+      }
+
+      if (elements.deleteActiveButton) {
+        elements.deleteActiveButton.disabled = actionsDisabled || !canDiscardActive;
+      }
+
+      if (elements.trashDuplicatesButton) {
+        elements.trashDuplicatesButton.disabled = actionsDisabled || duplicateDiscardCount === 0;
+        elements.trashDuplicatesButton.textContent = duplicateDiscardCount > 0
+          ? `Corbeille doublons (${duplicateDiscardCount})`
+          : "Corbeille doublons";
+      }
+
+      if (elements.deleteDuplicatesButton) {
+        elements.deleteDuplicatesButton.disabled = actionsDisabled || duplicateDiscardCount === 0;
+        elements.deleteDuplicatesButton.textContent = duplicateDiscardCount > 0
+          ? `Supprimer doublons (${duplicateDiscardCount})`
+          : "Supprimer doublons";
       }
     }
 
@@ -370,7 +424,11 @@ var DocSorterQueuePanel: QueuePanelFactoryApi;
       sortSelect: root.querySelector<HTMLSelectElement>("#queue-sort"),
       sortDirectionButton: root.querySelector<HTMLButtonElement>("#queue-sort-direction"),
       previousButton: root.querySelector<HTMLButtonElement>("#previous-document"),
-      nextButton: root.querySelector<HTMLButtonElement>("#next-document")
+      nextButton: root.querySelector<HTMLButtonElement>("#next-document"),
+      trashActiveButton: root.querySelector<HTMLButtonElement>("#trash-active-document"),
+      deleteActiveButton: root.querySelector<HTMLButtonElement>("#delete-active-document"),
+      trashDuplicatesButton: root.querySelector<HTMLButtonElement>("#trash-duplicate-documents"),
+      deleteDuplicatesButton: root.querySelector<HTMLButtonElement>("#delete-duplicate-documents")
     };
   }
 

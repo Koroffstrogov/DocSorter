@@ -474,6 +474,31 @@ h2 {
   white-space: normal;
 }
 
+.queue-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.queue-header-actions button {
+  max-width: none;
+  padding-inline: 8px;
+}
+
+#delete-active-document,
+#delete-duplicate-documents {
+  border-color: #c2410c;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
+#delete-active-document:not(:disabled):hover,
+#delete-duplicate-documents:not(:disabled):hover {
+  color: #ffffff;
+  background: #c2410c;
+}
+
 .document-list {
   display: grid;
   grid-row: 4;

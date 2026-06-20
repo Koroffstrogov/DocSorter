@@ -1109,7 +1109,7 @@ function applyAiSuggestionToEmptyFields(): void {
     return;
   }
 
-  const targetFolder = state.ai.suggestion.suggestion.targetFolder?.trim() ?? "";
+  const targetFolder = getCurrentAiTargetFolder();
   const result = buildNamingDraftFromAiSuggestion(
     state.naming.draft,
     state.naming.origins,
@@ -1164,7 +1164,7 @@ function canApplyAiSuggestionToEmptyFields(): boolean {
       state.ai.suggestion.suggestion
     ) ||
       canApplyAiSuggestionTargetFolder(
-        state.ai.suggestion.suggestion.targetFolder ?? "",
+        getCurrentAiTargetFolder(),
         state.ai.suggestion.suggestion.confidence
       )
   );
@@ -1627,6 +1627,23 @@ function canApplyAiSuggestionTargetFolder(targetFolder: string, confidence: numb
   }
 
   return confidence >= AI_PRIORITY_CONFIDENCE;
+}
+
+function getCurrentAiTargetFolder(): string {
+  if (state.ai.selection) {
+    return state.ai.selection.selectedFolder.trim();
+  }
+
+  if (!state.ai.suggestion) {
+    return "";
+  }
+
+  const response = readAiMultiCandidateResponse(state.ai.suggestion);
+  return (
+    state.ai.suggestion.suggestion.targetFolder?.trim() ||
+    selectBestAiCandidate(response?.folderCandidates ?? [])?.value.trim() ||
+    ""
+  );
 }
 
 function normalizeFolderForComparison(value: string): string {

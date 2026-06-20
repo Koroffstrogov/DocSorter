@@ -66,7 +66,13 @@
             <h2>File d'attente</h2>
             <small id="queue-count">0 document</small>
           </div>
-          <button id="analyze-duplicates" type="button" disabled>Analyser les doublons exacts</button>
+          <div class="queue-header-actions" aria-label="Actions sur la file">
+            <button id="analyze-duplicates" type="button" disabled>Analyser les doublons exacts</button>
+            <button id="trash-active-document" type="button" disabled>Corbeille</button>
+            <button id="delete-active-document" type="button" disabled>Supprimer</button>
+            <button id="trash-duplicate-documents" type="button" disabled>Corbeille doublons</button>
+            <button id="delete-duplicate-documents" type="button" disabled>Supprimer doublons</button>
+          </div>
         </div>
         <div class="queue-tools" aria-label="Recherche et tri de la file">
           <div class="queue-search">

@@ -55,6 +55,7 @@ describe("preload API surface", () => {
     await api.createTargetFolder("Vehicules/Renault-Captur");
     await api.listTargetFolderNames();
     await api.refreshSourceDocuments();
+    await api.discardDocuments(["C:\\source\\document.pdf"], "trash", true);
     await api.getPreviewData("C:\\source\\document.pdf");
     await api.createInitialNamingDraft("document.pdf");
     await api.buildNamingProposal(
@@ -133,6 +134,7 @@ describe("preload API surface", () => {
       IPC_CHANNELS.targetCreateFolder,
       IPC_CHANNELS.folderLearningListNames,
       IPC_CHANNELS.documentsRefreshSource,
+      IPC_CHANNELS.documentsDiscard,
       IPC_CHANNELS.previewGetData,
       IPC_CHANNELS.namingCreateInitialDraft,
       IPC_CHANNELS.namingBuildProposal,
