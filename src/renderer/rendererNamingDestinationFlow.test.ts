@@ -35,12 +35,109 @@ describe("rendererNamingDestinationFlow", () => {
       keywords: "fallback"
     });
   });
+
+  it("uses a valid AI preview as the classification filename for destination checks", async () => {
+    const harness = await createFlowHarness();
+    const state = harness.context.state;
+    state.targetPath = "Z:\\cible";
+    state.targetFolder.selectedFolder = "Vehicules/Captur";
+    state.naming.proposal = {
+      proposedFilename: "legacy-name.pdf",
+      isValid: true,
+      normalizedDraft: createEmptyNamingDraft(),
+      messages: []
+    };
+    harness.context.getAiNamingPreview = () => ({
+      filename: "2024-03-15_captur_facture_renault.pdf",
+      filenameValid: true,
+      destinationFolder: "Vehicules/Captur",
+      messages: []
+    });
+
+    harness.context.scheduleDestinationCheck();
+    await waitForAsyncDestinationCheck();
+
+    expect(harness.checkDestinationAvailability).toHaveBeenCalledWith(
+      "2024-03-15_captur_facture_renault.pdf"
+    );
+    expect(state.destination.checkedFilename).toBe("2024-03-15_captur_facture_renault.pdf");
+    expect(state.destination.status).toBe("available");
+  });
+
+  it("falls back to the historical proposal when the AI preview is incomplete", async () => {
+    const harness = await createFlowHarness();
+    const state = harness.context.state;
+    state.naming.proposal = {
+      proposedFilename: "legacy-name.pdf",
+      isValid: true,
+      normalizedDraft: createEmptyNamingDraft(),
+      messages: []
+    };
+    harness.context.getAiNamingPreview = () => ({
+      filename: "",
+      filenameValid: false,
+      destinationFolder: "",
+      messages: [{ level: "error", message: "Cible IA obligatoire." }]
+    });
+
+    expect(harness.context.getEffectiveClassificationFilename()).toBe("legacy-name.pdf");
+    expect(harness.context.isEffectiveClassificationFilenameValid()).toBe(false);
+  });
+
+  it("marks a ready classification plan stale when the AI filename or folder changes", async () => {
+    const harness = await createFlowHarness();
+    const state = harness.context.state;
+    state.targetFolder.selectedFolder = "Vehicules/Captur";
+    state.classification.plan = {
+      status: "ready",
+      sourcePath: "C:\\source\\2026-06-15_facture_edf.pdf",
+      currentName: "2026-06-15_facture_edf.pdf",
+      targetRootPath: "Z:\\cible",
+      targetFolder: "Vehicules/Captur",
+      targetPath: "Z:\\cible\\Vehicules\\Captur",
+      proposedFilename: "2024-03-15_captur_facture_renault.pdf",
+      destinationPath: "Z:\\cible\\Vehicules\\Captur\\2024-03-15_captur_facture_renault.pdf",
+      extension: ".pdf",
+      sourceFileStatus: "present",
+      targetDirectoryStatus: "ready",
+      collisionStatus: "available",
+      preparedAt: "2026-06-20T10:00:00.000Z",
+      checks: [],
+      message: "Plan prêt.",
+      simulationOnly: true
+    };
+    harness.context.getAiNamingPreview = () => ({
+      filename: "2024-03-15_captur_facture_renault.pdf",
+      filenameValid: true,
+      destinationFolder: "Vehicules/Captur",
+      messages: []
+    });
+
+    expect(harness.context.isClassificationPlanCurrent()).toBe(true);
+
+    state.targetFolder.selectedFolder = "Vehicules/Captur/Entretien";
+    expect(harness.context.isClassificationPlanCurrent()).toBe(false);
+
+    state.targetFolder.selectedFolder = "Vehicules/Captur";
+    harness.context.getAiNamingPreview = () => ({
+      filename: "2025_captur_facture_renault.pdf",
+      filenameValid: true,
+      destinationFolder: "Vehicules/Captur",
+      messages: []
+    });
+    expect(harness.context.isClassificationPlanCurrent()).toBe(false);
+  });
 });
+
+function waitForAsyncDestinationCheck(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 async function createFlowHarness(): Promise<{
   context: Record<string, any>;
   buildNamingProposal: ReturnType<typeof vi.fn>;
   createInitialNamingDraft: ReturnType<typeof vi.fn>;
+  checkDestinationAvailability: ReturnType<typeof vi.fn>;
 }> {
   const documentItem = createDocumentItem();
   const buildNamingProposal = vi.fn(async () => ({
@@ -61,6 +158,20 @@ async function createFlowHarness(): Promise<{
     documentType: "",
     keywords: ""
   }));
+  const checkDestinationAvailability = vi.fn(async (filename: string) => ({
+    ok: true,
+    value: {
+      status: "available",
+      targetRootPath: "Z:\\cible",
+      targetFolder: "Vehicules/Captur",
+      targetPath: "Z:\\cible\\Vehicules\\Captur",
+      proposedFilename: filename,
+      finalFilename: filename,
+      finalPath: `Z:\\cible\\Vehicules\\Captur\\${filename}`,
+      alternativeFilename: null,
+      message: "Nom disponible."
+    }
+  }));
   const context: Record<string, any> = {
     namingRequestId: 0,
     destinationRequestId: 0,
@@ -69,10 +180,14 @@ async function createFlowHarness(): Promise<{
     window: {
       docSorter: {
         buildNamingProposal,
-        createInitialNamingDraft
+        createInitialNamingDraft,
+        checkDestinationAvailability
       },
       clearTimeout: () => undefined,
-      setTimeout: () => 1
+      setTimeout: (callback: () => void) => {
+        callback();
+        return 1;
+      }
     },
     state: {
       activeDocumentPath: documentItem.filePath,
@@ -94,6 +209,7 @@ async function createFlowHarness(): Promise<{
       }
     },
     getActiveDocument: () => documentItem,
+    getAiNamingPreview: () => null,
     createIdleNamingState,
     createIdleDestinationCheckState,
     resetClassificationState: () => undefined,
@@ -122,7 +238,8 @@ async function createFlowHarness(): Promise<{
   return {
     context,
     buildNamingProposal,
-    createInitialNamingDraft
+    createInitialNamingDraft,
+    checkDestinationAvailability
   };
 }
 

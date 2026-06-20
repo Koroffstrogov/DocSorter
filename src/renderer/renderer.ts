@@ -161,7 +161,7 @@ const namingPanelView = DocSorterNamingPanel.createNamingPanel({
     targetFolder: state.targetFolder,
     naming: state.naming,
     destination: state.destination,
-    effectiveFilename: getEffectiveProposedFilename(),
+    effectiveFilename: getEffectiveClassificationFilename(),
     aiPreview: getAiNamingPreview(),
     canResetChoices: canResetAiSelectionChoices()
   }),

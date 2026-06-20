@@ -53,7 +53,7 @@ function mergeNamingDraftOriginsForManualEdit(
 
 function applyDestinationAlternative(): void {
   const alternativeFilename = state.destination.result?.alternativeFilename;
-  if (!alternativeFilename) {
+  if (!alternativeFilename || getAiNamingPreview()) {
     return;
   }
 
@@ -142,7 +142,7 @@ async function updateTargetFolderFromInput(
     state.destination = {
       ...createIdleDestinationCheckState(),
       status: "error",
-      checkedFilename: getEffectiveProposedFilename(),
+      checkedFilename: getEffectiveClassificationFilename(),
       error: result.error as DestinationAvailabilityError
     };
     renderPaths();
@@ -198,7 +198,7 @@ async function createSelectedTargetFolder(): Promise<void> {
     state.destination = {
       ...createIdleDestinationCheckState(),
       status: "error",
-      checkedFilename: getEffectiveProposedFilename(),
+      checkedFilename: getEffectiveClassificationFilename(),
       error: result.error as DestinationAvailabilityError
     };
     renderDestinationCheck();
@@ -243,7 +243,7 @@ function scheduleDestinationCheck(): void {
   clearDestinationCheckTimer();
 
   const activeDocument = getActiveDocument();
-  const filename = getEffectiveProposedFilename();
+  const filename = getEffectiveClassificationFilename();
 
   if (!activeDocument) {
     resetDestinationCheck();
@@ -251,13 +251,13 @@ function scheduleDestinationCheck(): void {
     return;
   }
 
-  if (state.naming.isLoading) {
+  if (state.naming.isLoading && !getAiNamingPreview()) {
     state.destination = createIdleDestinationCheckState();
     renderDestinationCheck();
     return;
   }
 
-  if (!state.naming.proposal?.isValid || !filename) {
+  if (!isEffectiveClassificationFilenameValid()) {
     state.destination = {
       ...createIdleDestinationCheckState(),
       status: "invalid",
@@ -297,7 +297,7 @@ function scheduleDestinationCheck(): void {
 async function checkDestinationAvailability(filename: string, requestId: number): Promise<void> {
   const result = await window.docSorter.checkDestinationAvailability(filename);
 
-  if (requestId !== destinationRequestId || filename !== getEffectiveProposedFilename()) {
+  if (requestId !== destinationRequestId || filename !== getEffectiveClassificationFilename()) {
     return;
   }
 
@@ -328,6 +328,57 @@ function renderDestinationCheck(): void {
 
 function getEffectiveProposedFilename(): string {
   return state.naming.overrideFilename ?? state.naming.proposal?.proposedFilename ?? "";
+}
+
+function getEffectiveClassificationFilename(): string {
+  const aiPreview = getAiNamingPreview();
+  if (aiPreview?.filenameValid && aiPreview.filename) {
+    return aiPreview.filename;
+  }
+
+  return getEffectiveProposedFilename();
+}
+
+function isEffectiveClassificationFilenameValid(): boolean {
+  const aiPreview = getAiNamingPreview();
+  if (aiPreview) {
+    return Boolean(aiPreview.filenameValid && aiPreview.filename);
+  }
+
+  return Boolean(state.naming.proposal?.isValid && getEffectiveProposedFilename());
+}
+
+function isDestinationCheckCurrentForClassification(): boolean {
+  const filename = getEffectiveClassificationFilename();
+  if (!filename || state.destination.checkedFilename !== filename || !state.destination.result) {
+    return false;
+  }
+
+  return (
+    normalizeTargetFolderForClassificationComparison(state.destination.result.targetFolder) ===
+    normalizeTargetFolderForClassificationComparison(state.targetFolder.selectedFolder)
+  );
+}
+
+function isClassificationPlanCurrent(): boolean {
+  const activeDocument = getActiveDocument();
+  const plan = state.classification.plan;
+  const filename = getEffectiveClassificationFilename();
+  if (!activeDocument || !plan || !filename) {
+    return false;
+  }
+
+  return (
+    plan.status === "ready" &&
+    plan.sourcePath === activeDocument.filePath &&
+    plan.proposedFilename === filename &&
+    normalizeTargetFolderForClassificationComparison(plan.targetFolder) ===
+      normalizeTargetFolderForClassificationComparison(state.targetFolder.selectedFolder)
+  );
+}
+
+function normalizeTargetFolderForClassificationComparison(value: string): string {
+  return value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
 }
 
 function mapDestinationErrorStatus(code: DestinationAvailabilityError["code"]): DestinationCheckStatus {

@@ -1,7 +1,7 @@
 async function prepareClassificationSimulation(): Promise<void> {
   const activeDocument = getActiveDocument();
-  const filename = getEffectiveProposedFilename();
-  if (!activeDocument || !filename) {
+  const filename = getEffectiveClassificationFilename();
+  if (!activeDocument || !filename || !isEffectiveClassificationFilenameValid()) {
     return;
   }
 
@@ -41,7 +41,7 @@ async function prepareClassificationSimulation(): Promise<void> {
 
 async function executeClassificationAction(): Promise<void> {
   const activeDocument = getActiveDocument();
-  const filename = getEffectiveProposedFilename();
+  const filename = getEffectiveClassificationFilename();
   if (!activeDocument || !filename || !canExecuteClassification()) {
     return;
   }
@@ -283,9 +283,9 @@ function canPrepareClassificationPlan(): boolean {
       activeDocument.status !== "missing" &&
       state.targetPath &&
       !state.naming.isLoading &&
-      state.naming.proposal?.isValid &&
-      getEffectiveProposedFilename() &&
+      isEffectiveClassificationFilenameValid() &&
       state.destination.status === "available" &&
+      isDestinationCheckCurrentForClassification() &&
       state.duplicates.status !== "analyzing" &&
       !isClassificationBusy()
   );
@@ -295,6 +295,7 @@ function canExecuteClassification(): boolean {
   return Boolean(
     state.classification.status === "ready" &&
       state.classification.plan?.status === "ready" &&
+      isClassificationPlanCurrent() &&
       getActiveDocument() &&
       !isClassificationBusy()
   );

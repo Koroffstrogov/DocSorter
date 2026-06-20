@@ -426,6 +426,11 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     return;
   }
 
+  const aiSelection = buildAiSelectionFromSuggestion(
+    result.value as RendererAiDocumentSuggestion,
+    activeDocument.extension,
+    state.targetPath
+  );
   state.ai = {
     ...state.ai,
     panelStatus: "suggestion-ready",
@@ -434,11 +439,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     modelStatus: result.value.modelStatus as RendererAiModelStatus,
     suggestion: result.value as RendererAiDocumentSuggestion,
     suggestionDocumentPath: activeDocument.filePath,
-    selection: buildAiSelectionFromSuggestion(
-      result.value as RendererAiDocumentSuggestion,
-      activeDocument.extension,
-      state.targetPath
-    )
+    selection: aiSelection
   };
   finishAiPipelineTimer("completed", {
     finalElapsedMs: nowMs() - startedAt,
@@ -446,6 +447,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     lastAnalysisMs: nowMs() - startedAt,
     lastGenerationMs: generationMs
   });
+  syncAiSelectedFolderToTargetFolder(aiSelection.selectedFolder);
   render();
 }
 
@@ -547,7 +549,10 @@ function selectAiFieldCandidate(field: AiSelectionFieldKey, value: string): void
     state.targetPath
   );
   state.ai.message = "Candidat IA sélectionné. Prévisualisation recalculée.";
+  resetClassificationState();
+  resetDestinationCheck();
   render();
+  scheduleDestinationCheck();
 }
 
 function startAiFieldManualEdit(field: AiSelectionFieldKey): void {
@@ -578,7 +583,10 @@ function updateAiFieldManualValue(field: AiSelectionFieldKey, value: string): vo
     state.targetPath
   );
   state.ai.message = "Champ IA manuel modifié. Prévisualisation recalculée.";
+  resetClassificationState();
+  resetDestinationCheck();
   renderNamingPanel(false);
+  scheduleDestinationCheck();
 }
 
 function finishAiFieldManualEdit(): void {

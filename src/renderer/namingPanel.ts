@@ -192,19 +192,19 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return;
       }
 
-      if (aiPreview) {
+      if (aiPreview && !aiPreview.filenameValid) {
         setDestinationState(elements, {
-          statusClass: aiPreview.filenameValid ? "status-neutral" : "status-warning",
-          statusText: aiPreview.filenameValid ? "Prévisualisation IA" : "Prévisualisation IA incomplète",
+          statusClass: "status-warning",
+          statusText: "Prévisualisation IA incomplète",
           finalPath: finalFolder,
           folderBadge: folderBadgeFor(finalFolder, targetFolder, destination),
-          alternative: "Non appliqué au classement réel dans ce lot",
+          alternative: "",
           showAlternativeButton: false
         });
         return;
       }
 
-      if (naming.isLoading) {
+      if (!aiPreview && naming.isLoading) {
         setDestinationState(elements, {
           statusClass: "status-neutral",
           statusText: "En attente de la proposition",
@@ -262,7 +262,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
           alternative: destination.result.alternativeFilename
             ? `Alternative proposée : ${destination.result.alternativeFilename}`
             : "Aucune alternative nécessaire",
-          showAlternativeButton: Boolean(destination.result.alternativeFilename)
+          showAlternativeButton: !aiPreview && Boolean(destination.result.alternativeFilename)
         });
         return;
       }
