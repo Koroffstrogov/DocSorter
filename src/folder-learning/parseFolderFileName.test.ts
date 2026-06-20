@@ -31,11 +31,21 @@ describe("parseFolderFileName", () => {
     });
   });
 
+  it("parses DATE_DOCUMENT names", () => {
+    expect(parseFolderFileName("2026_releve-bancaire.pdf")).toMatchObject({
+      dateToken: "2026",
+      datePrecision: "year",
+      target: "",
+      documentType: "releve-bancaire",
+      blocks: ["releve-bancaire"],
+      pattern: "DATE_DOCUMENT"
+    });
+  });
+
   it("ignores directories, unsupported extensions and non-conforming names", () => {
     expect(parseFolderFileName({ name: "2026_paul_carte-identite.pdf", isFile: false })).toBeNull();
     expect(parseFolderFileName("2026_paul_carte-identite.txt")).toBeNull();
     expect(parseFolderFileName("facture-libre.pdf")).toBeNull();
-    expect(parseFolderFileName("2026_paul.pdf")).toBeNull();
     expect(parseFolderFileName("2026-02-31_paul_attestation.pdf")).toBeNull();
     expect(parseFolderFileName("2026_Paul_attestation.pdf")).toBeNull();
     expect(parseFolderFileName("Sante/2026_paul_attestation.pdf")).toBeNull();

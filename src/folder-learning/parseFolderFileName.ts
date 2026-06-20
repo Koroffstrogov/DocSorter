@@ -9,6 +9,7 @@ export interface ParsedFolderFileName {
   originalName: string;
   dateToken: string;
   datePrecision: FolderLearningDatePrecision;
+  blocks: string[];
   target: string;
   documentType: string;
   issuer?: string;
@@ -18,9 +19,14 @@ export interface ParsedFolderFileName {
 }
 
 export type FolderNamingPattern =
+  | "DATE_DOCUMENT"
+  | "DATE_DOCUMENT_EMETTEUR"
+  | "DATE_DOCUMENT_CIBLE"
+  | "DATE_DOCUMENT_CIBLE_EMETTEUR"
   | "DATE_CIBLE_DOCUMENT"
   | "DATE_CIBLE_DOCUMENT_EMETTEUR"
-  | "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL";
+  | "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL"
+  | "DATE_DOCUMENT_CIBLE_EMETTEUR_DETAIL";
 
 const SUPPORTED_EXTENSIONS = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
 const NORMALIZED_NAME_BLOCK = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -42,24 +48,26 @@ export function parseFolderFileName(input: string | FolderLearningFileEntry): Pa
 
   const baseName = fileName.slice(0, -extension.length);
   const parts = baseName.split("_");
-  if (parts.length < 3 || parts.length > 5 || parts.some((part) => !isNormalizedNameBlock(part))) {
+  if (parts.length < 2 || parts.length > 5 || parts.some((part) => !isNormalizedNameBlock(part))) {
     return null;
   }
 
-  const [dateToken, target, documentType, issuer, detail] = parts;
+  const [dateToken, ...blocks] = parts;
   const datePrecision = detectDatePrecision(dateToken);
   if (!datePrecision) {
     return null;
   }
+  const semantic = defaultSemanticFromBlocks(blocks);
 
   return {
     originalName: fileName,
     dateToken,
     datePrecision,
-    target,
-    documentType,
-    ...(issuer ? { issuer } : {}),
-    ...(detail ? { detail } : {}),
+    blocks,
+    target: semantic.target,
+    documentType: semantic.documentType,
+    ...(semantic.issuer ? { issuer: semantic.issuer } : {}),
+    ...(semantic.detail ? { detail: semantic.detail } : {}),
     extension,
     pattern: patternForPartCount(parts.length)
   };
@@ -100,7 +108,33 @@ function isNormalizedNameBlock(value: string): boolean {
   return NORMALIZED_NAME_BLOCK.test(value);
 }
 
+function defaultSemanticFromBlocks(blocks: string[]): {
+  target: string;
+  documentType: string;
+  issuer?: string;
+  detail?: string;
+} {
+  if (blocks.length === 1) {
+    return {
+      target: "",
+      documentType: blocks[0] ?? ""
+    };
+  }
+
+  const [target, documentType, issuer, detail] = blocks;
+  return {
+    target: target ?? "",
+    documentType: documentType ?? "",
+    ...(issuer ? { issuer } : {}),
+    ...(detail ? { detail } : {})
+  };
+}
+
 function patternForPartCount(partCount: number): FolderNamingPattern {
+  if (partCount === 2) {
+    return "DATE_DOCUMENT";
+  }
+
   if (partCount === 5) {
     return "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL";
   }

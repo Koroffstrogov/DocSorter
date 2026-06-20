@@ -61,7 +61,7 @@ describe("buildFolderNamingProfile", () => {
     const profile = buildFolderNamingProfile([
       "note-libre.pdf",
       "2026-02_compte-joint_releve-bancaire_bnp-paribas.pdf",
-      "2026_compte-joint.pdf",
+      "2026-compte-joint.pdf",
       "2026-13_compte-joint_releve-bancaire.pdf",
       "2026_compte-joint_releve-bancaire.txt",
       { name: "2026_compte-joint_releve-bancaire.pdf", isFile: false }
@@ -74,7 +74,7 @@ describe("buildFolderNamingProfile", () => {
   });
 
   it("returns none when no file is recognized", () => {
-    const profile = buildFolderNamingProfile(["document.pdf", "sans-date.jpg", "2026_incomplet.pdf"]);
+    const profile = buildFolderNamingProfile(["document.pdf", "sans-date.jpg", "2026-incomplet.pdf"]);
 
     expect(profile).toMatchObject({
       status: "none",

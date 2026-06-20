@@ -182,6 +182,12 @@ type FolderLearningProfileStatus = "none" | "weak" | "medium" | "strong";
 type FolderLearningDatePrecision = "day" | "month" | "year" | "mixed";
 type FolderLearningDetailUsage = "never" | "sometimes" | "often";
 type FolderLearningRecommendation = "keep-ai" | "prefer-folder-profile" | "manual-review";
+type FolderLearningPipelineStepId =
+  | "content-ai-analysis"
+  | "folder-candidate"
+  | "folder-name-scan"
+  | "folder-schema-analysis"
+  | "aligned-name-proposal";
 
 interface FolderLearningNameEntry {
   name: string;
@@ -201,6 +207,8 @@ interface FolderLearningProfile {
   analyzedFileCount: number;
   recognizedFileCount: number;
   dominantPattern?: string;
+  dominantBlockCount?: number;
+  dominantBlocks?: string[];
   dominantDatePrecision?: FolderLearningDatePrecision;
   dominantTarget?: string;
   dominantDocumentType?: string;
@@ -214,6 +222,7 @@ interface FolderLearningProfile {
 interface FolderLearningComparison {
   aiName: string;
   alignedName?: string;
+  detectedPattern?: string;
   recommendation: FolderLearningRecommendation;
   confidence: number;
   appliedChanges: string[];
@@ -221,9 +230,20 @@ interface FolderLearningComparison {
   warnings: string[];
 }
 
+interface FolderLearningPipelineStep {
+  id: FolderLearningPipelineStepId;
+  status: "ready" | "warning" | "blocked";
+  inputs: Record<string, unknown>;
+  variables: Record<string, unknown>;
+  output: unknown;
+  warnings: string[];
+  blockingReason?: string;
+}
+
 interface FolderLearningAnalysis {
   profile: FolderLearningProfile;
   comparison: FolderLearningComparison | null;
+  pipeline: FolderLearningPipelineStep[];
 }
 
 interface FolderLearningState {
@@ -232,6 +252,7 @@ interface FolderLearningState {
   entries: FolderLearningNameEntry[];
   profile: FolderLearningProfile | null;
   comparison: FolderLearningComparison | null;
+  pipeline: FolderLearningPipelineStep[];
   message: string;
   error: string;
   warnings: string[];
@@ -744,6 +765,7 @@ interface RendererAiDocumentSuggestion {
     think: boolean;
   };
   responseJson: unknown;
+  folderLearningPipeline?: FolderLearningPipelineStep[];
   thinking: string | null;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;

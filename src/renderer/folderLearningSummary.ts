@@ -1,4 +1,5 @@
 interface FolderLearningSummaryInput {
+  targetFolder?: string;
   entries: FolderLearningNameEntry[];
   aiName: string;
   aiFields: AiSelectionFields | null;
@@ -17,15 +18,15 @@ interface Window {
 var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
 
 (() => {
-  const SUPPORTED_EXTENSIONS = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
-  const BLOCK_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  const DOMINANT_RATIO = 0.6;
-  const STRONG_RATIO = 0.8;
+  type ParsedDatePrecision = "day" | "month" | "year";
+  type SchemaStatus = "ready" | "ambiguous" | "blocked";
+  type SchemaField = "target" | "documentType" | "issuer" | "detail";
 
   interface ParsedName {
     originalName: string;
     dateToken: string;
-    datePrecision: "day" | "month" | "year";
+    datePrecision: ParsedDatePrecision;
+    blocks: string[];
     target: string;
     documentType: string;
     issuer?: string;
@@ -39,12 +40,49 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     ratio: number;
   }
 
+  interface SchemaAnalysis {
+    status: SchemaStatus;
+    pattern?: string;
+    fieldOrder: SchemaField[];
+    confidence: number;
+    reasons: string[];
+    warnings: string[];
+    blockingReason?: string;
+  }
+
+  interface AiInputFields {
+    dateToken: string;
+    target: string;
+    documentType: string;
+    issuer: string;
+    detail: string;
+  }
+
+  const SUPPORTED_EXTENSIONS = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
+  const BLOCK_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const DOMINANT_RATIO = 0.6;
+  const STRONG_RATIO = 0.8;
+  const SCHEMA_FIELD_ORDERS: Array<{ pattern: string; fields: SchemaField[] }> = [
+    { pattern: "DATE_DOCUMENT", fields: ["documentType"] },
+    { pattern: "DATE_DOCUMENT_EMETTEUR", fields: ["documentType", "issuer"] },
+    { pattern: "DATE_CIBLE_DOCUMENT", fields: ["target", "documentType"] },
+    { pattern: "DATE_DOCUMENT_CIBLE", fields: ["documentType", "target"] },
+    { pattern: "DATE_CIBLE_DOCUMENT_EMETTEUR", fields: ["target", "documentType", "issuer"] },
+    { pattern: "DATE_DOCUMENT_CIBLE_EMETTEUR", fields: ["documentType", "target", "issuer"] },
+    { pattern: "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL", fields: ["target", "documentType", "issuer", "detail"] },
+    { pattern: "DATE_DOCUMENT_CIBLE_EMETTEUR_DETAIL", fields: ["documentType", "target", "issuer", "detail"] }
+  ];
+
   function buildAnalysis(input: FolderLearningSummaryInput): FolderLearningAnalysis {
     const profile = buildProfile(input.entries, input.warnings ?? []);
-    const comparison = buildComparison(profile, input);
+    const aiInput = readAiInput(input);
+    const schema = aiInput ? analyzeSchema(profile, aiInput) : blockedSchema("Champs IA incomplets.");
+    const comparison = buildComparison(profile, input, aiInput, schema);
+    const profileWithSchema = applySchemaSemantics(profile, schema);
     return {
-      profile,
-      comparison
+      profile: profileWithSchema,
+      comparison,
+      pipeline: buildPipeline(input, profileWithSchema, aiInput, schema, comparison)
     };
   }
 
@@ -68,8 +106,10 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     }
 
     const dominantDatePrecision = datePrecision(parsed);
-    const dominantTarget = dominantValue(parsed.map((entry) => entry.target));
-    const dominantDocumentType = dominantValue(parsed.map((entry) => entry.documentType));
+    const dominantBlockCount = dominantNumber(parsed.map((entry) => entry.blocks.length));
+    const dominantBlocks = buildDominantBlocks(parsed, dominantBlockCount?.value ?? 0);
+    const dominantTarget = dominantValue(parsed.map((entry) => entry.target).filter(Boolean));
+    const dominantDocumentType = dominantValue(parsed.map((entry) => entry.documentType).filter(Boolean));
     const dominantIssuer = dominantValue(parsed.map((entry) => entry.issuer).filter(isString));
     const detailUsage = detailUsageFor(parsed);
     const coherence = coherenceScore({
@@ -87,6 +127,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       analyzedFileCount: analyzableEntries.length,
       recognizedFileCount: parsed.length,
       dominantPattern: dominantValue(parsed.map((entry) => entry.pattern))?.value,
+      dominantBlockCount: dominantBlockCount?.value,
+      dominantBlocks,
       dominantDatePrecision,
       dominantTarget: dominantTarget?.value,
       dominantDocumentType: dominantDocumentType?.value,
@@ -110,9 +152,10 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
 
   function buildComparison(
     profile: FolderLearningProfile,
-    input: FolderLearningSummaryInput
+    input: FolderLearningSummaryInput,
+    aiInput: AiInputFields | null,
+    schema: SchemaAnalysis
   ): FolderLearningComparison | null {
-    const aiInput = readAiInput(input);
     if (!aiInput) {
       return null;
     }
@@ -150,21 +193,36 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       };
     }
 
-    if (!profile.dominantDocumentType || normalizeBlock(profile.dominantDocumentType) !== aiInput.documentType) {
+    if (schema.status !== "ready") {
       return {
         aiName: input.aiName,
+        recommendation: "manual-review",
+        confidence: schema.status === "ambiguous" ? 45 : 35,
+        appliedChanges: [],
+        reasons: schema.reasons.length
+          ? schema.reasons
+          : ["Le schéma réel du dossier n'a pas pu être inféré."],
+        warnings: uniqueStrings([...schema.warnings, schema.blockingReason ?? ""])
+      };
+    }
+
+    const schemaDocumentType = schemaValue(profile, schema, "documentType");
+    if (!schemaDocumentType || normalizeBlock(schemaDocumentType) !== aiInput.documentType) {
+      return {
+        aiName: input.aiName,
+        detectedPattern: schema.pattern,
         recommendation: "manual-review",
         confidence: 45,
         appliedChanges: [],
         reasons: ["Type documentaire différent du profil dominant du dossier."],
-        warnings: ["Type documentaire dominant incompatible : alignement non appliqué."]
+        warnings: [`Type documentaire dominant incompatible : ${schemaDocumentType || "absent"}.`]
       };
     }
 
     const aligned = { ...aiInput };
     const appliedChanges: string[] = [];
     const reasons: string[] = [];
-    const warnings: string[] = [];
+    const warnings: string[] = [...schema.warnings];
 
     const alignedDate = alignDatePrecision(aiInput.dateToken, profile.dominantDatePrecision);
     if (alignedDate !== aiInput.dateToken) {
@@ -173,23 +231,36 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       reasons.push("Précision de date alignée sur le dossier.");
     }
 
-    if (canUseDominant(profile, "cible") && profile.dominantTarget && normalizeBlock(profile.dominantTarget) !== aiInput.target) {
-      aligned.target = normalizeBlock(profile.dominantTarget);
+    const schemaTarget = schemaValue(profile, schema, "target");
+    if (
+      schema.fieldOrder.includes("target") &&
+      schemaTarget &&
+      normalizeBlock(schemaTarget) !== aiInput.target &&
+      canApplySchemaField(profile, "target")
+    ) {
+      aligned.target = normalizeBlock(schemaTarget);
       appliedChanges.push("target");
       reasons.push("Cible alignée sur le dossier.");
-    } else if (profile.dominantTarget && normalizeBlock(profile.dominantTarget) !== aiInput.target) {
+    } else if (schemaTarget && normalizeBlock(schemaTarget) !== aiInput.target && !canApplySchemaField(profile, "target")) {
       warnings.push("Cible dominante hétérogène : alignement non appliqué.");
     }
 
-    if (canUseDominant(profile, "emetteur") && profile.dominantIssuer && normalizeBlock(profile.dominantIssuer) !== normalizeBlock(aiInput.issuer)) {
-      aligned.issuer = normalizeBlock(profile.dominantIssuer);
+    const schemaIssuer = schemaValue(profile, schema, "issuer");
+    if (!schema.fieldOrder.includes("issuer") && normalizeBlock(aiInput.issuer)) {
+      aligned.issuer = "";
+      appliedChanges.push("issuer");
+      reasons.push("Émetteur supprimé car absent du schéma local.");
+    } else if (
+      schemaIssuer &&
+      normalizeBlock(schemaIssuer) !== normalizeBlock(aiInput.issuer) &&
+      canApplySchemaField(profile, "issuer")
+    ) {
+      aligned.issuer = normalizeBlock(schemaIssuer);
       appliedChanges.push("issuer");
       reasons.push("Émetteur aligné sur le dossier.");
-    } else if (profile.dominantIssuer && normalizeBlock(profile.dominantIssuer) !== normalizeBlock(aiInput.issuer)) {
-      warnings.push("Émetteur dominant hétérogène : alignement non appliqué.");
     }
 
-    if (profile.detailUsage === "never" && normalizeBlock(aiInput.detail)) {
+    if ((!schema.fieldOrder.includes("detail") || profile.detailUsage === "never") && normalizeBlock(aiInput.detail)) {
       aligned.detail = "";
       appliedChanges.push("detail");
       reasons.push("Détail supprimé car absent des noms existants.");
@@ -198,6 +269,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     if (appliedChanges.length === 0) {
       return {
         aiName: input.aiName,
+        detectedPattern: schema.pattern,
         recommendation: warnings.length > 0 ? "manual-review" : "keep-ai",
         confidence: warnings.length > 0 ? 50 : profile.status === "strong" ? 85 : 65,
         appliedChanges,
@@ -208,9 +280,11 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       };
     }
 
+    const alignedName = buildName(aligned, schema, input.extension);
     return {
       aiName: input.aiName,
-      alignedName: buildName(aligned, input.extension),
+      alignedName,
+      detectedPattern: schema.pattern,
       recommendation: profile.status === "strong" ? "prefer-folder-profile" : "manual-review",
       confidence: profile.status === "strong" ? 85 : 65,
       appliedChanges,
@@ -235,7 +309,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     }
 
     const parts = fileName.slice(0, dotIndex).split("_");
-    if (parts.length < 3 || parts.length > 5 || parts.some((part) => !BLOCK_PATTERN.test(part))) {
+    if (parts.length < 2 || parts.length > 5 || parts.some((part) => !BLOCK_PATTERN.test(part))) {
       return null;
     }
 
@@ -244,29 +318,22 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       return null;
     }
 
+    const blocks = parts.slice(1);
+    const semantic = defaultSemanticFromBlocks(blocks);
     return {
       originalName: fileName,
       dateToken: parts[0],
       datePrecision: precision,
-      target: parts[1],
-      documentType: parts[2],
-      issuer: parts[3],
-      detail: parts[4],
-      pattern: parts.length === 5
-        ? "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL"
-        : parts.length === 4
-          ? "DATE_CIBLE_DOCUMENT_EMETTEUR"
-          : "DATE_CIBLE_DOCUMENT"
+      blocks,
+      target: semantic.target,
+      documentType: semantic.documentType,
+      issuer: semantic.issuer,
+      detail: semantic.detail,
+      pattern: defaultPatternForBlockCount(blocks.length)
     };
   }
 
-  function readAiInput(input: FolderLearningSummaryInput): {
-    dateToken: string;
-    target: string;
-    documentType: string;
-    issuer: string;
-    detail: string;
-  } | null {
+  function readAiInput(input: FolderLearningSummaryInput): AiInputFields | null {
     const fields = input.aiFields;
     if (fields) {
       const dateToken = normalizeDate(fields.dateToken);
@@ -299,26 +366,252 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     };
   }
 
-  function buildName(
-    fields: {
-      dateToken: string;
-      target: string;
-      documentType: string;
-      issuer: string;
-      detail: string;
-    },
-    extension: SupportedDocumentExtension
-  ): string {
-    return [
-      fields.dateToken,
-      fields.target,
-      fields.documentType,
-      normalizeOptionalBlock(fields.issuer),
-      normalizeOptionalBlock(fields.detail)
-    ].filter(Boolean).join("_") + extension;
+  function analyzeSchema(profile: FolderLearningProfile, fields: AiInputFields): SchemaAnalysis {
+    const blocks = (profile.dominantBlocks ?? []).map(normalizeBlock).filter(Boolean);
+    if (blocks.length === 0) {
+      return blockedSchema("Aucun bloc dominant disponible.");
+    }
+
+    const values: Record<SchemaField, string> = {
+      target: fields.target,
+      documentType: fields.documentType,
+      issuer: fields.issuer,
+      detail: fields.detail
+    };
+    const candidates = SCHEMA_FIELD_ORDERS
+      .filter((schema) => schema.fields.length === blocks.length)
+      .map((schema) => {
+        const matches = schema.fields.filter((field, index) =>
+          isCompatibleSchemaValue(blocks[index] ?? "", values[field])
+        );
+        return {
+          ...schema,
+          score: matches.length,
+          matches
+        };
+      })
+      .sort((left, right) => right.score - left.score || left.pattern.localeCompare(right.pattern));
+    const best = candidates[0];
+    if (!best || best.score === 0 || (best.fields.length > 1 && best.score < 2)) {
+      return {
+        status: "blocked",
+        fieldOrder: [],
+        confidence: 0,
+        reasons: [],
+        warnings: ["Schéma du dossier non reconnu à partir des champs IA."],
+        blockingReason: "Correspondance insuffisante entre blocs et champs IA."
+      };
+    }
+
+    const tied = candidates.filter((candidate) => candidate.score === best.score);
+    if (tied.length > 1) {
+      return {
+        status: "ambiguous",
+        fieldOrder: [],
+        confidence: Math.round((best.score / best.fields.length) * 100),
+        reasons: [`Schémas possibles : ${tied.map((candidate) => candidate.pattern).join(", ")}.`],
+        warnings: ["Schéma du dossier ambigu : validation manuelle nécessaire."],
+        blockingReason: "Plusieurs ordres de blocs sont plausibles."
+      };
+    }
+
+    return {
+      status: "ready",
+      pattern: best.pattern,
+      fieldOrder: best.fields,
+      confidence: Math.round((best.score / best.fields.length) * 100),
+      reasons: [`Schéma détecté : ${best.pattern}.`],
+      warnings: best.score < best.fields.length
+        ? ["Schéma détecté avec certains blocs alignés depuis le dossier."]
+        : []
+    };
   }
 
-  function precisionForDate(value: string): "day" | "month" | "year" | null {
+  function applySchemaSemantics(profile: FolderLearningProfile, schema: SchemaAnalysis): FolderLearningProfile {
+    if (schema.status !== "ready" || !schema.pattern) {
+      return profile;
+    }
+
+    const next: FolderLearningProfile = {
+      ...profile,
+      dominantPattern: schema.pattern
+    };
+    const target = schemaValue(profile, schema, "target");
+    const documentType = schemaValue(profile, schema, "documentType");
+    const issuer = schemaValue(profile, schema, "issuer");
+    if (target) {
+      next.dominantTarget = target;
+    } else {
+      delete next.dominantTarget;
+    }
+    if (documentType) {
+      next.dominantDocumentType = documentType;
+    } else {
+      delete next.dominantDocumentType;
+    }
+    if (issuer) {
+      next.dominantIssuer = issuer;
+    } else {
+      delete next.dominantIssuer;
+    }
+    return next;
+  }
+
+  function buildName(
+    fields: AiInputFields,
+    schema: SchemaAnalysis,
+    extension: SupportedDocumentExtension
+  ): string {
+    const blocks = schema.fieldOrder
+      .map((field) => normalizeOptionalBlock(fields[field]))
+      .filter(Boolean);
+    return [fields.dateToken, ...blocks].join("_") + extension;
+  }
+
+  function canApplySchemaField(profile: FolderLearningProfile, field: SchemaField): boolean {
+    if (field === "target") {
+      return !hasProfileWarning(profile, "cible");
+    }
+    if (field === "issuer") {
+      return !hasProfileWarning(profile, "emetteur") && !hasProfileWarning(profile, "émetteur");
+    }
+    return true;
+  }
+
+  function isCompatibleSchemaValue(folderValue: string, aiValue: string): boolean {
+    if (!folderValue || !aiValue) {
+      return false;
+    }
+    return folderValue === aiValue || folderValue.startsWith(`${aiValue}-`) || aiValue.startsWith(`${folderValue}-`);
+  }
+
+  function hasProfileWarning(profile: FolderLearningProfile, signal: string): boolean {
+    const normalizedSignal = normalizeBlock(signal);
+    return profile.warnings.some((warning) => normalizeBlock(warning).includes(normalizedSignal));
+  }
+
+  function buildPipeline(
+    input: FolderLearningSummaryInput,
+    profile: FolderLearningProfile,
+    aiInput: AiInputFields | null,
+    schema: SchemaAnalysis,
+    comparison: FolderLearningComparison | null
+  ): FolderLearningPipelineStep[] {
+    const aiVariables: Record<string, unknown> = aiInput
+      ? {
+          dateToken: aiInput.dateToken,
+          target: aiInput.target,
+          documentType: aiInput.documentType,
+          issuer: aiInput.issuer,
+          detail: aiInput.detail
+        }
+      : {};
+
+    return [
+      {
+        id: "content-ai-analysis",
+        status: aiInput ? "ready" : "blocked",
+        inputs: { aiName: input.aiName },
+        variables: aiVariables,
+        output: aiInput ? "Champs IA exploitables." : null,
+        warnings: [],
+        ...(aiInput ? {} : { blockingReason: "Analyse IA absente ou incomplète." })
+      },
+      {
+        id: "folder-candidate",
+        status: input.entries.length > 0 ? "ready" : "blocked",
+        inputs: { targetFolder: input.targetFolder ?? "" },
+        variables: { entryCount: input.entries.length },
+        output: { truncated: false },
+        warnings: input.warnings ?? [],
+        ...(input.entries.length > 0 ? {} : { blockingReason: "Aucun nom de dossier cible à analyser." })
+      },
+      {
+        id: "folder-name-scan",
+        status: profile.recognizedFileCount > 0 ? "ready" : "blocked",
+        inputs: { examples: profile.examples },
+        variables: {
+          status: profile.status,
+          recognizedFileCount: profile.recognizedFileCount,
+          dominantDatePrecision: profile.dominantDatePrecision,
+          dominantBlocks: profile.dominantBlocks ?? []
+        },
+        output: { dominantPattern: profile.dominantPattern ?? "" },
+        warnings: profile.warnings,
+        ...(profile.recognizedFileCount > 0 ? {} : { blockingReason: "Aucun nom compatible détecté." })
+      },
+      {
+        id: "folder-schema-analysis",
+        status: schema.status === "ready" ? "ready" : schema.status === "ambiguous" ? "warning" : "blocked",
+        inputs: { dominantBlocks: profile.dominantBlocks ?? [] },
+        variables: {
+          detectedPattern: schema.pattern ?? "",
+          fieldOrder: schema.fieldOrder,
+          confidence: schema.confidence
+        },
+        output: schema.reasons,
+        warnings: schema.warnings,
+        ...(schema.blockingReason ? { blockingReason: schema.blockingReason } : {})
+      },
+      {
+        id: "aligned-name-proposal",
+        status: comparison?.alignedName ? "ready" : comparison?.recommendation === "manual-review" ? "warning" : "blocked",
+        inputs: { aiName: comparison?.aiName ?? input.aiName },
+        variables: {
+          appliedChanges: comparison?.appliedChanges ?? [],
+          confidence: comparison?.confidence ?? 0
+        },
+        output: {
+          recommendation: comparison?.recommendation ?? "",
+          alignedName: comparison?.alignedName ?? ""
+        },
+        warnings: comparison?.warnings ?? [],
+        ...(comparison?.alignedName ? {} : { blockingReason: "Aucun nom aligné proposé." })
+      }
+    ];
+  }
+
+  function schemaValue(profile: FolderLearningProfile, schema: SchemaAnalysis, field: SchemaField): string {
+    const index = schema.fieldOrder.indexOf(field);
+    return index >= 0 ? profile.dominantBlocks?.[index] ?? "" : "";
+  }
+
+  function defaultSemanticFromBlocks(blocks: string[]): {
+    target: string;
+    documentType: string;
+    issuer?: string;
+    detail?: string;
+  } {
+    if (blocks.length === 1) {
+      return {
+        target: "",
+        documentType: blocks[0] ?? ""
+      };
+    }
+
+    const [target, documentType, issuer, detail] = blocks;
+    return {
+      target: target ?? "",
+      documentType: documentType ?? "",
+      issuer,
+      detail
+    };
+  }
+
+  function defaultPatternForBlockCount(count: number): string {
+    if (count === 1) {
+      return "DATE_DOCUMENT";
+    }
+    if (count === 3) {
+      return "DATE_CIBLE_DOCUMENT_EMETTEUR";
+    }
+    if (count === 4) {
+      return "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL";
+    }
+    return "DATE_CIBLE_DOCUMENT";
+  }
+
+  function precisionForDate(value: string): ParsedDatePrecision | null {
     if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) {
       const date = new Date(`${value}T00:00:00.000Z`);
       return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? "day" : null;
@@ -369,6 +662,14 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       return "never";
     }
     return count / parsed.length >= 0.6 ? "often" : "sometimes";
+  }
+
+  function buildDominantBlocks(parsed: ParsedName[], blockCount: number): string[] {
+    const blocks: string[] = [];
+    for (let index = 0; index < blockCount; index += 1) {
+      blocks.push(dominantValue(parsed.map((entry) => entry.blocks[index]).filter(isString))?.value ?? "");
+    }
+    return blocks;
   }
 
   function coherenceScore(input: {
@@ -453,6 +754,23 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     return ratio >= DOMINANT_RATIO ? { value: best[0], count: best[1], ratio } : null;
   }
 
+  function dominantNumber(values: number[]): { value: number; count: number; ratio: number } | null {
+    if (values.length === 0) {
+      return null;
+    }
+    const counts = new Map<number, number>();
+    for (const value of values) {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    const sorted = Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || left[0] - right[0]);
+    const best = sorted[0];
+    if (!best) {
+      return null;
+    }
+    const ratio = best[1] / values.length;
+    return ratio >= DOMINANT_RATIO ? { value: best[0], count: best[1], ratio } : null;
+  }
+
   function hasNotableDivergence(
     fields: { target: string; documentType: string; issuer: string; detail: string },
     profile: FolderLearningProfile
@@ -475,8 +793,15 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     return dateToken;
   }
 
-  function canUseDominant(profile: FolderLearningProfile, signal: "cible" | "emetteur"): boolean {
-    return !profile.warnings.some((warning) => normalizeBlock(warning).includes(signal));
+  function blockedSchema(reason: string): SchemaAnalysis {
+    return {
+      status: "blocked",
+      fieldOrder: [],
+      confidence: 0,
+      reasons: [],
+      warnings: [],
+      blockingReason: reason
+    };
   }
 
   function isParsedName(value: ParsedName | null): value is ParsedName {

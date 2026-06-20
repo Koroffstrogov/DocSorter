@@ -80,6 +80,7 @@ function createIdleFolderLearningState(): FolderLearningState {
     entries: [],
     profile: null,
     comparison: null,
+    pipeline: [],
     message: "Convention du dossier non analysée.",
     error: "",
     warnings: []

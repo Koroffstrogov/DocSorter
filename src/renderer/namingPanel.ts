@@ -655,9 +655,14 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
     const aligned = document.createElement("span");
     aligned.className = "folder-learning-aligned-name";
-    aligned.textContent = folderLearning.comparison?.alignedName
-      ? `Nom aligné proposé : ${folderLearning.comparison.alignedName}`
-      : "";
+    if (folderLearning.comparison?.alignedName) {
+      aligned.textContent = `Nom aligné proposé : ${folderLearning.comparison.alignedName}`;
+    } else if (folderLearning.comparison) {
+      const reason = folderLearning.comparison.warnings[0] || folderLearning.comparison.reasons[0] || "validation manuelle requise";
+      aligned.textContent = `Nom aligné non proposé : ${reason}`;
+    } else {
+      aligned.textContent = "";
+    }
 
     const children: Node[] = [
       title,

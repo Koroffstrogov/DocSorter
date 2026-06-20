@@ -156,6 +156,7 @@ describe("name explanation renderer model", () => {
           reasons: [],
           warnings: []
         },
+        pipeline: [],
         message: "",
         error: "",
         warnings: []
@@ -211,6 +212,7 @@ describe("name explanation renderer model", () => {
           reasons: [],
           warnings: []
         },
+        pipeline: [],
         message: "",
         error: "",
         warnings: []

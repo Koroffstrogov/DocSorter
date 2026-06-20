@@ -371,6 +371,7 @@ function createIdleFolderLearningState(): FolderLearningState {
     entries: [],
     profile: null,
     comparison: null,
+    pipeline: [],
     message: "",
     error: "",
     warnings: []
@@ -404,6 +405,7 @@ function createReadyFolderLearningState(alignedName: string): FolderLearningStat
       reasons: [],
       warnings: []
     },
+    pipeline: [],
     message: "",
     error: "",
     warnings: []

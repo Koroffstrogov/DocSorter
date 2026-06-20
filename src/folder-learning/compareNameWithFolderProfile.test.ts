@@ -79,6 +79,61 @@ describe("compareNameWithFolderProfile", () => {
     expect(comparison.confidence).toBeGreaterThanOrEqual(80);
   });
 
+  it("detects DATE_DOCUMENT_CIBLE and proposes a monthly aligned name", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05-01",
+        target: "compte-joint",
+        documentType: "releve-bancaire",
+        issuer: "bnp"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile([
+        "2026-01_releve-bancaire_compte-joint.pdf",
+        "2026-02_releve-bancaire_compte-joint.pdf",
+        "2026-03_releve-bancaire_compte-joint.pdf",
+        "2026-04_releve-bancaire_compte-joint.pdf",
+        "2026-05_releve-bancaire_compte-joint.pdf",
+        "2026-06_releve-bancaire_compte-joint.pdf",
+        "2026-07_releve-bancaire_compte-joint.pdf",
+        "2026-08_releve-bancaire_compte-joint.pdf"
+      ])
+    });
+
+    expect(comparison.detectedPattern).toBe("DATE_DOCUMENT_CIBLE");
+    expect(comparison.recommendation).toBe("prefer-folder-profile");
+    expect(comparison.alignedName).toBe("2026-05_releve-bancaire_compte-joint.pdf");
+    expect(comparison.appliedChanges).toEqual(expect.arrayContaining(["datePrecision", "issuer"]));
+    expect(comparison.pipeline?.map((step) => step.id)).toEqual([
+      "content-ai-analysis",
+      "folder-candidate",
+      "folder-name-scan",
+      "folder-schema-analysis",
+      "aligned-name-proposal"
+    ]);
+  });
+
+  it("keeps ambiguous schemas for manual review", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "compte-joint",
+        documentType: "compte-joint"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile([
+        "2026-01_compte-joint_compte-joint.pdf",
+        "2026-02_compte-joint_compte-joint.pdf",
+        "2026-03_compte-joint_compte-joint.pdf",
+        "2026-04_compte-joint_compte-joint.pdf"
+      ])
+    });
+
+    expect(comparison.recommendation).toBe("manual-review");
+    expect(comparison.alignedName).toBeUndefined();
+    expect(comparison.warnings.join(" ")).toContain("Schéma du dossier ambigu");
+  });
+
   it("removes detail when the folder profile never uses the detail block", () => {
     const comparison = compareNameWithFolderProfile({
       aiFields: {

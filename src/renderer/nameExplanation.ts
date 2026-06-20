@@ -249,7 +249,7 @@ var DocSorterNameExplanation: NameExplanationApi;
         ? `Nom aligné appliqué : ${appliedChangesLabel(comparison?.appliedChanges ?? [])}.`
         : alignedName
         ? `Nom aligné proposé : ${alignedName}.`
-        : folderLearningReason(profile),
+        : folderLearningBlockingReason(folderLearning) || folderLearningReason(profile),
       source: isApplied ? "Convention du dossier" : "Lecture seule"
     };
   }
@@ -331,6 +331,17 @@ var DocSorterNameExplanation: NameExplanationApi;
   function folderLearningReason(profile: FolderLearningProfile): string {
     const target = profile.dominantTarget ? ` avec ${profile.dominantTarget}` : "";
     return `Le dossier contient ${profile.recognizedFileCount} nom(s) compatible(s)${target}.`;
+  }
+
+  function folderLearningBlockingReason(folderLearning: FolderLearningState): string {
+    const pipelineReason = folderLearning.pipeline
+      .find((step) => step.blockingReason)
+      ?.blockingReason;
+    if (pipelineReason) {
+      return pipelineReason;
+    }
+
+    return folderLearning.comparison?.warnings[0] || "";
   }
 
   function appliedChangesLabel(changes: string[]): string {

@@ -458,11 +458,11 @@ async function exportAiDiagnosticForActiveDocument(): Promise<void> {
   }
 
   const textContext = getActiveAiTextContext(activeDocument);
-  const aiResult = state.ai.suggestion
+  const aiResult = withFolderLearningPipeline(state.ai.suggestion
     ? { ok: true as const, value: state.ai.suggestion }
     : state.ai.error
       ? { ok: false as const, error: state.ai.error }
-      : null;
+      : null);
 
   state.ai = {
     ...state.ai,
@@ -490,6 +490,33 @@ async function exportAiDiagnosticForActiveDocument(): Promise<void> {
     error: null
   };
   renderAiPanel();
+}
+
+function withFolderLearningPipeline(
+  aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError } | null
+): unknown {
+  const pipeline = state.folderLearning.pipeline;
+  if (!pipeline.length || !aiResult) {
+    return aiResult;
+  }
+
+  if (aiResult.ok) {
+    return {
+      ...aiResult,
+      value: {
+        ...aiResult.value,
+        folderLearningPipeline: pipeline
+      }
+    };
+  }
+
+  return {
+    ...aiResult,
+    error: {
+      ...aiResult.error,
+      folderLearningPipeline: pipeline
+    }
+  };
 }
 
 function canRunAiSuggestion(): boolean {

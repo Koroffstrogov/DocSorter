@@ -15,6 +15,8 @@ export interface FolderNamingProfile {
   analyzedFileCount: number;
   recognizedFileCount: number;
   dominantPattern?: FolderNamingPattern;
+  dominantBlockCount?: number;
+  dominantBlocks?: string[];
   dominantDatePrecision?: FolderNamingProfileDatePrecision;
   dominantTarget?: string;
   dominantDocumentType?: string;
@@ -27,6 +29,12 @@ export interface FolderNamingProfile {
 
 interface DominantValue<T extends string> {
   value: T;
+  count: number;
+  ratio: number;
+}
+
+interface DominantNumberValue {
+  value: number;
   count: number;
   ratio: number;
 }
@@ -54,8 +62,10 @@ export function buildFolderNamingProfile(
   }
 
   const dominantPattern = dominantValue(parsed.map((entry) => entry.pattern));
-  const dominantTarget = dominantValue(parsed.map((entry) => entry.target));
-  const dominantDocumentType = dominantValue(parsed.map((entry) => entry.documentType));
+  const dominantBlockCount = dominantNumberValue(parsed.map((entry) => entry.blocks.length));
+  const dominantBlocks = buildDominantBlocks(parsed, dominantBlockCount?.value ?? 0);
+  const dominantTarget = dominantValue(parsed.map((entry) => entry.target).filter(isString));
+  const dominantDocumentType = dominantValue(parsed.map((entry) => entry.documentType).filter(isString));
   const dominantIssuer = dominantValue(parsed.map((entry) => entry.issuer).filter(isString));
   const dominantDatePrecision = detectDominantDatePrecision(parsed);
   const detailUsage = detectDetailUsage(parsed);
@@ -94,6 +104,8 @@ export function buildFolderNamingProfile(
     analyzedFileCount: analyzedEntries.length,
     recognizedFileCount: parsed.length,
     ...(dominantPattern ? { dominantPattern: dominantPattern.value } : {}),
+    ...(dominantBlockCount ? { dominantBlockCount: dominantBlockCount.value } : {}),
+    ...(dominantBlocks.length > 0 ? { dominantBlocks } : {}),
     dominantDatePrecision,
     ...(dominantTarget ? { dominantTarget: dominantTarget.value } : {}),
     ...(dominantDocumentType ? { dominantDocumentType: dominantDocumentType.value } : {}),
@@ -126,6 +138,16 @@ function detectDetailUsage(parsed: ParsedFolderFileName[]): FolderNamingProfileD
 
   const ratio = withDetailCount / parsed.length;
   return ratio >= 0.6 ? "often" : "sometimes";
+}
+
+function buildDominantBlocks(parsed: ParsedFolderFileName[], blockCount: number): string[] {
+  const blocks: string[] = [];
+  for (let index = 0; index < blockCount; index += 1) {
+    const dominant = dominantValue(parsed.map((entry) => entry.blocks[index]).filter(isString));
+    blocks.push(dominant?.value ?? "");
+  }
+
+  return blocks;
 }
 
 function computeCoherence(input: {
@@ -310,6 +332,34 @@ function dominantValue<T extends string>(values: readonly T[]): DominantValue<T>
 
     return left[0].localeCompare(right[0], "fr", { sensitivity: "base" });
   });
+  const best = sorted[0];
+  if (!best) {
+    return null;
+  }
+
+  const ratio = best[1] / values.length;
+  if (ratio < DOMINANT_RATIO) {
+    return null;
+  }
+
+  return {
+    value: best[0],
+    count: best[1],
+    ratio
+  };
+}
+
+function dominantNumberValue(values: readonly number[]): DominantNumberValue | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const counts = new Map<number, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  const sorted = Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || left[0] - right[0]);
   const best = sorted[0];
   if (!best) {
     return null;

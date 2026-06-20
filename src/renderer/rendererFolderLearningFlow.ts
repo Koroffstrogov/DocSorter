@@ -60,6 +60,7 @@ function applyFolderLearningNameList(nameList: FolderLearningNameList): void {
     entries: nameList.entries,
     profile: analysis.profile,
     comparison: analysis.comparison,
+    pipeline: analysis.pipeline,
     message: folderLearningMessage(analysis),
     error: "",
     warnings: [...nameList.warnings, ...analysis.profile.warnings, ...(analysis.comparison?.warnings ?? [])]
@@ -85,6 +86,7 @@ function recalculateFolderLearningComparison(): void {
     ...state.folderLearning,
     profile: analysis.profile,
     comparison: analysis.comparison,
+    pipeline: analysis.pipeline,
     message: folderLearningMessage(analysis),
     warnings: [...analysis.profile.warnings, ...(analysis.comparison?.warnings ?? [])]
   };
@@ -97,6 +99,7 @@ function buildFolderLearningAnalysis(
   const aiPreview = getAiNamingPreview();
   return DocSorterFolderLearningSummary.buildAnalysis({
     entries: nameList.entries,
+    targetFolder: nameList.targetFolder,
     aiName: aiPreview?.filename ?? "",
     aiFields: aiPreview?.fields ?? null,
     extension: activeDocument.extension,

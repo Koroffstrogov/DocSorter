@@ -3,7 +3,7 @@ import path from "node:path";
 import vm from "node:vm";
 
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 describe("rendererAiFlow V2 application helpers", () => {
   it("replaces reference-data values when AI confidence is at least 70", async () => {
@@ -582,6 +582,46 @@ describe("rendererAiFlow V2 application helpers", () => {
       keepAlive: "30m"
     })).toMatchObject({ think: false });
   });
+
+  it("adds the folder-learning pipeline to the exported AI diagnostic", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const exportAiDiagnostic = vi.fn(async () => ({
+      ok: true,
+      value: {
+        message: "Diagnostic IA complet exporté."
+      }
+    }));
+    ((context.window as Record<string, any>).docSorter as Record<string, unknown>).exportAiDiagnostic = exportAiDiagnostic;
+    state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+      result: {
+        status: "text-found",
+        source: "pdf-native",
+        text: "Relevé bancaire compte joint mai 2026"
+      }
+    };
+    state.ai.suggestion = createAiSuggestion();
+    state.ai.suggestionDocumentPath = "Z:\\source\\document.pdf";
+    state.folderLearning.pipeline = [
+      pipelineStep("content-ai-analysis"),
+      pipelineStep("folder-candidate"),
+      pipelineStep("folder-name-scan"),
+      pipelineStep("folder-schema-analysis"),
+      pipelineStep("aligned-name-proposal")
+    ];
+
+    await (context.exportAiDiagnosticForActiveDocument as () => Promise<void>)();
+
+    expect(exportAiDiagnostic).toHaveBeenCalledTimes(1);
+    const aiResult = exportAiDiagnostic.mock.calls[0]?.[2] as Record<string, any>;
+    expect(aiResult.value.folderLearningPipeline.map((step: FolderLearningPipelineStep) => step.id)).toEqual([
+      "content-ai-analysis",
+      "folder-candidate",
+      "folder-name-scan",
+      "folder-schema-analysis",
+      "aligned-name-proposal"
+    ]);
+  });
 });
 
 async function loadAiFlow(): Promise<Record<string, unknown>> {
@@ -594,6 +634,9 @@ async function loadAiFlow(): Promise<Record<string, unknown>> {
     },
     activeDocumentPath: "Z:\\source\\document.pdf",
     ai: createTestAiState(),
+    folderLearning: {
+      pipeline: []
+    },
     textExtraction: {
       byDocumentPath: {}
     }
@@ -670,6 +713,9 @@ interface TestState {
     origin: string;
   };
   ai: Record<string, unknown>;
+  folderLearning: {
+    pipeline: FolderLearningPipelineStep[];
+  };
   textExtraction: {
     byDocumentPath: Record<string, unknown>;
   };
@@ -747,6 +793,17 @@ function createAiSuggestion(): Record<string, unknown> {
         { value: "ne-pas-utiliser.pdf", score: 100, reason: "candidate ignored" }
       ]
     }
+  };
+}
+
+function pipelineStep(id: FolderLearningPipelineStepId): FolderLearningPipelineStep {
+  return {
+    id,
+    status: "ready",
+    inputs: {},
+    variables: {},
+    output: {},
+    warnings: []
   };
 }
 

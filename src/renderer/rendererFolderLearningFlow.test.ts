@@ -25,6 +25,13 @@ describe("rendererFolderLearningFlow", () => {
     expect(harness.context.state.folderLearning.comparison).toMatchObject({
       alignedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
     });
+    expect(harness.context.state.folderLearning.pipeline.map((step: FolderLearningPipelineStep) => step.id)).toEqual([
+      "content-ai-analysis",
+      "folder-candidate",
+      "folder-name-scan",
+      "folder-schema-analysis",
+      "aligned-name-proposal"
+    ]);
   });
 
   it("recalculates the aligned name when the AI preview changes", async () => {
@@ -168,6 +175,7 @@ function createIdleFolderLearningState(): FolderLearningState {
     entries: [],
     profile: null,
     comparison: null,
+    pipeline: [],
     message: "",
     error: "",
     warnings: []
