@@ -189,6 +189,18 @@ type FolderLearningPipelineStepId =
   | "folder-schema-analysis"
   | "aligned-name-proposal";
 
+type AiDiagnosticPipelineStepId =
+  | "content-ai-analysis"
+  | "candidate-validation"
+  | "folder-candidate"
+  | "folder-name-scan"
+  | "folder-schema-analysis"
+  | "aligned-name-proposal"
+  | "user-name-choice"
+  | "classification-readiness";
+
+type AiDiagnosticPipelineStatus = "ok" | "skipped" | "blocked" | "warning";
+
 interface FolderLearningNameEntry {
   name: string;
   isFile: boolean;
@@ -233,6 +245,16 @@ interface FolderLearningComparison {
 interface FolderLearningPipelineStep {
   id: FolderLearningPipelineStepId;
   status: "ready" | "warning" | "blocked";
+  inputs: Record<string, unknown>;
+  variables: Record<string, unknown>;
+  output: unknown;
+  warnings: string[];
+  blockingReason?: string;
+}
+
+interface AiDiagnosticPipelineStep {
+  id: AiDiagnosticPipelineStepId;
+  status: AiDiagnosticPipelineStatus;
   inputs: Record<string, unknown>;
   variables: Record<string, unknown>;
   output: unknown;
@@ -766,6 +788,7 @@ interface RendererAiDocumentSuggestion {
   };
   responseJson: unknown;
   folderLearningPipeline?: FolderLearningPipelineStep[];
+  diagnosticPipeline?: AiDiagnosticPipelineStep[];
   thinking: string | null;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;

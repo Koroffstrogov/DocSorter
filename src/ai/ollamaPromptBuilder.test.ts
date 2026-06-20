@@ -7,8 +7,8 @@ describe("buildOllamaClassificationPrompt", () => {
     const result = buildOllamaClassificationPrompt({
       filename: "document.pdf",
       extension: ".pdf",
-      extractedTextExcerpt: "Facture Renault Captur du 05/03/2024",
-      knownRelativeFolders: ["Vehicules/Renault-Captur/Entretien"],
+      extractedTextExcerpt: "Document bancaire mensuel du 05/03/2024",
+      knownRelativeFolders: ["Finances/Releves"],
       namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext"
     });
 
@@ -46,6 +46,7 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain("date d'émission/délivrance est prioritaire");
     expect(result.prompt).toContain("date de naissance est exclue");
     expect(result.prompt).toContain("CNI ou Identité");
+    expect(result.prompt).not.toMatch(/\b(captur|renault|vidange|bnp|paul|lea)\b/i);
     expect(result.format).toMatchObject({
       type: "object",
       required: ["fields", "folderCandidates", "fileNameCandidates", "warnings", "confidence", "source"]
@@ -59,7 +60,7 @@ describe("buildOllamaClassificationPrompt", () => {
     });
     expect(result.prompt).not.toContain("currentSuggestionV2");
     expect(result.prompt).not.toContain('"keywords"');
-    expect(result.input.extractedTextExcerpt).toBe("Facture Renault Captur du 05/03/2024");
+    expect(result.input.extractedTextExcerpt).toBe("Document bancaire mensuel du 05/03/2024");
   });
 
   it("bounds document text at 6000 characters before prompt construction", () => {

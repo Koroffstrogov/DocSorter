@@ -60,6 +60,7 @@ export interface AiClassificationValidationIssue {
   field?: string;
   rawValue?: string;
   normalizedValue?: string;
+  evidence?: "text" | "filename" | "selected-folder" | "folder-profile" | "document-policy" | "none";
   reason: string;
 }
 

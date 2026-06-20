@@ -194,7 +194,13 @@ export async function runOllamaSuggestionForDocument(
     return parsed;
   }
 
-  const multiCandidateValidation = validateAiMultiCandidateResponse(parsed.value);
+  const multiCandidateValidation = validateAiMultiCandidateResponse(parsed.value, {
+    filename: prompt.input.filename,
+    text: [
+      prompt.input.extractedTextExcerpt,
+      prompt.input.ocrTextExcerpt
+    ].filter(Boolean).join("\n")
+  });
   if (multiCandidateValidation.status === "invalid") {
     return aiOutputValidationFailure(multiCandidateValidation.error);
   }
@@ -619,7 +625,7 @@ function inferFolderKeys(
   ].filter(Boolean).join(" "));
   const keys: FolderKey[] = [];
 
-  if (hasAnySignal(signal, ["vehicule", "vehicules", "vehicle", "vehicles", "renault", "captur", "controle-technique", "carte-grise", "garage"])) {
+  if (hasAnySignal(signal, ["vehicule", "vehicules", "vehicle", "vehicles", "controle-technique", "carte-grise", "garage"])) {
     keys.push("vehicles");
   }
   if (hasAnySignal(signal, ["avis-imposition", "declaration-revenus", "taxe-fonciere", "impot", "impots", "fiscal"])) {
@@ -631,7 +637,7 @@ function inferFolderKeys(
   if (hasAnySignal(signal, ["certificat-scolarite", "scolarite", "bulletin-scolaire", "ecole", "college", "lycee"])) {
     keys.push("school");
   }
-  if (hasAnySignal(signal, ["releve-bancaire", "banque", "bnp", "compte"])) {
+  if (hasAnySignal(signal, ["releve-bancaire", "banque", "compte"])) {
     keys.push("bank");
   }
   if (hasAnySignal(signal, ["facture-energie", "electricite", "gaz", "eau", "maison", "habitation"])) {

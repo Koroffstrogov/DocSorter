@@ -256,6 +256,62 @@ describe("validateAiMultiCandidateResponse", () => {
       "Certains candidats IA ont été ignorés. Analyse conservée."
     );
   });
+
+  it("drops weak naming candidates without document evidence", () => {
+    const response = createResponse();
+    response.fields.subject = {
+      selected: "captur",
+      candidates: [{ value: "captur", score: 40, reason: "candidat faible" }]
+    };
+
+    const result = validateAiMultiCandidateResponse(response, {
+      filename: "releve_bancaire.pdf",
+      text: "Relevé bancaire compte joint mai 2026."
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.subject.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.fields.subject.candidates).toEqual([]);
+    expect(result.status === "valid" && result.response.rejectedCandidates[0]).toMatchObject({
+      field: "fields.subject.candidates",
+      rawValue: "captur",
+      normalizedValue: "captur",
+      evidence: "none"
+    });
+  });
+
+  it("keeps weak naming candidates when the document text proves them", () => {
+    const response = createResponse();
+    response.fields.target = {
+      selected: "captur",
+      candidates: [{ value: "captur", score: 40, reason: "véhicule dans le texte" }]
+    };
+
+    const result = validateAiMultiCandidateResponse(response, {
+      filename: "facture.pdf",
+      text: "Facture garage Renault Captur."
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBe("captur");
+    expect(result.status === "valid" && result.response.rejectedCandidates).toEqual([]);
+  });
+
+  it("keeps weak issuer candidates when the document text proves them", () => {
+    const response = createResponse();
+    response.fields.issuer = {
+      selected: "BNP Paribas",
+      candidates: [{ value: "BNP Paribas", score: 55, reason: "organisme bancaire" }]
+    };
+
+    const result = validateAiMultiCandidateResponse(response, {
+      filename: "releve.pdf",
+      text: "Relevé bancaire BNP Paribas du compte joint."
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.issuer.selected).toBe("bnp-paribas");
+  });
 });
 
 function createResponse() {

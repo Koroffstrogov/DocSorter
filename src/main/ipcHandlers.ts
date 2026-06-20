@@ -1007,7 +1007,14 @@ function readAiDiagnosticResult(value: unknown): AiSettingsResult<AiDocumentSugg
   }
 
   if (candidate.ok === false && candidate.error && typeof candidate.error === "object") {
-    const error = candidate.error as { code?: unknown; message?: unknown; field?: unknown };
+    const error = candidate.error as {
+      code?: unknown;
+      message?: unknown;
+      field?: unknown;
+      validationErrors?: unknown;
+      diagnosticPipeline?: unknown;
+      folderLearningPipeline?: unknown;
+    };
     if (typeof error.code === "string" && typeof error.message === "string") {
       return {
         ok: false,
@@ -1016,6 +1023,15 @@ function readAiDiagnosticResult(value: unknown): AiSettingsResult<AiDocumentSugg
           message: error.message,
           ...(typeof error.field === "string" && error.field.trim()
             ? { field: error.field.trim().slice(0, 120) }
+            : {}),
+          ...(Array.isArray(error.validationErrors)
+            ? { validationErrors: error.validationErrors }
+            : {}),
+          ...(Array.isArray(error.diagnosticPipeline)
+            ? { diagnosticPipeline: error.diagnosticPipeline }
+            : {}),
+          ...(Array.isArray(error.folderLearningPipeline)
+            ? { folderLearningPipeline: error.folderLearningPipeline }
             : {})
         }
       } as AiSettingsResult<AiDocumentSuggestion>;

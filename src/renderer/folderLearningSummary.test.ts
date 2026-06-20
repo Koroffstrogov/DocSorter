@@ -107,6 +107,40 @@ describe("folderLearningSummary", () => {
       recommendation: "keep-ai"
     });
   });
+
+  it("does not propose a misleading aligned name when the AI date is missing", () => {
+    const analysis = summary.buildAnalysis({
+      targetFolder: "Courriers",
+      entries: [
+        name("2026-01_foyer_courrier.pdf"),
+        name("2026-02_foyer_courrier.pdf"),
+        name("2026-03_foyer_courrier.pdf"),
+        name("2026-04_foyer_courrier.pdf")
+      ],
+      aiName: "",
+      aiFields: {
+        dateToken: "",
+        subject: "",
+        target: "foyer",
+        documentType: "courrier",
+        issuer: "",
+        detail: ""
+      },
+      extension: ".pdf"
+    });
+
+    expect(analysis.comparison).toBeNull();
+    expect(analysis.pipeline.find((step) => step.id === "content-ai-analysis")).toMatchObject({
+      status: "blocked",
+      blockingReason: "Analyse IA absente ou incomplète."
+    });
+    expect(analysis.pipeline.find((step) => step.id === "aligned-name-proposal")).toMatchObject({
+      status: "blocked",
+      output: {
+        alignedName: ""
+      }
+    });
+  });
 });
 
 function name(value: string): FolderLearningNameEntry {

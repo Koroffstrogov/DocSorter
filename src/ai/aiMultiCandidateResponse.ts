@@ -32,7 +32,23 @@ export interface AiRejectedCandidate {
   index: number;
   rawValue?: string;
   normalizedValue?: string;
+  evidence?: AiCandidateEvidence;
   reason: string;
+}
+
+export type AiCandidateEvidence =
+  | "text"
+  | "filename"
+  | "selected-folder"
+  | "folder-profile"
+  | "document-policy"
+  | "none";
+
+export interface AiCandidateEvidenceContext {
+  filename?: string;
+  text?: string;
+  selectedFolder?: string;
+  folderProfileTerms?: string[];
 }
 
 export interface AiFieldCandidates {
@@ -80,6 +96,7 @@ const TOP_LEVEL_KEYS = new Set([
 ]);
 const CANDIDATE_KEYS = new Set(["value", "score", "reason", "role", "exists", "requiresCreation"]);
 const MAX_CANDIDATES = 3;
+const LOW_CONFIDENCE_EVIDENCE_THRESHOLD = 60;
 const TARGET_KIND_VALUES = new Set(["person", "household", "vehicle", "property", "other"]);
 const GENERIC_TARGET_VALUES = new Set([
   "person",
@@ -123,7 +140,10 @@ type CandidateListMode =
   | { kind: "folder" }
   | { kind: "fileName" };
 
-export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandidateValidationResult {
+export function validateAiMultiCandidateResponse(
+  value: unknown,
+  evidenceContext?: AiCandidateEvidenceContext
+): AiMultiCandidateValidationResult {
   if (!isJsonObject(value)) {
     return invalid("AI_OUTPUT_NOT_OBJECT", "La réponse IA multi-candidats n'est pas un objet JSON.");
   }
@@ -153,6 +173,10 @@ export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandida
   }
 
   const fieldConsistency = normalizeSelectedFields(fields.value);
+  const evidenceFiltering = filterLowConfidenceCandidatesWithoutEvidence(
+    fields.value,
+    evidenceContext
+  );
 
   const folderCandidates = readCandidateList(record.folderCandidates, "folderCandidates", { kind: "folder" });
   if (!("ok" in folderCandidates)) {
@@ -173,12 +197,14 @@ export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandida
   const rejectedCandidates = [
     ...fields.rejectedCandidates,
     ...fieldConsistency.rejectedCandidates,
+    ...evidenceFiltering.rejectedCandidates,
     ...folderCandidates.rejectedCandidates,
     ...fileNameCandidates.rejectedCandidates
   ];
   const warnings = [
     ...normalizeWarnings(record.warnings),
     ...fieldConsistency.warnings,
+    ...evidenceFiltering.warnings,
     ...(rejectedCandidates.length > 0 ? ["Certains candidats IA ont été ignorés. Analyse conservée."] : [])
   ];
 
@@ -473,6 +499,121 @@ function normalizeSelectedFields(
   return { rejectedCandidates, warnings };
 }
 
+function filterLowConfidenceCandidatesWithoutEvidence(
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>,
+  context: AiCandidateEvidenceContext | undefined
+): { rejectedCandidates: AiRejectedCandidate[]; warnings: string[] } {
+  if (!context) {
+    return { rejectedCandidates: [], warnings: [] };
+  }
+
+  const rejectedCandidates: AiRejectedCandidate[] = [];
+  const warnings: string[] = [];
+  const fieldKeys: AiCandidateFieldKey[] = ["subject", "target", "issuer", "detail"];
+
+  for (const key of fieldKeys) {
+    const before = fields[key].candidates;
+    fields[key].candidates = before.filter((candidate, index) => {
+      if (candidate.score >= LOW_CONFIDENCE_EVIDENCE_THRESHOLD) {
+        return true;
+      }
+
+      const evidence = findCandidateEvidence(candidate.value, key, fields, context);
+      if (evidence !== "none") {
+        return true;
+      }
+
+      rejectedCandidates.push(createRejectedCandidate(
+        `fields.${key}.candidates`,
+        index,
+        candidate.value,
+        normalizeNameBlock(candidate.value),
+        `Candidat IA ignoré : ${key} faible sans preuve dans le document courant.`,
+        "none"
+      ));
+      return false;
+    });
+
+    const selected = fields[key].selected;
+    if (selected && !fields[key].candidates.some((candidate) => candidate.value === selected)) {
+      fields[key].selected = selectBestCandidate(fields[key].candidates)?.value;
+    }
+
+    if (before.length !== fields[key].candidates.length) {
+      warnings.push(`Candidat IA ${key} ignoré : score faible sans preuve documentaire.`);
+    }
+  }
+
+  return { rejectedCandidates, warnings: uniqueStrings(warnings) };
+}
+
+function findCandidateEvidence(
+  value: string,
+  field: AiCandidateFieldKey,
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>,
+  context: AiCandidateEvidenceContext
+): AiCandidateEvidence {
+  const normalized = normalizeNameBlock(value);
+  if (!normalized) {
+    return "none";
+  }
+
+  if (containsNormalizedValue(context.text ?? "", normalized)) {
+    return "text";
+  }
+
+  if (containsNormalizedValue(context.filename ?? "", normalized)) {
+    return "filename";
+  }
+
+  if (containsNormalizedValue(context.selectedFolder ?? "", normalized)) {
+    return "selected-folder";
+  }
+
+  if ((context.folderProfileTerms ?? []).some((term) => normalizeNameBlock(term) === normalized)) {
+    return "folder-profile";
+  }
+
+  if (isAllowedByDocumentPolicy(field, normalized, fields)) {
+    return "document-policy";
+  }
+
+  return "none";
+}
+
+function containsNormalizedValue(source: string, normalizedValue: string): boolean {
+  const normalizedSource = normalizeNameBlock(source);
+  if (!normalizedSource || !normalizedValue) {
+    return false;
+  }
+
+  return normalizedSource === normalizedValue ||
+    normalizedSource.includes(`-${normalizedValue}-`) ||
+    normalizedSource.startsWith(`${normalizedValue}-`) ||
+    normalizedSource.endsWith(`-${normalizedValue}`);
+}
+
+function isAllowedByDocumentPolicy(
+  field: AiCandidateFieldKey,
+  normalizedValue: string,
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>
+): boolean {
+  const documentType = normalizeNameBlock(fields.documentType.selected);
+  if (field === "target" && normalizedValue === "foyer" && isFiscalDocumentType(documentType)) {
+    return true;
+  }
+
+  return field === "issuer" &&
+    normalizedValue === "etat" &&
+    (documentType === "carte-identite" || documentType === "passeport");
+}
+
+function isFiscalDocumentType(documentType: string): boolean {
+  return documentType === "avis-imposition" ||
+    documentType === "declaration-revenus" ||
+    documentType === "taxe-fonciere";
+}
+
 function preferJointAccountTarget(fields: Record<AiCandidateFieldKey, AiFieldCandidates>): void {
   const target = normalizeNameBlock(fields.target.selected);
   const subject = normalizeNameBlock(fields.subject.selected);
@@ -754,6 +895,7 @@ function createGlobalValidationErrors(
       field: candidate.field,
       ...(candidate.rawValue ? { rawValue: candidate.rawValue } : {}),
       ...(candidate.normalizedValue ? { normalizedValue: candidate.normalizedValue } : {}),
+      evidence: candidate.evidence,
       reason: candidate.reason
     });
   }
@@ -766,13 +908,15 @@ function createRejectedCandidate(
   index: number,
   rawValue: string,
   normalizedValue: string | undefined,
-  reason: string
+  reason: string,
+  evidence: AiCandidateEvidence = "none"
 ): AiRejectedCandidate {
   return {
     field,
     index,
     ...(rawValue ? { rawValue } : {}),
     ...(normalizedValue ? { normalizedValue } : {}),
+    evidence,
     reason
   };
 }

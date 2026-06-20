@@ -495,17 +495,20 @@ async function exportAiDiagnosticForActiveDocument(): Promise<void> {
 function withFolderLearningPipeline(
   aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError } | null
 ): unknown {
-  const pipeline = state.folderLearning.pipeline;
-  if (!pipeline.length || !aiResult) {
+  if (!aiResult) {
     return aiResult;
   }
+
+  const folderLearningPipeline = state.folderLearning.pipeline;
+  const diagnosticPipeline = buildAiDiagnosticPipeline(aiResult);
 
   if (aiResult.ok) {
     return {
       ...aiResult,
       value: {
         ...aiResult.value,
-        folderLearningPipeline: pipeline
+        ...(folderLearningPipeline.length ? { folderLearningPipeline } : {}),
+        diagnosticPipeline
       }
     };
   }
@@ -514,9 +517,351 @@ function withFolderLearningPipeline(
     ...aiResult,
     error: {
       ...aiResult.error,
-      folderLearningPipeline: pipeline
+      ...(folderLearningPipeline.length ? { folderLearningPipeline } : {}),
+      diagnosticPipeline
     }
   };
+}
+
+function buildAiDiagnosticPipeline(
+  aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError }
+): AiDiagnosticPipelineStep[] {
+  return [
+    buildContentAiAnalysisStep(aiResult),
+    buildCandidateValidationStep(aiResult),
+    buildFolderCandidateStep(aiResult),
+    buildFolderNameScanStep(),
+    buildFolderSchemaAnalysisStep(),
+    buildAlignedNameProposalStep(),
+    buildUserNameChoiceStep(),
+    buildClassificationReadinessStep()
+  ];
+}
+
+function buildContentAiAnalysisStep(
+  aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError }
+): AiDiagnosticPipelineStep {
+  if (!aiResult.ok) {
+    return {
+      id: "content-ai-analysis",
+      status: "blocked",
+      inputs: { documentPathKnown: Boolean(state.ai.suggestionDocumentPath || state.activeDocumentPath) },
+      variables: { code: aiResult.error.code },
+      output: aiResult.error.message,
+      warnings: [],
+      blockingReason: aiResult.error.message
+    };
+  }
+
+  return {
+    id: "content-ai-analysis",
+    status: "ok",
+    inputs: {
+      documentName: aiResult.value.documentName,
+      textSource: aiResult.value.textSource,
+      promptCharacterCount: aiResult.value.promptCharacterCount
+    },
+    variables: {
+      model: aiResult.value.model,
+      confidence: aiResult.value.suggestion.confidence
+    },
+    output: "Analyse IA validée.",
+    warnings: aiResult.value.suggestion.warnings
+  };
+}
+
+function buildCandidateValidationStep(
+  aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError }
+): AiDiagnosticPipelineStep {
+  if (!aiResult.ok) {
+    const validationErrors = aiResult.error.validationErrors ?? [];
+    return {
+      id: "candidate-validation",
+      status: "blocked",
+      inputs: { validationErrorCount: validationErrors.length },
+      variables: { code: aiResult.error.code },
+      output: validationErrors.length ? validationErrors : aiResult.error.message,
+      warnings: validationErrors.map((error) => error.reason),
+      blockingReason: aiResult.error.message
+    };
+  }
+
+  const response = readObject(aiResult.value.responseJson);
+  const rejectedCandidates = readArray(response?.rejectedCandidates);
+  const warnings = readStringArray(response?.warnings);
+  return {
+    id: "candidate-validation",
+    status: rejectedCandidates.length > 0 || warnings.length > 0 ? "warning" : "ok",
+    inputs: { fieldCount: countAiResponseFields(response) },
+    variables: { rejectedCandidateCount: rejectedCandidates.length },
+    output: rejectedCandidates.length ? { rejectedCandidates } : "Tous les candidats retenus sont exploitables.",
+    warnings
+  };
+}
+
+function buildFolderCandidateStep(
+  aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError }
+): AiDiagnosticPipelineStep {
+  if (!aiResult.ok) {
+    return {
+      id: "folder-candidate",
+      status: "skipped",
+      inputs: {},
+      variables: {},
+      output: "Analyse IA indisponible.",
+      warnings: []
+    };
+  }
+
+  const response = readObject(aiResult.value.responseJson);
+  const folderCandidates = readArray(response?.folderCandidates);
+  const selectedFolder = state.ai.selection?.selectedFolder || aiResult.value.suggestion.targetFolder || "";
+  return {
+    id: "folder-candidate",
+    status: selectedFolder ? "ok" : folderCandidates.length > 0 ? "warning" : "skipped",
+    inputs: { candidateCount: folderCandidates.length },
+    variables: { selectedFolder },
+    output: selectedFolder || folderCandidates,
+    warnings: selectedFolder ? [] : ["Aucun dossier cible IA sélectionné."]
+  };
+}
+
+function buildFolderNameScanStep(): AiDiagnosticPipelineStep {
+  const profile = state.folderLearning.profile;
+  const existingStep = findFolderLearningStep("folder-name-scan");
+  if (state.folderLearning.status === "idle") {
+    return existingStep
+      ? normalizeFolderLearningStep(existingStep)
+      : createSkippedPipelineStep("folder-name-scan", "Convention du dossier non analysée.");
+  }
+  if (state.folderLearning.status === "loading") {
+    return createSkippedPipelineStep("folder-name-scan", "Lecture passive du dossier en cours.");
+  }
+  if (state.folderLearning.status === "error") {
+    return {
+      id: "folder-name-scan",
+      status: "warning",
+      inputs: { targetFolder: state.folderLearning.targetFolder },
+      variables: {},
+      output: state.folderLearning.error,
+      warnings: state.folderLearning.warnings,
+      blockingReason: state.folderLearning.error
+    };
+  }
+  if (!profile) {
+    return existingStep
+      ? normalizeFolderLearningStep(existingStep)
+      : createSkippedPipelineStep("folder-name-scan", "Profil de dossier absent.");
+  }
+
+  return {
+    id: "folder-name-scan",
+    status: profile.recognizedFileCount > 0 ? "ok" : "blocked",
+    inputs: { targetFolder: state.folderLearning.targetFolder },
+    variables: {
+      analyzedFileCount: profile.analyzedFileCount,
+      recognizedFileCount: profile.recognizedFileCount,
+      status: profile.status,
+      dominantDatePrecision: profile.dominantDatePrecision ?? ""
+    },
+    output: {
+      dominantPattern: profile.dominantPattern ?? "",
+      examples: profile.examples
+    },
+    warnings: profile.warnings,
+    ...(profile.recognizedFileCount > 0 ? {} : { blockingReason: "Aucun nom compatible détecté." })
+  };
+}
+
+function buildFolderSchemaAnalysisStep(): AiDiagnosticPipelineStep {
+  const step = findFolderLearningStep("folder-schema-analysis");
+  if (!step) {
+    return createSkippedPipelineStep("folder-schema-analysis", "Schéma local non analysé.");
+  }
+
+  return {
+    id: "folder-schema-analysis",
+    status: mapFolderLearningStatus(step.status),
+    inputs: step.inputs,
+    variables: step.variables,
+    output: step.output,
+    warnings: step.warnings,
+    ...(step.blockingReason ? { blockingReason: step.blockingReason } : {})
+  };
+}
+
+function buildAlignedNameProposalStep(): AiDiagnosticPipelineStep {
+  const comparison = state.folderLearning.comparison;
+  if (!comparison) {
+    const existingStep = findFolderLearningStep("aligned-name-proposal");
+    return existingStep
+      ? normalizeFolderLearningStep(existingStep)
+      : createSkippedPipelineStep("aligned-name-proposal", "Nom aligné non calculé.");
+  }
+
+  return {
+    id: "aligned-name-proposal",
+    status: comparison.alignedName ? "ok" : comparison.recommendation === "manual-review" ? "warning" : "skipped",
+    inputs: { aiName: comparison.aiName, detectedPattern: comparison.detectedPattern ?? "" },
+    variables: {
+      appliedChanges: comparison.appliedChanges,
+      confidence: comparison.confidence
+    },
+    output: {
+      recommendation: comparison.recommendation,
+      alignedName: comparison.alignedName ?? ""
+    },
+    warnings: comparison.warnings,
+    ...(comparison.alignedName ? {} : { blockingReason: "Aucun nom aligné proposé." })
+  };
+}
+
+function buildUserNameChoiceStep(): AiDiagnosticPipelineStep {
+  const comparison = state.folderLearning.comparison;
+  const naming = (state as { naming?: NamingState }).naming;
+  const applied = naming?.overrideFilenameOrigin === "folder-learning" && Boolean(naming.overrideFilename);
+  if (applied) {
+    return {
+      id: "user-name-choice",
+      status: "ok",
+      inputs: { availableAlignedName: comparison?.alignedName ?? "" },
+      variables: { filenameSource: "folder-learning" },
+      output: naming?.overrideFilename,
+      warnings: []
+    };
+  }
+
+  if (comparison?.alignedName) {
+    return {
+      id: "user-name-choice",
+      status: "skipped",
+      inputs: { availableAlignedName: comparison.alignedName },
+      variables: { filenameSource: "ai" },
+      output: "Nom IA conservé : le nom aligné n'a pas été appliqué.",
+      warnings: []
+    };
+  }
+
+  return createSkippedPipelineStep("user-name-choice", "Aucun nom aligné disponible pour choix utilisateur.");
+}
+
+function buildClassificationReadinessStep(): AiDiagnosticPipelineStep {
+  const destination = (state as { destination?: DestinationCheckState }).destination;
+  const classification = (state as { classification?: ClassificationState }).classification;
+  const preview = getAiNamingPreview();
+
+  if (classification?.status === "ready" && classification.plan?.status === "ready") {
+    return {
+      id: "classification-readiness",
+      status: "ok",
+      inputs: { classificationStatus: classification.status },
+      variables: { planStatus: classification.plan.status },
+      output: "Plan de classement prêt.",
+      warnings: []
+    };
+  }
+
+  if (classification?.status === "blocked") {
+    return {
+      id: "classification-readiness",
+      status: "blocked",
+      inputs: { classificationStatus: classification.status },
+      variables: { planStatus: classification.plan?.status ?? "" },
+      output: classification.error?.message ?? "Plan de classement bloqué.",
+      warnings: [],
+      blockingReason: classification.error?.message ?? "Plan de classement bloqué."
+    };
+  }
+
+  if (destination?.status === "available") {
+    return {
+      id: "classification-readiness",
+      status: preview?.filenameValid ? "ok" : "blocked",
+      inputs: { destinationStatus: destination.status },
+      variables: { checkedFilename: destination.checkedFilename },
+      output: destination.result?.finalPath ?? "Destination disponible.",
+      warnings: preview?.messages.filter((message) => message.level !== "info").map((message) => message.message) ?? [],
+      ...(preview?.filenameValid ? {} : { blockingReason: "Nom final incomplet ou invalide." })
+    };
+  }
+
+  if (destination?.status === "collision") {
+    return {
+      id: "classification-readiness",
+      status: "warning",
+      inputs: { destinationStatus: destination.status },
+      variables: { checkedFilename: destination.checkedFilename },
+      output: destination.result?.message ?? "Collision détectée.",
+      warnings: ["Collision à résoudre avant classement."]
+    };
+  }
+
+  if (destination && ["target-not-selected", "invalid", "error"].includes(destination.status)) {
+    return {
+      id: "classification-readiness",
+      status: "blocked",
+      inputs: { destinationStatus: destination.status },
+      variables: { checkedFilename: destination.checkedFilename },
+      output: destination.error?.message ?? "Destination non disponible.",
+      warnings: [],
+      blockingReason: destination.error?.message ?? "Destination non disponible."
+    };
+  }
+
+  return createSkippedPipelineStep("classification-readiness", "Vérification de classement non lancée.");
+}
+
+function createSkippedPipelineStep(
+  id: AiDiagnosticPipelineStepId,
+  reason: string
+): AiDiagnosticPipelineStep {
+  return {
+    id,
+    status: "skipped",
+    inputs: {},
+    variables: {},
+    output: reason,
+    warnings: []
+  };
+}
+
+function findFolderLearningStep(id: FolderLearningPipelineStepId): FolderLearningPipelineStep | null {
+  return state.folderLearning.pipeline.find((step) => step.id === id) ?? null;
+}
+
+function normalizeFolderLearningStep(step: FolderLearningPipelineStep): AiDiagnosticPipelineStep {
+  return {
+    id: step.id,
+    status: mapFolderLearningStatus(step.status),
+    inputs: step.inputs,
+    variables: step.variables,
+    output: step.output,
+    warnings: step.warnings,
+    ...(step.blockingReason ? { blockingReason: step.blockingReason } : {})
+  };
+}
+
+function mapFolderLearningStatus(status: FolderLearningPipelineStep["status"]): AiDiagnosticPipelineStatus {
+  return status === "ready" ? "ok" : status;
+}
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function countAiResponseFields(response: Record<string, unknown> | null): number {
+  const fields = readObject(response?.fields);
+  return fields ? Object.keys(fields).length : 0;
 }
 
 function canRunAiSuggestion(): boolean {

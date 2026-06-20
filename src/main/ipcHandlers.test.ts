@@ -134,7 +134,24 @@ describe("registerIpcHandlers", () => {
       error: {
         code: "AI_OUTPUT_INVALID",
         message: "Réponse IA invalide.",
-        field: "fields.documentType.selected"
+        field: "fields.documentType.selected",
+        validationErrors: [
+          {
+            field: "fields.documentType.selected",
+            reason: "Candidat invalide."
+          }
+        ],
+        diagnosticPipeline: [
+          {
+            id: "candidate-validation",
+            status: "blocked",
+            inputs: {},
+            variables: {},
+            output: "Réponse IA invalide.",
+            warnings: [],
+            blockingReason: "Réponse IA invalide."
+          }
+        ]
       }
     });
 
@@ -157,7 +174,24 @@ describe("registerIpcHandlers", () => {
         error: {
           code: "AI_OUTPUT_INVALID",
           message: "Réponse IA invalide.",
-          field: "fields.documentType.selected"
+          field: "fields.documentType.selected",
+          validationErrors: [
+            {
+              field: "fields.documentType.selected",
+              reason: "Candidat invalide."
+            }
+          ],
+          diagnosticPipeline: [
+            {
+              id: "candidate-validation",
+              status: "blocked",
+              inputs: {},
+              variables: {},
+              output: "Réponse IA invalide.",
+              warnings: [],
+              blockingReason: "Réponse IA invalide."
+            }
+          ]
         }
       }
     });

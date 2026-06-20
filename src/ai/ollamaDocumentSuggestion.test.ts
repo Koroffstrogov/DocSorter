@@ -755,6 +755,115 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
   });
 
+  it("drops weak Captur subject candidates from bank statements when the document has no evidence", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Relevé bancaire du compte joint pour mai 2026."
+      }),
+      knownRelativeFolders: ["Vehicules/Renault-Captur/Entretien", "Banque/Releves"],
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          fields: {
+            dateToken: createField("2026-05"),
+            subject: createScoredField("captur", 40),
+            target: createField("foyer"),
+            targetKind: createField("household"),
+            documentType: createField("releve-bancaire"),
+            issuer: createField(""),
+            detail: createField("")
+          },
+          folderCandidates: [],
+          fileNameCandidates: [],
+          confidence: 78,
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.subject.selected).toBeUndefined();
+    expect(result.ok && result.value.responseJson.fields.subject.candidates).toEqual([]);
+    expect(result.ok && result.value.suggestion.subject).toBeUndefined();
+    const rejectedCaptur = result.ok && result.value.responseJson.rejectedCandidates.find((candidate) =>
+      candidate.rawValue === "captur"
+    );
+    expect(rejectedCaptur).toMatchObject({
+      field: "fields.subject.candidates",
+      rawValue: "captur",
+      evidence: "none"
+    });
+  });
+
+  it("keeps weak Captur candidates when Renault Captur is present in the document", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Facture garage Renault Captur du 05/03/2024."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          fields: {
+            dateToken: createField("2024-03-05"),
+            subject: createField(""),
+            target: createScoredField("captur", 40),
+            targetKind: createField("vehicle"),
+            documentType: createField("facture"),
+            issuer: createScoredField("renault", 55),
+            detail: createField("")
+          },
+          folderCandidates: [],
+          fileNameCandidates: [],
+          confidence: 78,
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.target.selected).toBe("captur");
+    expect(result.ok && result.value.responseJson.fields.issuer.selected).toBe("renault");
+  });
+
+  it("keeps weak BNP Paribas issuer candidates when the document proves them", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Relevé bancaire BNP Paribas du compte joint pour mai 2026."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: JSON.stringify({
+          fields: {
+            dateToken: createField("2026-05"),
+            subject: createField(""),
+            target: createField("foyer"),
+            targetKind: createField("household"),
+            documentType: createField("releve-bancaire"),
+            issuer: createScoredField("BNP Paribas", 55),
+            detail: createField("")
+          },
+          folderCandidates: [],
+          fileNameCandidates: [],
+          confidence: 78,
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.issuer.selected).toBe("bnp-paribas");
+    expect(result.ok && result.value.suggestion.issuer).toBe("bnp-paribas");
+  });
+
   it("prefers compte-joint from text for bank statements even when the model selects foyer", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
@@ -1042,6 +1151,13 @@ function createField(value: string | undefined) {
   return {
     selected: value ?? "",
     candidates: value ? [createCandidate(value, 80, "Valeur sélectionnée.", "selected")] : []
+  };
+}
+
+function createScoredField(value: string, score: number) {
+  return {
+    selected: value,
+    candidates: [createCandidate(value, score, "Valeur sélectionnée.", "selected")]
   };
 }
 

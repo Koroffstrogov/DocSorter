@@ -48,7 +48,7 @@ export function buildOllamaClassificationPrompt(
             },
             subject: {
               selected: "sujet du champ Renommage proposé optionnel",
-              candidates: [{ value: "captur", score: 85, reason: "véhicule détecté", role: "selected" }]
+              candidates: [{ value: "sujet-utile", score: 85, reason: "sujet explicitement détecté", role: "selected" }]
             },
             target: {
               selected: "cible logique optionnelle",
@@ -64,19 +64,19 @@ export function buildOllamaClassificationPrompt(
             },
             issuer: {
               selected: "émetteur normalisé optionnel",
-              candidates: [{ value: "renault", score: 60, reason: "organisme détecté", role: "selected" }]
+              candidates: [{ value: "emetteur", score: 60, reason: "organisme détecté", role: "selected" }]
             },
             detail: {
               selected: "détail normalisé optionnel",
-              candidates: [{ value: "vidange", score: 65, reason: "prestation détectée", role: "selected" }]
+              candidates: [{ value: "operation", score: 65, reason: "détail explicitement détecté", role: "selected" }]
             }
           },
           folderCandidates: [
-            { value: "Vehicules", score: 80, reason: "dossier connu pertinent", exists: true }
+            { value: "Domaine", score: 80, reason: "dossier connu pertinent", exists: true }
           ],
           fileNameCandidates: [
             {
-              value: "2026_captur_facture-entretien_renault_vidange.pdf",
+              value: "2026_cible-documentaire_type-documentaire_emetteur_operation.pdf",
               score: 80,
               reason: "convention respectée",
               exists: false,
@@ -107,13 +107,15 @@ export function buildOllamaClassificationPrompt(
       "- subject ne doit pas répéter target, documentType, issuer ou detail.",
       "- Pour un relevé bancaire, documentType vaut releve-bancaire ; subject peut rester vide.",
       "- target ne doit jamais être égal à documentType.",
-      "- target est la valeur de nommage : paul, lea, foyer, captur, maison-principale.",
+      "- target est la valeur de nommage issue du document courant : personne nommée, foyer, véhicule identifié ou bien identifié.",
       "- target ne doit jamais valoir personne, person, véhicule, vehicle, document, bien, property, other, ni le type documentaire.",
       "- targetKind décrit seulement la nature optionnelle de target : person, household, vehicle, property ou other.",
       "- subject peut rester un libellé lisible, mais ne doit pas remplacer target.",
       "- la cible doit être la personne, le foyer, le véhicule ou le bien concerné ; le type documentaire ne doit pas servir de cible.",
       "- detail ne doit pas répéter subject, target, documentType ou issuer.",
       "- le nom de fichier source ou son basename ne doit jamais devenir subject ni target.",
+      "- N'ajoute jamais une marque, un prénom, un véhicule, un organisme ou une opération qui n'apparaît pas dans le document courant.",
+      "- Si un candidat subject, target, issuer ou detail est incertain ou seulement inspiré par un exemple, laisse-le vide.",
       "- n'utilise jamais DocSorter, docsorter-local, document de test ou contenu fictif dans subject, issuer, detail ou proposedName.",
       "- n'utilise jamais de chemin absolu dans target, documentType, issuer, detail ou targetFolder.",
       "- dateToken doit être au format AAAA-MM-JJ, ou rester absent.",

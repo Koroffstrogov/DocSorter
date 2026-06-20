@@ -361,6 +361,32 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(redundant.filename).toBe("2026_lea_carnet-vaccination.pdf");
   });
 
+  it("keeps a document without date incomplete instead of inventing a year", async () => {
+    const context = await loadAiFlow();
+    const buildPreview = context.buildAiSelectionPreview as (
+      fields: Record<string, string>,
+      extension: string
+    ) => { filename: string; isValid: boolean; messages: Array<{ level: string; message: string }> };
+
+    const preview = buildPreview({
+      dateToken: "",
+      subject: "",
+      target: "foyer",
+      documentType: "courrier",
+      issuer: "",
+      detail: ""
+    }, ".pdf");
+
+    expect(preview).toMatchObject({
+      filename: "",
+      isValid: false
+    });
+    expect(preview.messages).toContainEqual({
+      level: "error",
+      message: "Date IA obligatoire : AAAA, AAAA-MM ou AAAA-MM-JJ."
+    });
+  });
+
   it("recalculates the AI destination folder when a folder candidate is selected", async () => {
     const context = await loadAiFlow();
     const buildSelection = context.buildAiSelectionFromSuggestion as (
@@ -621,6 +647,25 @@ describe("rendererAiFlow V2 application helpers", () => {
       "folder-schema-analysis",
       "aligned-name-proposal"
     ]);
+    expect(aiResult.value.diagnosticPipeline.map((step: AiDiagnosticPipelineStep) => step.id)).toEqual([
+      "content-ai-analysis",
+      "candidate-validation",
+      "folder-candidate",
+      "folder-name-scan",
+      "folder-schema-analysis",
+      "aligned-name-proposal",
+      "user-name-choice",
+      "classification-readiness"
+    ]);
+    expect(aiResult.value.diagnosticPipeline.map((step: AiDiagnosticPipelineStep) => step.status)).not.toContain("ready");
+    expect(aiResult.value.diagnosticPipeline[0]).toMatchObject({
+      id: "content-ai-analysis",
+      status: "ok"
+    });
+    expect(aiResult.value.diagnosticPipeline[1]).toMatchObject({
+      id: "candidate-validation",
+      status: "ok"
+    });
   });
 });
 

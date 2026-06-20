@@ -158,6 +158,10 @@ function stripRejectedCandidateValues(value: unknown): unknown {
       output[key] = entry.map((candidate) => redactValidationError(candidate));
       continue;
     }
+    if ((key === "diagnosticPipeline" || key === "folderLearningPipeline") && Array.isArray(entry)) {
+      output[key] = entry.map((step) => redactPipelineStep(step));
+      continue;
+    }
 
     output[key] = stripRejectedCandidateValues(entry);
   }
@@ -173,6 +177,7 @@ function redactRejectedCandidate(value: unknown): unknown {
   return {
     ...(typeof record.field === "string" ? { field: record.field } : {}),
     ...(typeof record.index === "number" ? { index: record.index } : {}),
+    ...(typeof record.evidence === "string" ? { evidence: record.evidence } : {}),
     ...(typeof record.reason === "string" ? { reason: record.reason } : {})
   };
 }
@@ -185,8 +190,58 @@ function redactValidationError(value: unknown): unknown {
   const record = value as Record<string, unknown>;
   return {
     ...(typeof record.field === "string" ? { field: record.field } : {}),
+    ...(typeof record.evidence === "string" ? { evidence: record.evidence } : {}),
     ...(typeof record.reason === "string" ? { reason: record.reason } : {})
   };
+}
+
+function redactPipelineStep(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.id === "string" ? { id: record.id } : {}),
+    ...(typeof record.status === "string" ? { status: record.status } : {}),
+    inputs: redactPipelineRecord(record.inputs),
+    variables: redactPipelineRecord(record.variables),
+    output: redactPipelineOutput(record.output),
+    warnings: Array.isArray(record.warnings) ? record.warnings.map(() => "[avertissement-expurgé]") : [],
+    ...(typeof record.blockingReason === "string" ? { blockingReason: "[raison-expurgée]" } : {})
+  };
+}
+
+function redactPipelineRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    output[key] = redactPipelineOutput(entry);
+  }
+  return output;
+}
+
+function redactPipelineOutput(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value ? "[valeur-expurgée]" : "";
+  }
+  if (typeof value === "number" || typeof value === "boolean" || value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return { itemCount: value.length };
+  }
+  if (value && typeof value === "object") {
+    const output: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      output[key] = redactPipelineOutput(entry);
+    }
+    return output;
+  }
+  return value;
 }
 
 function createDiagnosticText(

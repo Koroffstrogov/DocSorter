@@ -142,6 +142,7 @@ describe("AI diagnostics", () => {
     expect(log.ia.value.responseJson.rejectedCandidates[0]).toEqual({
       field: "fields.issuer.candidates",
       index: 0,
+      evidence: "none",
       reason: "Candidat IA invalide : les chemins locaux sont refusés."
     });
   });
@@ -187,6 +188,64 @@ describe("AI diagnostics", () => {
       field: "targetFolder",
       reason: "Dossier cible IA invalide ou dangereux."
     });
+  });
+
+  it("keeps diagnostic pipeline structure but removes raw values in redacted diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+    const suggestion = {
+      ...createAiDiagnosticSuggestion(),
+      diagnosticPipeline: [
+        {
+          id: "aligned-name-proposal",
+          status: "ok",
+          inputs: {
+            aiName: "2026-05_foyer_releve-bancaire_bnp.pdf",
+            detectedPattern: "DATE_DOCUMENT_CIBLE_EMETTEUR"
+          },
+          variables: {
+            appliedChanges: ["target", "issuer"],
+            confidence: 85
+          },
+          output: {
+            alignedName: "2026-05_releve-bancaire_compte-joint_bnp-paribas.pdf"
+          },
+          warnings: ["Nom aligné proposé pour compte joint."]
+        }
+      ]
+    };
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "releve-bancaire.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: true,
+        value: suggestion
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.ia.value.diagnosticPipeline[0]).toMatchObject({
+      id: "aligned-name-proposal",
+      status: "ok",
+      inputs: {
+        aiName: "[valeur-expurgée]",
+        detectedPattern: "[valeur-expurgée]"
+      },
+      output: {
+        alignedName: "[valeur-expurgée]"
+      },
+      warnings: ["[avertissement-expurgé]"]
+    });
+    expect(JSON.stringify(log.ia.value.diagnosticPipeline)).not.toContain("compte-joint");
+    expect(JSON.stringify(log.ia.value.diagnosticPipeline)).not.toContain("bnp-paribas");
   });
 });
 
@@ -235,6 +294,7 @@ function createAiDiagnosticSuggestion(): any {
           index: 0,
           rawValue: "C:\\secret\\etat",
           normalizedValue: "c-secret-etat",
+          evidence: "none",
           reason: "Candidat IA invalide : les chemins locaux sont refusés."
         }
       ],
