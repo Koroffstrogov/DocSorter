@@ -9,6 +9,7 @@ const api: DocSorterApi = {
   listTargetFolders: () => ipcRenderer.invoke("target:listFolders"),
   setTargetFolder: (targetFolder) => ipcRenderer.invoke("target:setFolder", targetFolder),
   createTargetFolder: (targetFolder) => ipcRenderer.invoke("target:createFolder", targetFolder),
+  listTargetFolderNames: () => ipcRenderer.invoke("folderLearning:listNames"),
   refreshSourceDocuments: () => ipcRenderer.invoke("documents:refreshSource"),
   getPreviewData: (documentPath) => ipcRenderer.invoke("preview:getData", documentPath),
   createInitialNamingDraft: (originalName) =>

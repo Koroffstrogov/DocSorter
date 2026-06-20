@@ -1196,6 +1196,67 @@ details.detail-section[open] > summary {
   background: var(--badge-warning-bg);
 }
 
+.folder-learning-summary {
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px;
+  background: #f8fafc;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.folder-learning-summary.ready {
+  background: #fbfcfe;
+}
+
+.folder-learning-summary.error {
+  border-color: #ead7a2;
+  background: var(--badge-warning-bg);
+}
+
+.folder-learning-summary.loading {
+  background: var(--surface-muted);
+}
+
+.folder-learning-summary strong {
+  color: var(--text-main);
+}
+
+.folder-learning-example,
+.folder-learning-recommendation,
+.folder-learning-aligned-name {
+  overflow-wrap: anywhere;
+}
+
+.folder-learning-aligned-name {
+  color: var(--success);
+  font-weight: 760;
+}
+
+.folder-learning-use-aligned {
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  background: var(--button-secondary-bg);
+  color: var(--text-main);
+  font-size: 11px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.folder-learning-use-aligned:hover:not(:disabled),
+.folder-learning-use-aligned:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  outline: none;
+}
+
 .proposal-summary strong.valid {
   color: var(--success);
 }

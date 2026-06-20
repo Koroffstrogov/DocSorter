@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   targetListFolders: "target:listFolders",
   targetSetFolder: "target:setFolder",
   targetCreateFolder: "target:createFolder",
+  folderLearningListNames: "folderLearning:listNames",
   documentsRefreshSource: "documents:refreshSource",
   previewGetData: "preview:getData",
   namingCreateInitialDraft: "naming:createInitialDraft",

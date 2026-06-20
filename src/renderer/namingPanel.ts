@@ -2,9 +2,11 @@ interface NamingPanelState {
   activeDocument: DocumentItem | null;
   targetPath: string | null;
   targetFolder: TargetFolderState;
+  folderLearning: FolderLearningState;
   naming: NamingState;
   destination: DestinationCheckState;
   effectiveFilename: string;
+  effectiveFilenameValid: boolean;
   aiPreview: {
     filename: string;
     filenameValid: boolean;
@@ -22,6 +24,7 @@ interface NamingPanelOptions {
   onDraftChange: (draft: NamingDraft) => void;
   onResetDraft: () => void;
   onApplyDestinationAlternative: () => void;
+  onUseFolderLearningAlignedName: () => void;
   onTargetFolderChange: (targetFolder: string) => void;
   onCreateTargetFolder: () => void;
 }
@@ -41,6 +44,7 @@ interface NamingPanelElements {
   proposedFilename: HTMLElement | null;
   nameExplanation: HTMLDetailsElement | null;
   nameExplanationContent: HTMLElement | null;
+  folderLearningSummary: HTMLElement | null;
   proposalState: HTMLElement | null;
   messages: HTMLUListElement | null;
   destinationStatus: HTMLElement | null;
@@ -102,7 +106,8 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return;
       }
 
-      const { activeDocument, naming, effectiveFilename, aiPreview, canResetChoices } = options.getState();
+      const { activeDocument, naming, effectiveFilename, effectiveFilenameValid, aiPreview, canResetChoices } =
+        options.getState();
       syncResetButton(elements, canResetChoices);
       elements.panel.hidden = false;
       if (!activeDocument) {
@@ -114,6 +119,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
         setProposalState(elements, "Aucun document sélectionné.");
         renderNameExplanation(elements, createNameExplanationInput(options.getState()));
+        renderFolderLearningSummary(elements, options.getState(), options.onUseFolderLearningAlignedName);
 
         if (elements.messages) {
           elements.messages.replaceChildren(
@@ -132,12 +138,19 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       if (elements.proposedFilename) {
-        const displayFilename = aiPreview
-          ? aiPreview.filename
-          : naming.proposal?.isValid
-            ? effectiveFilename
-            : "";
-        const displayIsValid = aiPreview ? aiPreview.filenameValid : Boolean(naming.proposal?.isValid);
+        const hasOverride = Boolean(naming.overrideFilename);
+        const displayFilename = hasOverride
+          ? effectiveFilename
+          : aiPreview
+            ? aiPreview.filename
+            : naming.proposal?.isValid
+              ? effectiveFilename
+              : "";
+        const displayIsValid = hasOverride
+          ? effectiveFilenameValid
+          : aiPreview
+            ? aiPreview.filenameValid
+            : Boolean(naming.proposal?.isValid);
         const label = !aiPreview && naming.isLoading
           ? "Calcul de la proposition..."
           : displayFilename || "Nom final non généré";
@@ -148,6 +161,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
       setProposalState(elements, proposalStateLabel(naming, aiPreview));
       renderNameExplanation(elements, createNameExplanationInput(options.getState()));
+      renderFolderLearningSummary(elements, options.getState(), options.onUseFolderLearningAlignedName);
 
       if (elements.messages) {
         if (aiPreview) {
@@ -177,6 +191,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
       const { activeDocument, targetPath, targetFolder, naming, destination, aiPreview } = options.getState();
       renderNameExplanation(elements, createNameExplanationInput(options.getState()));
+      renderFolderLearningSummary(elements, options.getState(), options.onUseFolderLearningAlignedName);
       const finalFolder = aiPreview
         ? formatRelativeDestinationFolder(aiPreview.destinationFolder)
         : naming.proposal?.isValid
@@ -313,6 +328,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       proposedFilename: root.querySelector<HTMLElement>("#proposed-filename"),
       nameExplanation: root.querySelector<HTMLDetailsElement>("#name-explanation"),
       nameExplanationContent: root.querySelector<HTMLElement>("#name-explanation-content"),
+      folderLearningSummary: root.querySelector<HTMLElement>("#folder-learning-summary"),
       proposalState: root.querySelector<HTMLElement>("#proposal-state"),
       messages: root.querySelector<HTMLUListElement>("#naming-messages"),
       destinationStatus: root.querySelector<HTMLElement>("#destination-status"),
@@ -530,14 +546,25 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
   function createNameExplanationInput(state: NamingPanelState): NameExplanationInput {
     const aiPreview = state.aiPreview;
+    const hasOverride = Boolean(state.naming.overrideFilename);
     return {
-      filename: aiPreview?.filename ?? (state.naming.proposal?.isValid ? state.effectiveFilename : ""),
-      filenameValid: aiPreview?.filenameValid ?? Boolean(state.naming.proposal?.isValid),
+      filename: hasOverride
+        ? state.effectiveFilename
+        : aiPreview?.filename ?? (state.naming.proposal?.isValid ? state.effectiveFilename : ""),
+      filenameValid: hasOverride
+        ? state.effectiveFilenameValid
+        : aiPreview?.filenameValid ?? Boolean(state.naming.proposal?.isValid),
+      filenameSource: state.naming.overrideFilenameOrigin === "folder-learning"
+        ? "folder-learning"
+        : aiPreview
+          ? "ai"
+          : "legacy",
       extension: state.activeDocument?.extension ?? "",
       fields: aiPreview?.fields ?? null,
       manualFields: aiPreview?.manualFields ?? null,
       destinationFolder: aiPreview?.destinationFolder ?? state.targetFolder.selectedFolder,
       folderOrigin: state.targetFolder.origin,
+      folderLearning: state.folderLearning,
       messages: aiPreview?.messages ?? []
     };
   }
@@ -575,6 +602,127 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
     list.replaceChildren(...model.lines.map(createNameExplanationLine));
 
     elements.nameExplanationContent.replaceChildren(formula, result, missing, list);
+  }
+
+  function renderFolderLearningSummary(
+    elements: NamingPanelElements,
+    state: NamingPanelState,
+    onUseFolderLearningAlignedName: () => void
+  ): void {
+    if (!elements.folderLearningSummary) {
+      return;
+    }
+
+    const folderLearning = state.folderLearning;
+    elements.folderLearningSummary.className = `folder-learning-summary ${folderLearning.status}`;
+
+    if (folderLearning.status === "idle") {
+      elements.folderLearningSummary.replaceChildren("Convention du dossier : non analysée.");
+      return;
+    }
+
+    if (folderLearning.status === "loading") {
+      elements.folderLearningSummary.replaceChildren("Convention du dossier : lecture en cours.");
+      return;
+    }
+
+    if (folderLearning.status === "error") {
+      elements.folderLearningSummary.replaceChildren("Convention du dossier : indisponible.");
+      elements.folderLearningSummary.title = folderLearning.error || folderLearning.message;
+      return;
+    }
+
+    const profile = folderLearning.profile;
+    if (!profile || profile.status === "none") {
+      elements.folderLearningSummary.replaceChildren("Convention du dossier : aucune convention détectée.");
+      elements.folderLearningSummary.title = folderLearning.message;
+      return;
+    }
+
+    const title = document.createElement("strong");
+    title.textContent = `Convention du dossier : ${profileStatusLabel(profile.status)}`;
+
+    const stats = document.createElement("span");
+    stats.textContent = `${profile.recognizedFileCount}/${profile.analyzedFileCount} nom(s) reconnu(s)`;
+
+    const example = document.createElement("span");
+    example.textContent = profile.examples[0] ? `Exemple : ${profile.examples[0]}` : "";
+
+    const recommendation = document.createElement("span");
+    recommendation.textContent = folderLearning.comparison
+      ? `Recommandation : ${recommendationLabel(folderLearning.comparison.recommendation)}`
+      : "Recommandation : analyse IA requise";
+
+    const aligned = document.createElement("span");
+    aligned.className = "folder-learning-aligned-name";
+    aligned.textContent = folderLearning.comparison?.alignedName
+      ? `Nom aligné proposé : ${folderLearning.comparison.alignedName}`
+      : "";
+
+    const children: Node[] = [
+      title,
+      stats,
+      example,
+      recommendation,
+      aligned
+    ];
+
+    if (canShowUseAlignedNameButton(state)) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "folder-learning-use-aligned";
+      action.textContent = "Utiliser ce nom aligné";
+      action.title = "Appliquer ce nom comme nom final affiché et vérifié";
+      action.addEventListener("click", () => {
+        onUseFolderLearningAlignedName();
+      });
+      children.push(action);
+    }
+
+    elements.folderLearningSummary.replaceChildren(...children);
+    elements.folderLearningSummary.title = folderLearning.message;
+  }
+
+  function canShowUseAlignedNameButton(state: NamingPanelState): boolean {
+    const comparison = state.folderLearning.comparison;
+    const alignedName = comparison?.alignedName?.trim() ?? "";
+    if (!state.activeDocument || !comparison || !alignedName) {
+      return false;
+    }
+
+    if (comparison.recommendation !== "prefer-folder-profile" && comparison.recommendation !== "manual-review") {
+      return false;
+    }
+
+    if (normalizeFilenameForComparison(alignedName) === normalizeFilenameForComparison(state.effectiveFilename)) {
+      return false;
+    }
+
+    return isSafeAlignedFilename(alignedName, state.activeDocument.extension);
+  }
+
+  function profileStatusLabel(status: FolderLearningProfileStatus): string {
+    switch (status) {
+      case "none":
+        return "aucune";
+      case "weak":
+        return "faible";
+      case "medium":
+        return "moyenne";
+      case "strong":
+        return "forte";
+    }
+  }
+
+  function recommendationLabel(recommendation: FolderLearningRecommendation): string {
+    switch (recommendation) {
+      case "keep-ai":
+        return "garder le nom IA";
+      case "manual-review":
+        return "comparaison manuelle";
+      case "prefer-folder-profile":
+        return "convention recommandée";
+    }
   }
 
   function createNameExplanationLine(line: NameExplanationLine): HTMLDivElement {
@@ -678,6 +826,43 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
 
   function normalizeFolderForComparison(value: string): string {
     return value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+  }
+
+  function normalizeFilenameForComparison(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  function isSafeAlignedFilename(
+    value: string,
+    expectedExtension: SupportedDocumentExtension
+  ): boolean {
+    const filename = value.trim();
+    if (!filename || filename !== value || filename.length > 220) {
+      return false;
+    }
+
+    if (
+      filename.includes("/") ||
+      filename.includes("\\") ||
+      filename.includes("..") ||
+      /^[a-z]:/i.test(filename) ||
+      /[\x00-\x1f<>:"|?*]/.test(filename)
+    ) {
+      return false;
+    }
+
+    const extension = expectedExtension.toLowerCase();
+    if (!filename.toLowerCase().endsWith(extension)) {
+      return false;
+    }
+
+    const baseName = filename.slice(0, -extension.length);
+    if (!baseName || baseName.endsWith(".") || baseName.endsWith(" ")) {
+      return false;
+    }
+
+    const firstSegment = baseName.split(".")[0]?.toUpperCase() ?? "";
+    return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(firstSegment);
   }
 
   function destinationErrorLabel(error: DestinationAvailabilityError): string {

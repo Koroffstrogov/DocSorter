@@ -145,6 +145,7 @@ function selectDocument(documentItem: DocumentItem): void {
   resetAiSuggestionState();
   render();
   void initializeNamingDraft(documentItem);
+  void refreshFolderLearningForCurrentTargetFolder();
   void loadActivePreview(documentItem);
 }
 

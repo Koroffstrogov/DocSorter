@@ -55,6 +55,10 @@ import {
   type UndoClassificationResult
 } from "../file-ops/classifyFile";
 import {
+  listTargetFolderNames as listTargetFolderNamesService,
+  type FolderLearningTargetFolderNamesResult
+} from "../folder-learning/targetFolderNameListing";
+import {
   getActionJournalFilePath as getActionJournalFilePathService,
   readLastUndoableClassification as readLastUndoableClassificationService,
   readRecentActions as readRecentActionsService,
@@ -161,6 +165,10 @@ export interface IpcHandlerServices {
     targetPath: string | null | undefined,
     targetFolder: string
   ) => Promise<TargetFolderResult<TargetFolderCreation>>;
+  listTargetFolderNames: (
+    targetPath: string | null | undefined,
+    targetFolder: string
+  ) => Promise<FolderLearningTargetFolderNamesResult>;
   prepareClassificationPlan: (options: {
     documentPath: string;
     proposedFilename: string;
@@ -299,6 +307,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     usesMainTarget: true,
     usesUserDataPath: false,
     serviceName: "createTargetSubdirectory"
+  },
+  {
+    channel: IPC_CHANNELS.folderLearningListNames,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: true,
+    usesUserDataPath: false,
+    serviceName: "listTargetFolderNames"
   },
   {
     channel: IPC_CHANNELS.documentsRefreshSource,
@@ -512,6 +528,7 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   normalizeTargetFolderRelative: normalizeTargetFolderRelativeService,
   listTargetSubdirectories: listTargetSubdirectoriesService,
   createTargetSubdirectory: createTargetSubdirectoryService,
+  listTargetFolderNames: listTargetFolderNamesService,
   prepareClassificationPlan: prepareClassificationPlanService,
   executeClassification: executeClassificationService,
   undoLastClassification: undoLastClassificationService,
@@ -587,6 +604,9 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
 
     return result;
   });
+  options.ipcMain.handle(IPC_CHANNELS.folderLearningListNames, () =>
+    services.listTargetFolderNames(state.selectedTargetPath, state.selectedTargetFolder)
+  );
   options.ipcMain.handle(IPC_CHANNELS.namingCreateInitialDraft, (_event, originalName: unknown) => {
     if (typeof originalName !== "string") {
       return services.createInitialNamingDraft("");

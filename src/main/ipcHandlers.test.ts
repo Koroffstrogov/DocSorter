@@ -47,6 +47,16 @@ describe("sensitive IPC handler contract", () => {
       serviceName: "preloadAiModel"
     });
   });
+
+  it("documents the read-only folder learning listing channel", () => {
+    expect(contractFor(IPC_CHANNELS.folderLearningListNames)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainSource: false,
+      usesMainTarget: true,
+      usesUserDataPath: false,
+      serviceName: "listTargetFolderNames"
+    });
+  });
 });
 
 describe("registerIpcHandlers", () => {
@@ -95,6 +105,14 @@ describe("registerIpcHandlers", () => {
       knownRelativeFolders: ["Scolarite", "Vehicules", "Vehicules/Captur"],
       competingRelativePaths: ["Vehicules"]
     });
+  });
+
+  it("lists target folder names only from main-state target and selected folder", async () => {
+    const harness = createHarness();
+
+    await harness.invoke(IPC_CHANNELS.folderLearningListNames);
+
+    expect(harness.services.listTargetFolderNames).toHaveBeenCalledWith(TARGET_PATH, "Vehicules");
   });
 
   it("preloads the IA model only with userData from main state", async () => {
@@ -289,6 +307,21 @@ function createServices(): IpcHandlerServices {
         targetPath: path.join(TARGET_PATH, "Vehicules"),
         created: false,
         message: "Dossier prêt."
+      }
+    })),
+    listTargetFolderNames: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targetFolder: "Vehicules",
+        entries: [
+          {
+            name: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+            isFile: true
+          }
+        ],
+        truncated: false,
+        entryLimit: 500,
+        warnings: []
       }
     })),
     prepareClassificationPlan: vi.fn(async () => ({

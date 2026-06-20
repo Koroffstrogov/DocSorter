@@ -14,7 +14,8 @@ async function initializeNamingDraft(documentItem: DocumentItem): Promise<void> 
     ...createIdleNamingState(),
     isLoading: true,
     proposal: null,
-    overrideFilename: null
+    overrideFilename: null,
+    overrideFilenameOrigin: null
   };
   renderNamingPanel(true);
   await updateNamingProposal(documentItem.extension, requestId);
@@ -29,6 +30,7 @@ function updateNamingDraftFromInputs(draft: NamingDraft): void {
   state.naming.origins = mergeNamingDraftOriginsForManualEdit(state.naming.draft, draft, state.naming.origins);
   state.naming.draft = draft;
   state.naming.overrideFilename = null;
+  state.naming.overrideFilenameOrigin = null;
   state.naming.isLoading = true;
   resetClassificationState();
   resetDestinationCheck();
@@ -58,10 +60,45 @@ function applyDestinationAlternative(): void {
   }
 
   state.naming.overrideFilename = alternativeFilename;
+  state.naming.overrideFilenameOrigin = "destination-alternative";
   resetClassificationState();
   resetDestinationCheck();
   renderNamingPanel(false);
   scheduleDestinationCheck();
+}
+
+function useFolderLearningAlignedName(): void {
+  const activeDocument = getActiveDocument();
+  const alignedName = state.folderLearning.comparison?.alignedName?.trim() ?? "";
+  if (!activeDocument || !canUseFolderLearningAlignedName() || !isSafeAlignedFilename(alignedName, activeDocument.extension)) {
+    return;
+  }
+
+  state.naming.overrideFilename = alignedName;
+  state.naming.overrideFilenameOrigin = "folder-learning";
+  resetClassificationState();
+  resetDestinationCheck();
+  renderNamingPanel(false);
+  scheduleDestinationCheck();
+}
+
+function canUseFolderLearningAlignedName(): boolean {
+  const activeDocument = getActiveDocument();
+  const comparison = state.folderLearning.comparison;
+  const alignedName = comparison?.alignedName?.trim() ?? "";
+  if (!activeDocument || !comparison || !alignedName) {
+    return false;
+  }
+
+  if (comparison.recommendation !== "prefer-folder-profile" && comparison.recommendation !== "manual-review") {
+    return false;
+  }
+
+  if (normalizeFilenameForComparison(alignedName) === normalizeFilenameForComparison(getEffectiveClassificationFilename())) {
+    return false;
+  }
+
+  return isSafeAlignedFilename(alignedName, activeDocument.extension);
 }
 
 async function loadTargetFolders(): Promise<void> {
@@ -69,6 +106,7 @@ async function loadTargetFolders(): Promise<void> {
 
   if (!state.targetPath) {
     state.targetFolder = createIdleTargetFolderState();
+    resetFolderLearningState();
     renderPaths();
     renderNamingPanel(false);
     return;
@@ -94,6 +132,7 @@ async function loadTargetFolders(): Promise<void> {
       status: "error",
       message: result.error.message
     };
+    resetFolderLearningState();
     renderNamingPanel(false);
     return;
   }
@@ -107,6 +146,7 @@ async function loadTargetFolders(): Promise<void> {
       : "Classement à la racine cible."
   };
   renderNamingPanel(false);
+  void refreshFolderLearningForCurrentTargetFolder();
 }
 
 async function updateTargetFolderFromInput(
@@ -147,6 +187,7 @@ async function updateTargetFolderFromInput(
     };
     renderPaths();
     renderDestinationCheck();
+    resetFolderLearningState();
     return;
   }
 
@@ -158,6 +199,7 @@ async function updateTargetFolderFromInput(
     origin
   };
   renderPaths();
+  void refreshFolderLearningForCurrentTargetFolder();
   scheduleDestinationCheck();
 }
 
@@ -215,6 +257,7 @@ async function createSelectedTargetFolder(): Promise<void> {
   renderPaths();
   renderNamingPanel(false);
   void loadTargetFolders();
+  void refreshFolderLearningForCurrentTargetFolder();
   scheduleDestinationCheck();
 }
 
@@ -331,6 +374,10 @@ function getEffectiveProposedFilename(): string {
 }
 
 function getEffectiveClassificationFilename(): string {
+  if (state.naming.overrideFilename) {
+    return state.naming.overrideFilename;
+  }
+
   const aiPreview = getAiNamingPreview();
   if (aiPreview?.filenameValid && aiPreview.filename) {
     return aiPreview.filename;
@@ -340,6 +387,13 @@ function getEffectiveClassificationFilename(): string {
 }
 
 function isEffectiveClassificationFilenameValid(): boolean {
+  if (state.naming.overrideFilename) {
+    return isSafeAlignedFilename(
+      state.naming.overrideFilename,
+      getActiveDocument()?.extension ?? ".pdf"
+    );
+  }
+
   const aiPreview = getAiNamingPreview();
   if (aiPreview) {
     return Boolean(aiPreview.filenameValid && aiPreview.filename);
@@ -379,6 +433,75 @@ function isClassificationPlanCurrent(): boolean {
 
 function normalizeTargetFolderForClassificationComparison(value: string): string {
   return value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+}
+
+function clearFolderLearningAlignedNameOverride(): boolean {
+  if (state.naming.overrideFilenameOrigin !== "folder-learning") {
+    return false;
+  }
+
+  state.naming.overrideFilename = null;
+  state.naming.overrideFilenameOrigin = null;
+  return true;
+}
+
+function canResetSortProposalChoices(): boolean {
+  return canResetAiSelectionChoices() || state.naming.overrideFilenameOrigin === "folder-learning";
+}
+
+function resetSortProposalChoices(): void {
+  const clearedAlignedName = clearFolderLearningAlignedNameOverride();
+  const resetAiChoices = resetAiSelectionChoices();
+  if (!clearedAlignedName || resetAiChoices) {
+    return;
+  }
+
+  resetClassificationState();
+  resetDestinationCheck();
+  recalculateFolderLearningComparison();
+  render();
+  scheduleDestinationCheck();
+}
+
+function isSafeAlignedFilename(
+  value: string,
+  expectedExtension: SupportedDocumentExtension
+): boolean {
+  const filename = value.trim();
+  if (!filename || filename !== value || filename.length > 220) {
+    return false;
+  }
+
+  if (
+    filename.includes("/") ||
+    filename.includes("\\") ||
+    filename.includes("..") ||
+    /^[a-z]:/i.test(filename) ||
+    /[\x00-\x1f<>:"|?*]/.test(filename)
+  ) {
+    return false;
+  }
+
+  const extension = expectedExtension.toLowerCase();
+  if (!filename.toLowerCase().endsWith(extension)) {
+    return false;
+  }
+
+  const baseName = filename.slice(0, -extension.length);
+  if (!baseName || baseName.endsWith(".") || baseName.endsWith(" ")) {
+    return false;
+  }
+
+  return !isReservedWindowsName(baseName);
+}
+
+function isReservedWindowsName(baseName: string): boolean {
+  const firstSegment = baseName.split(".")[0]?.toUpperCase() ?? "";
+  return /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(firstSegment);
+}
+
+function normalizeFilenameForComparison(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function mapDestinationErrorStatus(code: DestinationAvailabilityError["code"]): DestinationCheckStatus {

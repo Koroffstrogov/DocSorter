@@ -1,6 +1,7 @@
 function resetNamingState(): void {
   namingRequestId += 1;
   state.naming = createIdleNamingState();
+  resetFolderLearningState();
   resetDestinationCheck();
   resetClassificationState();
 }
@@ -33,5 +34,6 @@ function resetAiSuggestionState(): void {
     suggestionDocumentPath: null,
     selection: null
   };
+  recalculateFolderLearningComparison();
 }
 

@@ -31,6 +31,7 @@ function createIdleNamingState(): NamingState {
     origins: createFallbackNamingDraftOrigins(),
     proposal: null,
     overrideFilename: null,
+    overrideFilenameOrigin: null,
     isLoading: false
   };
 }
@@ -69,6 +70,19 @@ function createIdleTargetFolderState(): TargetFolderState {
     status: "idle",
     message: "Classement à la racine cible",
     origin: "fallback"
+  };
+}
+
+function createIdleFolderLearningState(): FolderLearningState {
+  return {
+    status: "idle",
+    targetFolder: "",
+    entries: [],
+    profile: null,
+    comparison: null,
+    message: "Convention du dossier non analysée.",
+    error: "",
+    warnings: []
   };
 }
 

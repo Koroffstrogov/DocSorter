@@ -105,6 +105,9 @@ describe("renderer right panel layout", () => {
     expect(sortProposalPanel).toContain('id="name-explanation"');
     expect(sortProposalPanel).toContain("Pourquoi ce nom ?");
     expect(sortProposalPanel).toContain('id="name-explanation-content"');
+    expect(sortProposalPanel).toContain('id="folder-learning-summary"');
+    expect(sortProposalPanel).toContain("Convention du dossier : non analysée.");
+    expect(html).not.toContain("Utiliser ce nom aligné</button>");
     expect(sortProposalPanel).not.toMatch(/<details id="name-explanation"[^>]*\sopen[\s>]/);
     expect(sortProposalPanel).toContain('id="destination-final-path"');
     expect(sortProposalPanel).toContain("Aucun dossier final");
@@ -148,6 +151,7 @@ describe("renderer right panel layout", () => {
       "proposed-filename",
       "name-explanation",
       "name-explanation-content",
+      "folder-learning-summary",
       "proposal-state",
       "destination-final-path",
       "destination-folder-badge",
@@ -229,6 +233,8 @@ describe("renderer right panel layout", () => {
     expect(css).toContain(".proposal-final-name");
     expect(css).toContain(".name-explanation");
     expect(css).toContain(".name-explanation-list");
+    expect(css).toContain(".folder-learning-summary");
+    expect(css).toContain(".folder-learning-use-aligned");
     expect(css).toContain(".folder-status-badge");
     expect(css).toContain("border: 1px solid var(--border-subtle)");
     expect(css).toContain("background: var(--surface-card)");
@@ -239,11 +245,17 @@ describe("renderer right panel layout", () => {
     const html = await readRendererHtml();
 
     expect(indexOf(html, "nameExplanation.js")).toBeLessThan(indexOf(html, "namingPanel.js"));
+    expect(indexOf(html, "nameExplanation.js")).toBeLessThan(indexOf(html, "folderLearningSummary.js"));
+    expect(indexOf(html, "folderLearningSummary.js")).toBeLessThan(indexOf(html, "namingPanel.js"));
     expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
     expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiStatusContent.js"));
     expect(indexOf(html, "aiStatusContent.js")).toBeLessThan(indexOf(html, "aiFieldRows.js"));
     expect(indexOf(html, "aiFieldRows.js")).toBeLessThan(indexOf(html, "aiFolderCandidates.js"));
     expect(indexOf(html, "aiFolderCandidates.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
+    expect(indexOf(html, "rendererAiFlow.js")).toBeLessThan(indexOf(html, "rendererFolderLearningFlow.js"));
+    expect(indexOf(html, "rendererFolderLearningFlow.js")).toBeLessThan(
+      indexOf(html, "rendererNamingDestinationFlow.js")
+    );
   });
 
   it("renders the six IA refinement fields and folder candidate area", async () => {
@@ -363,6 +375,8 @@ describe("renderer right panel layout", () => {
     expect(namingPanel).toContain("Nom final non généré");
     expect(namingPanel).toContain("Sélectionnez un document à trier.");
     expect(namingPanel).toContain("DocSorterNameExplanation.buildNameExplanation");
+    expect(namingPanel).toContain("Utiliser ce nom aligné");
+    expect(namingPanel).toContain("options.onUseFolderLearningAlignedName");
     expect(namingPanel).toContain("syncResetButton");
     expect(namingPanel).toContain("Réinitialiser les choix");
   });

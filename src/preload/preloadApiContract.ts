@@ -16,6 +16,7 @@ import type { DocumentDiscoveryResult, Result } from "../documents/documentDisco
 import type { ExactDuplicateAnalysisResult } from "../duplicates/exactDuplicates";
 import type { PdfTextExtractionResult } from "../extraction/pdfTextExtraction";
 import type { ExecuteClassificationResult, UndoClassificationResult } from "../file-ops/classifyFile";
+import type { FolderLearningTargetFolderNamesResult } from "../folder-learning/targetFolderNameListing";
 import type { ActionJournalReadResult } from "../history/actionJournal";
 import type { UndoableClassificationAction } from "../history/historyTypes";
 import type { ActionJournalEntry } from "../history/historyTypes";
@@ -53,6 +54,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "listTargetFolders",
   "setTargetFolder",
   "createTargetFolder",
+  "listTargetFolderNames",
   "refreshSourceDocuments",
   "getPreviewData",
   "createInitialNamingDraft",
@@ -106,6 +108,8 @@ export function createPreloadApi(ipc: IpcInvoker) {
         IPC_CHANNELS.targetCreateFolder,
         targetFolder
       ) as Promise<TargetFolderResult<TargetFolderCreation>>,
+    listTargetFolderNames: (): Promise<FolderLearningTargetFolderNamesResult> =>
+      ipc.invoke(IPC_CHANNELS.folderLearningListNames) as Promise<FolderLearningTargetFolderNamesResult>,
     refreshSourceDocuments: (): Promise<Result<DocumentDiscoveryResult>> =>
       ipc.invoke(IPC_CHANNELS.documentsRefreshSource) as Promise<Result<DocumentDiscoveryResult>>,
     getPreviewData: (documentPath: string): Promise<Result<PreviewData>> =>

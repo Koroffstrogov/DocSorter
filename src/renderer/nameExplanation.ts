@@ -1,11 +1,13 @@
 interface NameExplanationInput {
   filename: string;
   filenameValid: boolean;
+  filenameSource?: "ai" | "folder-learning" | "legacy";
   extension: string;
   fields: Partial<AiSelectionFields> | null;
   manualFields?: AiSelectionManualFields | null;
   destinationFolder: string;
   folderOrigin?: NamingFieldOrigin;
+  folderLearning?: FolderLearningState | null;
   messages: AiSelectionPreviewMessage[];
 }
 
@@ -70,12 +72,14 @@ var DocSorterNameExplanation: NameExplanationApi;
       isComplete,
       missingFields,
       lines: [
+        createFinalNameLine(input.filename, input.filenameValid, input.filenameSource),
         createRequiredLine("Date", date, "dateToken", input.manualFields),
         createRequiredLine("Cible", target, "target", input.manualFields),
         createRequiredLine("Document", documentType, "documentType", input.manualFields),
         createOptionalLine("Émetteur", issuerRaw, optionalParts.issuer, "issuer", input.manualFields, date),
         createOptionalLine("Détail", detailRaw, optionalParts.detail, "detail", input.manualFields, date),
         createFolderLine(input.destinationFolder, input.folderOrigin),
+        createFolderLearningLine(input.folderLearning, input.filename, input.filenameSource),
         createSubjectLine(fields.subject ?? "", input.manualFields)
       ]
     };
@@ -184,6 +188,116 @@ var DocSorterNameExplanation: NameExplanationApi;
     };
   }
 
+  function createFolderLearningLine(
+    folderLearning: FolderLearningState | null | undefined,
+    filename: string,
+    filenameSource: NameExplanationInput["filenameSource"]
+  ): NameExplanationLine {
+    if (!folderLearning || folderLearning.status === "idle") {
+      return {
+        label: "Convention du dossier",
+        value: "non analysée",
+        status: "ignored",
+        reason: "Aucun profil de nommage du dossier n'est encore disponible.",
+        source: "Lecture seule"
+      };
+    }
+
+    if (folderLearning.status === "loading") {
+      return {
+        label: "Convention du dossier",
+        value: "lecture en cours",
+        status: "ignored",
+        reason: "Lecture passive des noms du dossier cible.",
+        source: "Lecture seule"
+      };
+    }
+
+    if (folderLearning.status === "error") {
+      return {
+        label: "Convention du dossier",
+        value: "indisponible",
+        status: "ignored",
+        reason: "Le dossier cible n'a pas pu être lu sans bloquer la proposition.",
+        source: "Lecture seule"
+      };
+    }
+
+    const profile = folderLearning.profile;
+    if (!profile || profile.status === "none") {
+      return {
+        label: "Convention du dossier",
+        value: "aucune",
+        status: "ignored",
+        reason: "Aucun nom compatible détecté dans le dossier cible.",
+        source: "Lecture seule"
+      };
+    }
+
+    const comparison = folderLearning.comparison;
+    const alignedName = comparison?.alignedName ?? "";
+    const isApplied = Boolean(
+      alignedName &&
+        filenameSource === "folder-learning" &&
+        normalizeFilename(alignedName) === normalizeFilename(filename)
+    );
+    return {
+      label: "Convention du dossier",
+      value: alignedName || profileStatusLabel(profile.status),
+      status: isApplied ? "used" : alignedName ? "ignored" : "used",
+      reason: isApplied
+        ? `Nom aligné appliqué : ${appliedChangesLabel(comparison?.appliedChanges ?? [])}.`
+        : alignedName
+        ? `Nom aligné proposé : ${alignedName}.`
+        : folderLearningReason(profile),
+      source: isApplied ? "Convention du dossier" : "Lecture seule"
+    };
+  }
+
+  function createFinalNameLine(
+    filename: string,
+    filenameValid: boolean,
+    filenameSource: NameExplanationInput["filenameSource"]
+  ): NameExplanationLine {
+    if (!filename || !filenameValid) {
+      return {
+        label: "Nom final",
+        value: "non généré",
+        status: "missing",
+        reason: "Nom final incomplet ou invalide.",
+        source: "Prévisualisation"
+      };
+    }
+
+    if (filenameSource === "folder-learning") {
+      return {
+        label: "Nom final",
+        value: filename,
+        status: "used",
+        reason: "Remplacé explicitement par la convention du dossier.",
+        source: "Convention du dossier"
+      };
+    }
+
+    if (filenameSource === "ai") {
+      return {
+        label: "Nom final",
+        value: filename,
+        status: "used",
+        reason: "Recalculé localement depuis les choix IA.",
+        source: "IA locale"
+      };
+    }
+
+    return {
+      label: "Nom final",
+      value: filename,
+      status: "used",
+      reason: "Calculé depuis les champs de renommage.",
+      source: "Renommage proposé"
+    };
+  }
+
   function sourceForField(
     field: AiSelectionFieldKey,
     manualFields: AiSelectionManualFields | null | undefined
@@ -199,6 +313,46 @@ var DocSorterNameExplanation: NameExplanationApi;
       return "IA locale";
     }
     return "Dossier sélectionné";
+  }
+
+  function profileStatusLabel(status: FolderLearningProfileStatus): string {
+    switch (status) {
+      case "none":
+        return "aucune";
+      case "weak":
+        return "faible";
+      case "medium":
+        return "moyenne";
+      case "strong":
+        return "forte";
+    }
+  }
+
+  function folderLearningReason(profile: FolderLearningProfile): string {
+    const target = profile.dominantTarget ? ` avec ${profile.dominantTarget}` : "";
+    return `Le dossier contient ${profile.recognizedFileCount} nom(s) compatible(s)${target}.`;
+  }
+
+  function appliedChangesLabel(changes: string[]): string {
+    if (changes.length === 0) {
+      return "aucune différence structurelle";
+    }
+
+    const labels = changes.map((change) => {
+      switch (change) {
+        case "target":
+          return "cible modifiée";
+        case "issuer":
+          return "émetteur modifié";
+        case "detail":
+          return "détail retiré";
+        case "datePrecision":
+          return "précision de date réduite";
+        default:
+          return change;
+      }
+    });
+    return labels.join(", ");
   }
 
   function normalizeDateToken(value: string): string {
@@ -224,6 +378,10 @@ var DocSorterNameExplanation: NameExplanationApi;
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 80);
+  }
+
+  function normalizeFilename(value: string): string {
+    return value.trim().toLowerCase();
   }
 
   function normalizeOptionalNamePart(value: string): string {

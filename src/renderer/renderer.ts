@@ -9,6 +9,7 @@ const state: AppState = {
   preview: createIdlePreviewState(),
   naming: createIdleNamingState(),
   targetFolder: createIdleTargetFolderState(),
+  folderLearning: createIdleFolderLearningState(),
   destination: createIdleDestinationCheckState(),
   classification: createIdleClassificationState(),
   lastUndoableAction: null,
@@ -28,6 +29,7 @@ let classificationRequestId = 0;
 let duplicateAnalysisRequestId = 0;
 let textExtractionRequestId = 0;
 let targetFolderRequestId = 0;
+let folderLearningRequestId = 0;
 let ocrRequestId = 0;
 let aiRequestId = 0;
 let aiSuggestionRequestId = 0;
@@ -159,17 +161,20 @@ const namingPanelView = DocSorterNamingPanel.createNamingPanel({
     activeDocument: getActiveDocument(),
     targetPath: state.targetPath,
     targetFolder: state.targetFolder,
+    folderLearning: state.folderLearning,
     naming: state.naming,
     destination: state.destination,
     effectiveFilename: getEffectiveClassificationFilename(),
+    effectiveFilenameValid: isEffectiveClassificationFilenameValid(),
     aiPreview: getAiNamingPreview(),
-    canResetChoices: canResetAiSelectionChoices()
+    canResetChoices: canResetSortProposalChoices()
   }),
   onDraftChange: updateNamingDraftFromInputs,
   onResetDraft: () => {
-    resetAiSelectionChoices();
+    resetSortProposalChoices();
   },
   onApplyDestinationAlternative: applyDestinationAlternative,
+  onUseFolderLearningAlignedName: useFolderLearningAlignedName,
   onTargetFolderChange: updateTargetFolderFromInput,
   onCreateTargetFolder: () => {
     void createSelectedTargetFolder();

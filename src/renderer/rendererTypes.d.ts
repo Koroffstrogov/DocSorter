@@ -123,11 +123,14 @@ interface ProposedFilename {
   normalizedDraft: NamingDraft;
 }
 
+type NamingOverrideFilenameOrigin = "folder-learning" | "destination-alternative";
+
 interface NamingState {
   draft: NamingDraft;
   origins: NamingDraftOrigins;
   proposal: ProposedFilename | null;
   overrideFilename: string | null;
+  overrideFilenameOrigin: NamingOverrideFilenameOrigin | null;
   isLoading: boolean;
 }
 
@@ -172,6 +175,66 @@ interface TargetFolderState {
   status: TargetFolderStatus;
   message: string;
   origin: NamingFieldOrigin;
+}
+
+type FolderLearningStatus = "idle" | "loading" | "ready" | "error";
+type FolderLearningProfileStatus = "none" | "weak" | "medium" | "strong";
+type FolderLearningDatePrecision = "day" | "month" | "year" | "mixed";
+type FolderLearningDetailUsage = "never" | "sometimes" | "often";
+type FolderLearningRecommendation = "keep-ai" | "prefer-folder-profile" | "manual-review";
+
+interface FolderLearningNameEntry {
+  name: string;
+  isFile: boolean;
+}
+
+interface FolderLearningNameList {
+  targetFolder: string;
+  entries: FolderLearningNameEntry[];
+  truncated: boolean;
+  entryLimit: number;
+  warnings: string[];
+}
+
+interface FolderLearningProfile {
+  status: FolderLearningProfileStatus;
+  analyzedFileCount: number;
+  recognizedFileCount: number;
+  dominantPattern?: string;
+  dominantDatePrecision?: FolderLearningDatePrecision;
+  dominantTarget?: string;
+  dominantDocumentType?: string;
+  dominantIssuer?: string;
+  detailUsage?: FolderLearningDetailUsage;
+  examples: string[];
+  reasons: string[];
+  warnings: string[];
+}
+
+interface FolderLearningComparison {
+  aiName: string;
+  alignedName?: string;
+  recommendation: FolderLearningRecommendation;
+  confidence: number;
+  appliedChanges: string[];
+  reasons: string[];
+  warnings: string[];
+}
+
+interface FolderLearningAnalysis {
+  profile: FolderLearningProfile;
+  comparison: FolderLearningComparison | null;
+}
+
+interface FolderLearningState {
+  status: FolderLearningStatus;
+  targetFolder: string;
+  entries: FolderLearningNameEntry[];
+  profile: FolderLearningProfile | null;
+  comparison: FolderLearningComparison | null;
+  message: string;
+  error: string;
+  warnings: string[];
 }
 
 interface ClassificationPlanCheck {
@@ -876,6 +939,7 @@ interface AppState {
   preview: PreviewState;
   naming: NamingState;
   targetFolder: TargetFolderState;
+  folderLearning: FolderLearningState;
   destination: DestinationCheckState;
   classification: ClassificationState;
   lastUndoableAction: UndoableClassificationAction | null;

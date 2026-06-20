@@ -549,8 +549,10 @@ function selectAiFieldCandidate(field: AiSelectionFieldKey, value: string): void
     state.targetPath
   );
   state.ai.message = "Candidat IA sélectionné. Prévisualisation recalculée.";
+  clearFolderLearningAlignedNameOverride();
   resetClassificationState();
   resetDestinationCheck();
+  recalculateFolderLearningComparison();
   render();
   scheduleDestinationCheck();
 }
@@ -583,8 +585,10 @@ function updateAiFieldManualValue(field: AiSelectionFieldKey, value: string): vo
     state.targetPath
   );
   state.ai.message = "Champ IA manuel modifié. Prévisualisation recalculée.";
+  clearFolderLearningAlignedNameOverride();
   resetClassificationState();
   resetDestinationCheck();
+  recalculateFolderLearningComparison();
   renderNamingPanel(false);
   scheduleDestinationCheck();
 }
@@ -656,6 +660,8 @@ function updateAiSelectedFolder(relativePath: string, message: string, keepEditi
     selectedFolder
   }, getActiveDocument()?.extension ?? ".pdf", state.targetPath);
   state.ai.message = message;
+  clearFolderLearningAlignedNameOverride();
+  recalculateFolderLearningComparison();
   syncAiSelectedFolderToTargetFolder(selectedFolder);
 }
 
@@ -693,6 +699,7 @@ function applyAiSuggestionToEmptyFields(): void {
     targetFolder,
     state.ai.suggestion.suggestion.confidence
   );
+  clearFolderLearningAlignedNameOverride();
 
   state.ai = {
     ...state.ai,
@@ -703,6 +710,7 @@ function applyAiSuggestionToEmptyFields(): void {
     state.naming.draft = result.draft;
     state.naming.origins = result.origins;
     state.naming.overrideFilename = null;
+    state.naming.overrideFilenameOrigin = null;
     state.naming.isLoading = true;
     resetClassificationState();
     resetDestinationCheck();
@@ -756,6 +764,8 @@ function ignoreAiSuggestion(): void {
     suggestionDocumentPath: null,
     selection: null
   };
+  clearFolderLearningAlignedNameOverride();
+  recalculateFolderLearningComparison();
   render();
 }
 
@@ -1192,6 +1202,8 @@ function resetAiSelectionChoices(): boolean {
     state.targetPath
   );
   state.ai.message = "Choix IA réinitialisés. Prévisualisation recalculée.";
+  clearFolderLearningAlignedNameOverride();
+  recalculateFolderLearningComparison();
   syncAiSelectedFolderToTargetFolder(state.ai.selection.selectedFolder);
   render();
   return true;

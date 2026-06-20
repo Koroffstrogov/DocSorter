@@ -64,6 +64,72 @@ describe("rendererNamingDestinationFlow", () => {
     expect(state.destination.status).toBe("available");
   });
 
+  it("uses an explicit folder-aligned name as the canonical classification filename", async () => {
+    const harness = await createFlowHarness();
+    const state = harness.context.state;
+    state.targetPath = "Z:\\cible";
+    state.folderLearning = createReadyFolderLearningState("2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf");
+    harness.context.getAiNamingPreview = () => ({
+      filename: "2026-05_foyer_releve-bancaire_bnp.pdf",
+      filenameValid: true,
+      destinationFolder: "Finances/Banque",
+      messages: []
+    });
+
+    expect(harness.context.canUseFolderLearningAlignedName()).toBe(true);
+
+    harness.context.useFolderLearningAlignedName();
+
+    expect(state.naming.overrideFilename).toBe("2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf");
+    expect(state.naming.overrideFilenameOrigin).toBe("folder-learning");
+    expect(harness.context.getEffectiveClassificationFilename()).toBe(
+      "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+    );
+    expect(harness.checkDestinationAvailability).toHaveBeenCalledWith(
+      "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+    );
+  });
+
+  it("refuses an invalid folder-aligned name without changing the final filename", async () => {
+    const harness = await createFlowHarness();
+    const state = harness.context.state;
+    state.folderLearning = createReadyFolderLearningState("C:\\tmp\\evil.pdf");
+    harness.context.getAiNamingPreview = () => ({
+      filename: "2026-05_foyer_releve-bancaire_bnp.pdf",
+      filenameValid: true,
+      destinationFolder: "Finances/Banque",
+      messages: []
+    });
+
+    expect(harness.context.canUseFolderLearningAlignedName()).toBe(false);
+
+    harness.context.useFolderLearningAlignedName();
+
+    expect(state.naming.overrideFilename).toBeNull();
+    expect(harness.context.getEffectiveClassificationFilename()).toBe("2026-05_foyer_releve-bancaire_bnp.pdf");
+  });
+
+  it("resets an applied folder-aligned name back to the IA preview", async () => {
+    const harness = await createFlowHarness();
+    const state = harness.context.state;
+    state.naming.overrideFilename = "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf";
+    state.naming.overrideFilenameOrigin = "folder-learning";
+    harness.context.getAiNamingPreview = () => ({
+      filename: "2026-05_foyer_releve-bancaire_bnp.pdf",
+      filenameValid: true,
+      destinationFolder: "Finances/Banque",
+      messages: []
+    });
+
+    expect(harness.context.canResetSortProposalChoices()).toBe(true);
+
+    harness.context.resetSortProposalChoices();
+
+    expect(state.naming.overrideFilename).toBeNull();
+    expect(state.naming.overrideFilenameOrigin).toBeNull();
+    expect(harness.context.getEffectiveClassificationFilename()).toBe("2026-05_foyer_releve-bancaire_bnp.pdf");
+  });
+
   it("falls back to the historical proposal when the AI preview is incomplete", async () => {
     const harness = await createFlowHarness();
     const state = harness.context.state;
@@ -127,6 +193,16 @@ describe("rendererNamingDestinationFlow", () => {
     });
     expect(harness.context.isClassificationPlanCurrent()).toBe(false);
   });
+
+  it("refreshes folder convention analysis when the target folder changes", async () => {
+    const harness = await createFlowHarness();
+    harness.context.state.targetPath = "Z:\\cible";
+
+    await harness.context.updateTargetFolderFromInput("Finances/Banque", "ai-v2");
+
+    expect(harness.setTargetFolder).toHaveBeenCalledWith("Finances/Banque");
+    expect(harness.refreshFolderLearningForCurrentTargetFolder).toHaveBeenCalledTimes(1);
+  });
 });
 
 function waitForAsyncDestinationCheck(): Promise<void> {
@@ -138,6 +214,8 @@ async function createFlowHarness(): Promise<{
   buildNamingProposal: ReturnType<typeof vi.fn>;
   createInitialNamingDraft: ReturnType<typeof vi.fn>;
   checkDestinationAvailability: ReturnType<typeof vi.fn>;
+  setTargetFolder: ReturnType<typeof vi.fn>;
+  refreshFolderLearningForCurrentTargetFolder: ReturnType<typeof vi.fn>;
 }> {
   const documentItem = createDocumentItem();
   const buildNamingProposal = vi.fn(async () => ({
@@ -172,6 +250,11 @@ async function createFlowHarness(): Promise<{
       message: "Nom disponible."
     }
   }));
+  const setTargetFolder = vi.fn(async (targetFolder: string) => ({
+    ok: true,
+    value: targetFolder
+  }));
+  const refreshFolderLearningForCurrentTargetFolder = vi.fn();
   const context: Record<string, any> = {
     namingRequestId: 0,
     destinationRequestId: 0,
@@ -181,7 +264,8 @@ async function createFlowHarness(): Promise<{
       docSorter: {
         buildNamingProposal,
         createInitialNamingDraft,
-        checkDestinationAvailability
+        checkDestinationAvailability,
+        setTargetFolder
       },
       clearTimeout: () => undefined,
       setTimeout: (callback: () => void) => {
@@ -193,6 +277,7 @@ async function createFlowHarness(): Promise<{
       activeDocumentPath: documentItem.filePath,
       targetPath: null,
       naming: createIdleNamingState(),
+      folderLearning: createIdleFolderLearningState(),
       destination: createIdleDestinationCheckState(),
       targetFolder: {
         selectedFolder: "",
@@ -210,11 +295,17 @@ async function createFlowHarness(): Promise<{
     },
     getActiveDocument: () => documentItem,
     getAiNamingPreview: () => null,
+    resetFolderLearningState: () => undefined,
+    refreshFolderLearningForCurrentTargetFolder,
     createIdleNamingState,
     createIdleDestinationCheckState,
     resetClassificationState: () => undefined,
+    canResetAiSelectionChoices: () => false,
+    resetAiSelectionChoices: () => false,
+    recalculateFolderLearningComparison: () => undefined,
     renderControls: () => undefined,
     renderPaths: () => undefined,
+    render: () => undefined,
     renderClassificationSummary: () => undefined,
     namingPanelView: {
       render: () => undefined,
@@ -239,7 +330,9 @@ async function createFlowHarness(): Promise<{
     context,
     buildNamingProposal,
     createInitialNamingDraft,
-    checkDestinationAvailability
+    checkDestinationAvailability,
+    setTargetFolder,
+    refreshFolderLearningForCurrentTargetFolder
   };
 }
 
@@ -266,7 +359,54 @@ function createIdleNamingState(): NamingState {
     },
     proposal: null,
     overrideFilename: null,
+    overrideFilenameOrigin: null,
     isLoading: false
+  };
+}
+
+function createIdleFolderLearningState(): FolderLearningState {
+  return {
+    status: "idle",
+    targetFolder: "",
+    entries: [],
+    profile: null,
+    comparison: null,
+    message: "",
+    error: "",
+    warnings: []
+  };
+}
+
+function createReadyFolderLearningState(alignedName: string): FolderLearningState {
+  return {
+    status: "ready",
+    targetFolder: "Finances/Banque",
+    entries: [],
+    profile: {
+      status: "strong",
+      analyzedFileCount: 8,
+      recognizedFileCount: 8,
+      dominantDatePrecision: "month",
+      dominantTarget: "compte-joint",
+      dominantDocumentType: "releve-bancaire",
+      dominantIssuer: "bnp-paribas",
+      detailUsage: "never",
+      examples: ["2026-04_compte-joint_releve-bancaire_bnp-paribas.pdf"],
+      reasons: [],
+      warnings: []
+    },
+    comparison: {
+      aiName: "2026-05_foyer_releve-bancaire_bnp.pdf",
+      alignedName,
+      recommendation: "prefer-folder-profile",
+      confidence: 85,
+      appliedChanges: ["target", "issuer"],
+      reasons: [],
+      warnings: []
+    },
+    message: "",
+    error: "",
+    warnings: []
   };
 }
 

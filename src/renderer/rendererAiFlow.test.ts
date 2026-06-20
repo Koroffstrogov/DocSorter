@@ -613,6 +613,8 @@ async function loadAiFlow(): Promise<Record<string, unknown>> {
     renderPaths: () => undefined,
     resetClassificationState: () => undefined,
     resetDestinationCheck: () => undefined,
+    recalculateFolderLearningComparison: () => undefined,
+    clearFolderLearningAlignedNameOverride: () => false,
     isClassificationBusy: () => false,
     updateTargetFolderFromInput: async (folder: string, origin: string) => {
       targetFolderUpdates.push({ folder, origin });
