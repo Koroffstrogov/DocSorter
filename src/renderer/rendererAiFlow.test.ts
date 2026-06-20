@@ -555,6 +555,39 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(state.ai?.timing).toMatchObject({ stage: "completed" });
   });
 
+  it("keeps AI analysis available with a warning when PDF text quality is incomplete", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const run = context.runAiSuggestionForActiveDocument as () => Promise<void>;
+    state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+      status: "text-found",
+      result: {
+        status: "text-found",
+        source: "pdf-native",
+        text: "Texte partiel exploitable",
+        excerpt: "Texte partiel exploitable",
+        characterCount: 24,
+        excerptCharacterCount: 24,
+        pdfTextQuality: createHybridPdfTextQuality()
+      },
+      error: null
+    };
+    (context.window as { docSorter: Record<string, unknown> }).docSorter = {
+      testAiConnection: async () => ({ ok: true, value: state.ai?.status }),
+      preloadAiModel: async () => ({ ok: true, value: createReadyModelStatus() }),
+      runAiSuggestionForActiveDocument: async () => ({ ok: true, value: createAiSuggestion() })
+    };
+
+    await run();
+
+    expect(state.ai?.panelStatus).toBe("suggestion-ready");
+    const suggestion = state.ai?.suggestion as RendererAiDocumentSuggestion;
+    expect(suggestion.pdfTextQuality).toMatchObject({ decision: "hybrid-ocr-recommended" });
+    expect(suggestion.suggestion.warnings).toContain(
+      "Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."
+    );
+  });
+
   it("does not launch OCR automatically when image text is missing", async () => {
     const context = await loadAiFlow();
     const calls: string[] = [];
@@ -627,6 +660,7 @@ describe("rendererAiFlow V2 application helpers", () => {
       }
     };
     state.ai.suggestion = createAiSuggestion();
+    (state.ai.suggestion as RendererAiDocumentSuggestion).pdfTextQuality = createHybridPdfTextQuality();
     state.ai.suggestionDocumentPath = "Z:\\source\\document.pdf";
     state.folderLearning.pipeline = [
       pipelineStep("content-ai-analysis"),
@@ -660,7 +694,22 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(aiResult.value.diagnosticPipeline.map((step: AiDiagnosticPipelineStep) => step.status)).not.toContain("ready");
     expect(aiResult.value.diagnosticPipeline[0]).toMatchObject({
       id: "content-ai-analysis",
-      status: "ok"
+      status: "warning",
+      inputs: {
+        pdfTextQualityDecision: "hybrid-ocr-recommended"
+      },
+      variables: {
+        pdfAffectedPageCount: 1
+      },
+      output: {
+        pdfTextQuality: {
+          decision: "hybrid-ocr-recommended",
+          pages: [
+            { page: 1, status: "text-ok" },
+            { page: 2, status: "text-empty" }
+          ]
+        }
+      }
     });
     expect(aiResult.value.diagnosticPipeline[1]).toMatchObject({
       id: "candidate-validation",
@@ -838,6 +887,35 @@ function createAiSuggestion(): Record<string, unknown> {
         { value: "ne-pas-utiliser.pdf", score: 100, reason: "candidate ignored" }
       ]
     }
+  };
+}
+
+function createHybridPdfTextQuality(): PdfTextQuality {
+  return {
+    pageCount: 2,
+    nativeTextChars: 240,
+    usefulTextChars: 220,
+    decision: "hybrid-ocr-recommended",
+    reason: "Certaines pages PDF ont peu ou pas de texte natif.",
+    warnings: ["PDF hybride : OCR recommandé sur certaines pages."],
+    pages: [
+      {
+        page: 1,
+        rawTextChars: 230,
+        usefulTextChars: 220,
+        approximateWordCount: 42,
+        readableCharRatio: 0.96,
+        status: "text-ok"
+      },
+      {
+        page: 2,
+        rawTextChars: 10,
+        usefulTextChars: 4,
+        approximateWordCount: 1,
+        readableCharRatio: 0.4,
+        status: "text-empty"
+      }
+    ]
   };
 }
 

@@ -406,6 +406,7 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
   renderAiPanel();
 
   const generationStartedAt = nowMs();
+  const pdfTextQuality = getActivePdfTextQuality(activeDocument);
   const result = await window.docSorter.runAiSuggestionForActiveDocument(
     activeDocument.filePath,
     textContext
@@ -421,23 +422,27 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
       lastLoadMs: loadMs,
       lastGenerationMs: generationMs
     });
-    applyAiError(result.error as RendererAiError);
+    applyAiError(attachPdfTextQualityToAiError(result.error as RendererAiError, pdfTextQuality));
     void refreshAiModelStatus();
     return;
   }
 
-  const aiSelection = buildAiSelectionFromSuggestion(
+  const suggestion = attachPdfTextQualityToAiSuggestion(
     result.value as RendererAiDocumentSuggestion,
+    pdfTextQuality
+  );
+  const aiSelection = buildAiSelectionFromSuggestion(
+    suggestion,
     activeDocument.extension,
     state.targetPath
   );
   state.ai = {
     ...state.ai,
     panelStatus: "suggestion-ready",
-    message: result.value.message,
+    message: suggestion.message,
     error: null,
-    modelStatus: result.value.modelStatus as RendererAiModelStatus,
-    suggestion: result.value as RendererAiDocumentSuggestion,
+    modelStatus: suggestion.modelStatus as RendererAiModelStatus,
+    suggestion,
     suggestionDocumentPath: activeDocument.filePath,
     selection: aiSelection
   };
@@ -542,30 +547,56 @@ function buildContentAiAnalysisStep(
   aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError }
 ): AiDiagnosticPipelineStep {
   if (!aiResult.ok) {
+    const pdfTextQuality = aiResult.error.pdfTextQuality;
     return {
       id: "content-ai-analysis",
       status: "blocked",
-      inputs: { documentPathKnown: Boolean(state.ai.suggestionDocumentPath || state.activeDocumentPath) },
-      variables: { code: aiResult.error.code },
-      output: aiResult.error.message,
-      warnings: [],
+      inputs: {
+        documentPathKnown: Boolean(state.ai.suggestionDocumentPath || state.activeDocumentPath),
+        pdfTextQualityDecision: pdfTextQuality?.decision ?? ""
+      },
+      variables: {
+        code: aiResult.error.code,
+        pdfPageCount: pdfTextQuality?.pageCount ?? 0,
+        pdfUsefulTextChars: pdfTextQuality?.usefulTextChars ?? 0,
+        pdfAffectedPageCount: countPdfTextQualityAffectedPages(pdfTextQuality)
+      },
+      output: {
+        error: aiResult.error.message,
+        ...(pdfTextQuality ? { pdfTextQuality: createDiagnosticPdfTextQuality(pdfTextQuality) } : {})
+      },
+      warnings: [
+        ...(pdfTextQuality?.warnings ?? []),
+        ...(isPdfTextQualityIncomplete(pdfTextQuality)
+          ? ["Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."]
+          : [])
+      ],
       blockingReason: aiResult.error.message
     };
   }
 
   return {
     id: "content-ai-analysis",
-    status: "ok",
+    status: isPdfTextQualityIncomplete(aiResult.value.pdfTextQuality) ? "warning" : "ok",
     inputs: {
       documentName: aiResult.value.documentName,
       textSource: aiResult.value.textSource,
-      promptCharacterCount: aiResult.value.promptCharacterCount
+      promptCharacterCount: aiResult.value.promptCharacterCount,
+      pdfTextQualityDecision: aiResult.value.pdfTextQuality?.decision ?? ""
     },
     variables: {
       model: aiResult.value.model,
-      confidence: aiResult.value.suggestion.confidence
+      confidence: aiResult.value.suggestion.confidence,
+      pdfPageCount: aiResult.value.pdfTextQuality?.pageCount ?? 0,
+      pdfUsefulTextChars: aiResult.value.pdfTextQuality?.usefulTextChars ?? 0,
+      pdfAffectedPageCount: countPdfTextQualityAffectedPages(aiResult.value.pdfTextQuality)
     },
-    output: "Analyse IA validée.",
+    output: aiResult.value.pdfTextQuality
+      ? {
+          analysis: "Analyse IA validée.",
+          pdfTextQuality: createDiagnosticPdfTextQuality(aiResult.value.pdfTextQuality)
+        }
+      : "Analyse IA validée.",
     warnings: aiResult.value.suggestion.warnings
   };
 }
@@ -1306,6 +1337,112 @@ function getActiveAiTextContext(
   return {
     source: extraction.source ?? (documentItem.extension === ".pdf" ? "pdf-native" : "tesseract-cli"),
     excerpt
+  };
+}
+
+function getActivePdfTextQuality(documentItem: DocumentItem | null): PdfTextQuality | undefined {
+  if (!documentItem || documentItem.extension !== ".pdf") {
+    return undefined;
+  }
+
+  return getTextExtractionState(documentItem.filePath).result?.pdfTextQuality;
+}
+
+function attachPdfTextQualityToAiSuggestion(
+  suggestion: RendererAiDocumentSuggestion,
+  pdfTextQuality: PdfTextQuality | undefined
+): RendererAiDocumentSuggestion {
+  if (!pdfTextQuality) {
+    return suggestion;
+  }
+
+  const warning = isPdfTextQualityIncomplete(pdfTextQuality)
+    ? "Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."
+    : "";
+  const nextSuggestionWarnings = warning
+    ? uniqueAiStrings([...suggestion.suggestion.warnings, warning])
+    : suggestion.suggestion.warnings;
+
+  const message = typeof suggestion.message === "string" ? suggestion.message : "";
+
+  return {
+    ...suggestion,
+    pdfTextQuality,
+    responseJson: addPdfTextQualityWarningToResponseJson(suggestion.responseJson, warning),
+    suggestion: {
+      ...suggestion.suggestion,
+      warnings: nextSuggestionWarnings
+    },
+    message: warning && !message.includes(warning)
+      ? `${message} ${warning}`.trim()
+      : message
+  };
+}
+
+function attachPdfTextQualityToAiError(
+  error: RendererAiError,
+  pdfTextQuality: PdfTextQuality | undefined
+): RendererAiError {
+  if (!pdfTextQuality) {
+    return error;
+  }
+
+  return {
+    ...error,
+    pdfTextQuality
+  };
+}
+
+function addPdfTextQualityWarningToResponseJson(responseJson: unknown, warning: string): unknown {
+  if (!warning || !responseJson || typeof responseJson !== "object" || Array.isArray(responseJson)) {
+    return responseJson;
+  }
+
+  const response = responseJson as Record<string, unknown>;
+  return {
+    ...response,
+    warnings: uniqueAiStrings([
+      ...readStringArray(response.warnings),
+      warning
+    ])
+  };
+}
+
+function isPdfTextQualityIncomplete(pdfTextQuality: PdfTextQuality | undefined): boolean {
+  return (
+    pdfTextQuality?.decision === "ocr-recommended" ||
+    pdfTextQuality?.decision === "hybrid-ocr-recommended"
+  );
+}
+
+function countPdfTextQualityAffectedPages(pdfTextQuality: PdfTextQuality | undefined): number {
+  if (!pdfTextQuality) {
+    return 0;
+  }
+
+  return pdfTextQuality.pages.filter((page) =>
+    page.status === "text-empty" ||
+    page.status === "text-weak" ||
+    page.status === "unknown"
+  ).length;
+}
+
+function createDiagnosticPdfTextQuality(pdfTextQuality: PdfTextQuality): Record<string, unknown> {
+  return {
+    pageCount: pdfTextQuality.pageCount,
+    nativeTextChars: pdfTextQuality.nativeTextChars,
+    usefulTextChars: pdfTextQuality.usefulTextChars,
+    decision: pdfTextQuality.decision,
+    reason: pdfTextQuality.reason,
+    warnings: pdfTextQuality.warnings,
+    pages: pdfTextQuality.pages.map((page) => ({
+      page: page.page,
+      rawTextChars: page.rawTextChars,
+      usefulTextChars: page.usefulTextChars,
+      approximateWordCount: page.approximateWordCount,
+      readableCharRatio: page.readableCharRatio,
+      status: page.status
+    }))
   };
 }
 

@@ -41,6 +41,54 @@ describe("textExtractionPanel", () => {
     expect(source).not.toContain("runSuggestionV2");
     expect(source).not.toContain("runAiSuggestion");
   });
+
+  it("renders PDF text quality and OCR recommendation without launching OCR", async () => {
+    const { api, details } = await createPanelHarness(createReadyState({
+      pdfTextQuality: {
+        pageCount: 3,
+        nativeTextChars: 260,
+        usefulTextChars: 230,
+        decision: "hybrid-ocr-recommended",
+        reason: "Certaines pages PDF ont peu ou pas de texte natif.",
+        warnings: ["PDF hybride : OCR recommandé sur certaines pages."],
+        pages: [
+          {
+            page: 1,
+            rawTextChars: 250,
+            usefulTextChars: 220,
+            approximateWordCount: 40,
+            readableCharRatio: 0.9,
+            status: "text-ok"
+          },
+          {
+            page: 2,
+            rawTextChars: 10,
+            usefulTextChars: 10,
+            approximateWordCount: 2,
+            readableCharRatio: 1,
+            status: "text-empty"
+          },
+          {
+            page: 3,
+            rawTextChars: 0,
+            usefulTextChars: 0,
+            approximateWordCount: 0,
+            readableCharRatio: 0,
+            status: "unknown"
+          }
+        ]
+      }
+    }));
+
+    api.render();
+
+    expect(details.getText()).toContain(
+      "Texte PDF : PDF hybride, OCR recommandé sur certaines pages (2 pages concernées)"
+    );
+    expect(details.getText()).toContain(
+      "Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."
+    );
+  });
 });
 
 async function createPanelHarness(
@@ -85,7 +133,7 @@ function panelSourcePath(): string {
   return path.join(process.cwd(), "src", "renderer", "textExtractionPanel.ts");
 }
 
-function createReadyState(): TextExtractionPanelState {
+function createReadyState(overrides: Partial<PdfTextExtraction> = {}): TextExtractionPanelState {
   return {
     activeDocument: {
       name: "document.pdf",
@@ -112,7 +160,8 @@ function createReadyState(): TextExtractionPanelState {
             excerptCharacterCount: 42,
             truncated: false,
             extractedAt: "2026-06-17T10:00:00.000Z",
-            fromCache: false
+            fromCache: false,
+            ...overrides
           }
         }
       }

@@ -89,6 +89,7 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         elements.details.replaceChildren(
           createTextExtractionMeta(extractionState.result),
           ...createTextExtractionLimitNoticeNodes(extractionState.result),
+          ...createTextExtractionWarningNodes(extractionState.result),
           activeDocument.extension === ".pdf"
             ? "Aucun texte exploitable détecté — OCR nécessaire plus tard."
             : "Aucun texte exploitable détecté."
@@ -167,6 +168,11 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
       cacheStatus.textContent = extraction.fromCache ? "issu du cache" : "analyse locale";
       meta.append(characters, extractedAt, cacheStatus);
 
+      const qualityStatus = createPdfTextQualityStatusNode(extraction);
+      if (qualityStatus) {
+        meta.append(qualityStatus);
+      }
+
       return meta;
     }
 
@@ -228,16 +234,75 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
   }
 
   function createTextExtractionWarningNodes(extraction: PdfTextExtraction | null): HTMLElement[] {
-    if (!extraction?.warnings || extraction.warnings.length === 0) {
+    const warnings = [
+      ...(extraction?.warnings ?? []),
+      ...createPdfTextQualityWarnings(extraction)
+    ];
+    if (warnings.length === 0) {
       return [];
     }
 
-    return extraction.warnings.map((warningText) => {
+    return uniqueStrings(warnings).map((warningText) => {
       const warning = document.createElement("p");
       warning.className = "text-extraction-limit";
       warning.textContent = warningText;
       return warning;
     });
+  }
+
+  function createPdfTextQualityStatusNode(extraction: PdfTextExtraction): HTMLSpanElement | null {
+    const quality = extraction.pdfTextQuality;
+    if (!quality || extraction.source === "tesseract-cli") {
+      return null;
+    }
+
+    const status = document.createElement("span");
+    const affectedPageCount = quality.pages.filter((page) =>
+      page.status === "text-empty" ||
+      page.status === "text-weak" ||
+      page.status === "unknown"
+    ).length;
+    const suffix = affectedPageCount > 0
+      ? ` (${affectedPageCount} page${affectedPageCount > 1 ? "s" : ""} concernée${affectedPageCount > 1 ? "s" : ""})`
+      : "";
+    status.textContent = `${pdfTextQualityLabel(quality.decision)}${suffix}`;
+    return status;
+  }
+
+  function pdfTextQualityLabel(decision: PdfTextQualityDecision): string {
+    switch (decision) {
+      case "native-ok":
+        return "Texte PDF : natif exploitable";
+      case "ocr-recommended":
+        return "Texte PDF : OCR recommandé";
+      case "hybrid-ocr-recommended":
+        return "Texte PDF : PDF hybride, OCR recommandé sur certaines pages";
+      case "unknown":
+        return "Texte PDF : qualité indéterminée";
+    }
+  }
+
+  function createPdfTextQualityWarnings(extraction: PdfTextExtraction | null): string[] {
+    const decision = extraction?.pdfTextQuality?.decision;
+    if (decision === "ocr-recommended" || decision === "hybrid-ocr-recommended") {
+      return ["Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."];
+    }
+
+    return [];
+  }
+
+  function uniqueStrings(values: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const value of values) {
+      const trimmed = value.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      result.push(trimmed);
+    }
+    return result;
   }
 
   function createEmptyTextExtractionDocumentState(): TextExtractionDocumentState {

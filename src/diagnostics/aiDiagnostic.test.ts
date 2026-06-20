@@ -247,6 +247,78 @@ describe("AI diagnostics", () => {
     expect(JSON.stringify(log.ia.value.diagnosticPipeline)).not.toContain("compte-joint");
     expect(JSON.stringify(log.ia.value.diagnosticPipeline)).not.toContain("bnp-paribas");
   });
+
+  it("keeps PDF text quality metrics in complete diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+    const suggestion = {
+      ...createAiDiagnosticSuggestion(),
+      pdfTextQuality: createPdfTextQuality()
+    };
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "T08-document-hybride.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: true,
+        value: suggestion
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.ia.value.pdfTextQuality).toMatchObject({
+      pageCount: 2,
+      decision: "hybrid-ocr-recommended",
+      usefulTextChars: 220
+    });
+    expect(log.ia.value.pdfTextQuality.pages[1]).toMatchObject({
+      page: 2,
+      status: "text-empty"
+    });
+  });
+
+  it("keeps only bounded PDF text quality metrics in redacted diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+    const suggestion = {
+      ...createAiDiagnosticSuggestion(),
+      pdfTextQuality: createPdfTextQuality()
+    };
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "document-hybride.pdf",
+      extension: ".pdf",
+      textContext: {
+        source: "pdf-native",
+        excerpt: "Texte sensible 12/05/2026 numero 123456789012"
+      },
+      aiResult: {
+        ok: true,
+        value: suggestion
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.ia.value.pdfTextQuality).toMatchObject({
+      pageCount: 2,
+      decision: "hybrid-ocr-recommended"
+    });
+    expect(JSON.stringify(log)).not.toContain("123456789012");
+    expect(JSON.stringify(log)).not.toContain("12/05/2026");
+  });
 });
 
 function createAiDiagnosticSuggestion(): any {
@@ -313,5 +385,34 @@ function createAiDiagnosticSuggestion(): any {
     },
     promptCharacterCount: 120,
     message: "Certains candidats IA ont été ignorés. Analyse conservée."
+  };
+}
+
+function createPdfTextQuality(): any {
+  return {
+    pageCount: 2,
+    nativeTextChars: 240,
+    usefulTextChars: 220,
+    decision: "hybrid-ocr-recommended",
+    reason: "Certaines pages PDF ont peu ou pas de texte natif.",
+    warnings: ["PDF hybride : OCR recommandé sur certaines pages."],
+    pages: [
+      {
+        page: 1,
+        rawTextChars: 230,
+        usefulTextChars: 220,
+        approximateWordCount: 42,
+        readableCharRatio: 0.96,
+        status: "text-ok"
+      },
+      {
+        page: 2,
+        rawTextChars: 10,
+        usefulTextChars: 0,
+        approximateWordCount: 0,
+        readableCharRatio: 0,
+        status: "text-empty"
+      }
+    ]
   };
 }

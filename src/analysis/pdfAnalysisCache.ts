@@ -235,7 +235,30 @@ function isTextExtraction(value: unknown): value is PdfTextExtraction {
   return (
     (candidate.status === "text-found" || candidate.status === "empty") &&
     typeof candidate.excerpt === "string" &&
-    typeof candidate.extractedAt === "string"
+    typeof candidate.extractedAt === "string" &&
+    (candidate.pdfTextQuality === undefined || isPdfTextQuality(candidate.pdfTextQuality))
+  );
+}
+
+function isPdfTextQuality(value: unknown): value is PdfTextExtraction["pdfTextQuality"] {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as NonNullable<PdfTextExtraction["pdfTextQuality"]>;
+  return (
+    typeof candidate.pageCount === "number" &&
+    typeof candidate.nativeTextChars === "number" &&
+    typeof candidate.usefulTextChars === "number" &&
+    Array.isArray(candidate.pages) &&
+    (
+      candidate.decision === "native-ok" ||
+      candidate.decision === "ocr-recommended" ||
+      candidate.decision === "hybrid-ocr-recommended" ||
+      candidate.decision === "unknown"
+    ) &&
+    typeof candidate.reason === "string" &&
+    Array.isArray(candidate.warnings)
   );
 }
 

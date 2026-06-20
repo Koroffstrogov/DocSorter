@@ -11,6 +11,33 @@ import {
 
 export type PdfTextExtractionStatus = "text-found" | "empty";
 
+export type PdfPageTextQualityStatus = "text-ok" | "text-empty" | "text-weak" | "unknown";
+
+export type PdfTextQualityDecision =
+  | "native-ok"
+  | "ocr-recommended"
+  | "hybrid-ocr-recommended"
+  | "unknown";
+
+export interface PdfPageTextQuality {
+  page: number;
+  rawTextChars: number;
+  usefulTextChars: number;
+  approximateWordCount: number;
+  readableCharRatio: number;
+  status: PdfPageTextQualityStatus;
+}
+
+export interface PdfTextQuality {
+  pageCount: number;
+  nativeTextChars: number;
+  usefulTextChars: number;
+  pages: PdfPageTextQuality[];
+  decision: PdfTextQualityDecision;
+  reason: string;
+  warnings: string[];
+}
+
 export type PdfTextExtractionErrorCode =
   | "DOCUMENT_NOT_SELECTED"
   | "DOCUMENT_NOT_IN_QUEUE"
@@ -31,6 +58,7 @@ export interface PdfTextExtraction {
   excerptCharacterCount: number;
   truncated: boolean;
   extractedAt: string;
+  pdfTextQuality?: PdfTextQuality;
   fromCache?: boolean;
 }
 
@@ -162,6 +190,7 @@ export function buildPdfTextExtraction(
   );
   const text = boundedText.text;
   const excerpt = createTextExcerpt(text, options.maxExcerptLength);
+  const pdfTextQuality = buildPdfTextQuality(rawExtraction);
 
   return {
     status: text.length > 0 ? "text-found" : "empty",
@@ -174,7 +203,28 @@ export function buildPdfTextExtraction(
       rawExtraction.pagesAnalyzed < rawExtraction.pageCount ||
       boundedText.truncated ||
       excerpt.length < text.length,
-    extractedAt: options.extractedAt
+    extractedAt: options.extractedAt,
+    pdfTextQuality
+  };
+}
+
+export function buildPdfTextQuality(rawExtraction: RawPdfTextExtraction): PdfTextQuality {
+  const pageCount = Math.max(0, Math.floor(rawExtraction.pageCount));
+  const pages = Array.from({ length: pageCount }, (_entry, index) =>
+    analyzePdfPageTextQuality(rawExtraction.pageTexts[index], index + 1)
+  );
+  const nativeTextChars = pages.reduce((total, page) => total + page.rawTextChars, 0);
+  const usefulTextChars = pages.reduce((total, page) => total + page.usefulTextChars, 0);
+  const decision = decidePdfTextQuality(pages);
+
+  return {
+    pageCount,
+    nativeTextChars,
+    usefulTextChars,
+    pages,
+    decision,
+    reason: pdfTextQualityReason(decision),
+    warnings: pdfTextQualityWarnings(decision)
   };
 }
 
@@ -227,6 +277,107 @@ export function normalizeExtractedText(value: string): string {
     .replace(/[ \t\f\v\r]+/g, " ")
     .replace(/[ \t\f\v\r]*\n+[ \t\f\v\r]*/g, "\n")
     .trim();
+}
+
+function analyzePdfPageTextQuality(
+  pageText: string | undefined,
+  page: number
+): PdfPageTextQuality {
+  if (typeof pageText !== "string") {
+    return {
+      page,
+      rawTextChars: 0,
+      usefulTextChars: 0,
+      approximateWordCount: 0,
+      readableCharRatio: 0,
+      status: "unknown"
+    };
+  }
+
+  const normalized = normalizeExtractedText(pageText);
+  const rawTextChars = normalized.length;
+  const usefulTextChars = countUsefulTextChars(normalized);
+  const readableBase = normalized.replace(/\s+/g, "").length;
+  const readableCharRatio = readableBase > 0
+    ? Math.round((usefulTextChars / readableBase) * 100) / 100
+    : 0;
+
+  return {
+    page,
+    rawTextChars,
+    usefulTextChars,
+    approximateWordCount: countApproximateWords(normalized),
+    readableCharRatio,
+    status: classifyPdfPageTextQuality(usefulTextChars)
+  };
+}
+
+function countUsefulTextChars(value: string): number {
+  return value.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
+}
+
+function countApproximateWords(value: string): number {
+  return value.match(/[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+}
+
+function classifyPdfPageTextQuality(usefulTextChars: number): PdfPageTextQualityStatus {
+  if (usefulTextChars < 30) {
+    return "text-empty";
+  }
+
+  if (usefulTextChars < 200) {
+    return "text-weak";
+  }
+
+  return "text-ok";
+}
+
+function decidePdfTextQuality(pages: PdfPageTextQuality[]): PdfTextQualityDecision {
+  if (pages.length === 0 || pages.every((page) => page.status === "unknown")) {
+    return "unknown";
+  }
+
+  const okCount = pages.filter((page) => page.status === "text-ok").length;
+  const affectedCount = pages.filter(
+    (page) => page.status === "text-empty" || page.status === "text-weak"
+  ).length;
+
+  if (okCount === 0) {
+    return "ocr-recommended";
+  }
+
+  if (affectedCount > 0 || pages.some((page) => page.status === "unknown")) {
+    return "hybrid-ocr-recommended";
+  }
+
+  const majorityOk = okCount >= Math.ceil(pages.length / 2);
+  return majorityOk ? "native-ok" : "hybrid-ocr-recommended";
+}
+
+function pdfTextQualityReason(decision: PdfTextQualityDecision): string {
+  switch (decision) {
+    case "native-ok":
+      return "Texte PDF natif exploitable sur la majorité des pages.";
+    case "ocr-recommended":
+      return "Texte PDF natif absent ou trop faible.";
+    case "hybrid-ocr-recommended":
+      return "Certaines pages PDF ont peu ou pas de texte natif.";
+    case "unknown":
+      return "Qualité du texte PDF indéterminée.";
+  }
+}
+
+function pdfTextQualityWarnings(decision: PdfTextQualityDecision): string[] {
+  switch (decision) {
+    case "native-ok":
+      return [];
+    case "ocr-recommended":
+      return ["OCR recommandé : le texte PDF natif semble absent ou insuffisant."];
+    case "hybrid-ocr-recommended":
+      return ["PDF hybride : OCR recommandé sur certaines pages."];
+    case "unknown":
+      return ["Qualité du texte PDF non déterminée."];
+  }
 }
 
 export function createTextExcerpt(text: string, maxLength: number): string {

@@ -420,6 +420,32 @@ interface DuplicateAnalysisState {
 
 type TextExtractionStatus = "idle" | "extracting" | "text-found" | "empty" | "error";
 
+type PdfPageTextQualityStatus = "text-ok" | "text-empty" | "text-weak" | "unknown";
+type PdfTextQualityDecision =
+  | "native-ok"
+  | "ocr-recommended"
+  | "hybrid-ocr-recommended"
+  | "unknown";
+
+interface PdfPageTextQuality {
+  page: number;
+  rawTextChars: number;
+  usefulTextChars: number;
+  approximateWordCount: number;
+  readableCharRatio: number;
+  status: PdfPageTextQualityStatus;
+}
+
+interface PdfTextQuality {
+  pageCount: number;
+  nativeTextChars: number;
+  usefulTextChars: number;
+  pages: PdfPageTextQuality[];
+  decision: PdfTextQualityDecision;
+  reason: string;
+  warnings: string[];
+}
+
 interface PdfTextExtraction {
   status: "text-found" | "empty";
   source?: "pdf-native" | "tesseract-cli";
@@ -434,6 +460,7 @@ interface PdfTextExtraction {
   truncated: boolean;
   durationMs?: number;
   extractedAt: string;
+  pdfTextQuality?: PdfTextQuality;
   fromCache?: boolean;
   warnings?: string[];
 }
@@ -556,6 +583,7 @@ interface RendererAiError {
     | "UNKNOWN_ERROR";
   message: string;
   field?: string;
+  pdfTextQuality?: PdfTextQuality;
   validationErrors?: Array<{
     field?: string;
     rawValue?: string;
@@ -637,6 +665,7 @@ interface RendererAiDocumentSuggestion {
   responseJson: unknown;
   folderLearningPipeline?: FolderLearningPipelineStep[];
   diagnosticPipeline?: AiDiagnosticPipelineStep[];
+  pdfTextQuality?: PdfTextQuality;
   thinking: string | null;
   suggestion: RendererAiClassificationSuggestion;
   promptCharacterCount: number;

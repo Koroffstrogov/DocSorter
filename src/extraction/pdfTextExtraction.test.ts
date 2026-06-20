@@ -8,6 +8,7 @@ import {
   aggregatePageText,
   aggregatePageTextWithinLimit,
   buildPdfTextExtraction,
+  buildPdfTextQuality,
   createTextExcerpt,
   extractTextFromPdfDocument,
   normalizeExtractedText,
@@ -58,7 +59,11 @@ describe("pdf text extraction helpers", () => {
       pageCount: 2,
       pagesAnalyzed: 2,
       characterCount: 0,
-      excerpt: ""
+      excerpt: "",
+      pdfTextQuality: {
+        decision: "ocr-recommended",
+        usefulTextChars: 0
+      }
     });
   });
 
@@ -80,7 +85,11 @@ describe("pdf text extraction helpers", () => {
       characterCount: 10,
       excerpt: "abcde",
       excerptCharacterCount: 5,
-      truncated: true
+      truncated: true,
+      pdfTextQuality: {
+        pageCount: 1,
+        decision: "ocr-recommended"
+      }
     });
   });
 
@@ -123,6 +132,65 @@ describe("pdf text extraction helpers", () => {
       excerpt: "abcd",
       truncated: true
     });
+  });
+
+  it("detects native PDF text as usable when pages contain enough readable text", () => {
+    const pageText = Array.from({ length: 60 }, (_entry, index) => `mot${index}`).join(" ");
+
+    const quality = buildPdfTextQuality({
+      pageCount: 2,
+      pagesAnalyzed: 2,
+      pageTexts: [pageText, pageText]
+    });
+
+    expect(quality).toMatchObject({
+      pageCount: 2,
+      decision: "native-ok",
+      warnings: []
+    });
+    expect(quality.pages.every((page) => page.status === "text-ok")).toBe(true);
+  });
+
+  it("recommends OCR when every PDF page has no useful text", () => {
+    const quality = buildPdfTextQuality({
+      pageCount: 2,
+      pagesAnalyzed: 2,
+      pageTexts: ["   ", "\n"]
+    });
+
+    expect(quality).toMatchObject({
+      decision: "ocr-recommended",
+      nativeTextChars: 0,
+      usefulTextChars: 0
+    });
+    expect(quality.pages.map((page) => page.status)).toEqual(["text-empty", "text-empty"]);
+  });
+
+  it("detects hybrid PDFs when some pages have text and others are weak", () => {
+    const strongText = Array.from({ length: 60 }, (_entry, index) => `mot${index}`).join(" ");
+    const quality = buildPdfTextQuality({
+      pageCount: 3,
+      pagesAnalyzed: 3,
+      pageTexts: [strongText, "", "scan"]
+    });
+
+    expect(quality.decision).toBe("hybrid-ocr-recommended");
+    expect(quality.pages.map((page) => page.status)).toEqual(["text-ok", "text-empty", "text-empty"]);
+    expect(quality.warnings).toContain("PDF hybride : OCR recommandé sur certaines pages.");
+  });
+
+  it("marks unanalyzed pages as unknown without crashing", () => {
+    const quality = buildPdfTextQuality({
+      pageCount: 2,
+      pagesAnalyzed: 1,
+      pageTexts: ["Texte trop court"]
+    });
+
+    expect(quality.pages).toMatchObject([
+      { page: 1, status: "text-empty" },
+      { page: 2, status: "unknown" }
+    ]);
+    expect(quality.decision).toBe("ocr-recommended");
   });
 });
 
