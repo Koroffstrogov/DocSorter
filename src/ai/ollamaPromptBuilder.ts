@@ -43,8 +43,8 @@ export function buildOllamaClassificationPrompt(
         {
           fields: {
             dateToken: {
-              selected: "AAAA-MM-JJ ou AAAA optionnel",
-              candidates: [{ value: "2026", score: 80, reason: "année fiscale détectée", role: "selected" }]
+              selected: "AAAA-MM-JJ, AAAA-MM ou AAAA optionnel",
+              candidates: [{ value: "2026-05", score: 80, reason: "période mensuelle détectée", role: "selected" }]
             },
             subject: {
               selected: "sujet du champ Renommage proposé optionnel",
@@ -113,9 +113,12 @@ export function buildOllamaClassificationPrompt(
       "- le nom de fichier source ou son basename ne doit jamais devenir subject ni target.",
       "- n'utilise jamais DocSorter, docsorter-local, document de test ou contenu fictif dans subject, issuer, detail ou proposedName.",
       "- n'utilise jamais de chemin absolu dans target, documentType, issuer, detail ou targetFolder.",
-      "- dateToken doit être au format AAAA-MM-JJ ou AAAA, ou rester absent.",
-      "- si tu ne connais que le mois au format AAAA-MM, utilise AAAA-MM-01.",
-      "- n'utilise pas date-inconnue, AAAA-env, ni AAAA-MM dans la sortie JSON.",
+      "- dateToken doit être au format AAAA-MM-JJ, AAAA-MM ou AAAA, ou rester absent.",
+      "- Pour une période mensuelle simple, utilise AAAA-MM.",
+      "- N'utilise pas AAAA-MM-01 pour représenter un mois entier.",
+      "- N'utilise pas date-inconnue ni AAAA-env dans la sortie JSON.",
+      "- detail ne doit pas contenir un mois ou une période déjà représentés par dateToken.",
+      "- Pour relevé bancaire, facture énergie périodique, quittance ou document mensuel, dateToken doit préférer AAAA-MM.",
       "- Pour contrat ou assurance, la date d'effet est prioritaire sur la date de signature.",
       "- Si une date complète d'effet, émission ou délivrance est détectée, dateToken doit être AAAA-MM-JJ, pas seulement AAAA.",
       "- Si une date de prise d'effet est présente, elle doit gagner comme dateToken.",

@@ -104,6 +104,7 @@ describe("renderer right panel layout", () => {
     expect(sortProposalPanel).toContain("Nom final non généré");
     expect(sortProposalPanel).toContain('id="destination-final-path"');
     expect(sortProposalPanel).toContain("Aucun dossier final");
+    expect(sortProposalPanel).toContain("Réinitialiser les choix");
     expect(sortProposalPanel).toContain('id="destination-folder-badge"');
     expect(sortProposalPanel).toContain('id="proposal-state"');
     expect(sortProposalPanel).toContain("Analyse IA requise pour générer une proposition.");
@@ -185,7 +186,11 @@ describe("renderer right panel layout", () => {
       "--badge-fallback-bg",
       "--candidate-pill-bg",
       "--candidate-pill-selected-bg",
-      "--section-header-height"
+      "--section-header-height",
+      "--right-panel-width",
+      "--right-panel-min-width",
+      "--right-panel-section-gap",
+      "--right-panel-card-padding"
     ]) {
       expect(css).toContain(token);
     }
@@ -209,6 +214,10 @@ describe("renderer right panel layout", () => {
 
     expect(css).toContain(".simple-mode-toolbar,");
     expect(css).toContain(".sort-proposal-card,");
+    expect(css).toContain(".diagnostic-panel,");
+    expect(css).toContain(".advanced-panel");
+    expect(css).toContain("minmax(var(--right-panel-min-width), var(--right-panel-width))");
+    expect(css).toContain("--right-panel-width: 500px");
     expect(css).toContain(".proposal-final-name");
     expect(css).toContain(".folder-status-badge");
     expect(css).toContain("border: 1px solid var(--border-subtle)");
@@ -270,6 +279,10 @@ describe("renderer right panel layout", () => {
     expect(aiFolderCandidates).toContain("folderCandidates = aiFieldRows.getFolderCandidates(suggestion).slice(0, 3)");
     expect(aiFolderCandidates).toContain('marker.textContent = selected ? "✓" : "";');
     expect(aiFolderCandidates).toContain("formatRelativeFolderLabel");
+    expect(aiFolderCandidates).toContain("createManualFolderControl");
+    expect(aiFolderCandidates).toContain("folder-manual-edit");
+    expect(aiFolderCandidates).toContain("folder-manual-input");
+    expect(aiFolderCandidates).toContain("Aucun dossier n'est créé automatiquement.");
     expect(aiFolderCandidates).not.toContain("Dossier proposé actuel");
     expect(aiFieldRows).toContain("createCandidateButton");
     expect(aiFieldRows).toContain(".slice(0, 3)");
@@ -323,6 +336,10 @@ describe("renderer right panel layout", () => {
     expect(css).toContain(".ai-candidate-chip");
     expect(css).toContain("min-height: 22px !important");
     expect(css).toContain(".folder-candidate-badge");
+    expect(css).toContain(".folder-manual-edit");
+    expect(css).toContain(".folder-manual-input");
+    expect(css).toContain("grid-template-columns: 64px minmax(0, 1fr)");
+    expect(css).toContain(".ai-control-panel .ai-simple-status");
     expect(css).toContain(".target-folder-controls[hidden]");
     expect(css).toContain(".destination-details[hidden]");
     expect(css).toContain("#destination-status[hidden]");
@@ -334,6 +351,8 @@ describe("renderer right panel layout", () => {
     expect(namingPanel).toContain("elements.panel.hidden = false");
     expect(namingPanel).toContain("Nom final non généré");
     expect(namingPanel).toContain("Sélectionnez un document à trier.");
+    expect(namingPanel).toContain("syncResetButton");
+    expect(namingPanel).toContain("Réinitialiser les choix");
   });
 
   it("keeps the simple sort proposal relative and state-driven", async () => {

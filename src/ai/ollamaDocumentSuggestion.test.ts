@@ -127,7 +127,7 @@ describe("runOllamaSuggestionForDocument", () => {
       documentType: "facture",
       issuer: "renault",
       detail: "vidange",
-      proposedName: "2026-06-16_captur_facture_renault_vidange.pdf",
+      proposedName: "2026-06-16_renault-captur_facture_renault_vidange.pdf",
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       source: "ollama"
     });
@@ -213,7 +213,7 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.responseJson.fields.target.selected).toBe("captur");
   });
 
-  it("converts monthly Ollama dates before proposed name generation", async () => {
+  it("keeps monthly Ollama dates before proposed name generation", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -234,12 +234,120 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026-05-01",
+      dateToken: "2026-05",
       target: "captur",
       documentType: "facture-entretien",
-      proposedName: "2026-05-01_captur_facture-entretien.pdf",
+      proposedName: "2026-05_captur_facture-entretien.pdf",
       source: "ollama"
     });
+  });
+
+  it("builds a clean monthly bank statement name and removes period detail", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Relevé bancaire BNP Paribas période mai 2026"
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026-05",
+          subject: "foyer",
+          target: "foyer",
+          targetKind: "household",
+          documentType: "releve-bancaire",
+          issuer: "bnp-paribas",
+          detail: "mai-2026",
+          confidence: 82,
+          reasons: ["Période mensuelle détectée."],
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026-05",
+      target: "foyer",
+      documentType: "releve-bancaire",
+      issuer: "bnp-paribas",
+      proposedName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
+    });
+    expect(result.ok && result.value.suggestion.detail).toBeUndefined();
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("période déjà représentée");
+  });
+
+  it("downgrades a monthly bank statement first-day date to the covered month", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Relevé bancaire période du 01/05/2026 au 31/05/2026"
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026-05-01",
+          target: "foyer",
+          targetKind: "household",
+          documentType: "releve-bancaire",
+          issuer: "bnp-paribas",
+          detail: "05-2026",
+          confidence: 82,
+          reasons: ["Période mensuelle détectée."],
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026-05",
+      target: "foyer",
+      documentType: "releve-bancaire",
+      issuer: "bnp-paribas",
+      proposedName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
+    });
+    expect(result.ok && result.value.suggestion.detail).toBeUndefined();
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA ramenée au mois");
+  });
+
+  it("downgrades monthly energy invoice first-day dates to the covered month", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Facture énergie EDF février 2026"
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026-02-01",
+          target: "maison-principale",
+          targetKind: "property",
+          documentType: "facture-energie",
+          issuer: "edf",
+          detail: "fevrier-2026",
+          confidence: 82,
+          reasons: ["Facture mensuelle détectée."],
+          warnings: [],
+          source: "ollama"
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion).toMatchObject({
+      dateToken: "2026-02",
+      target: "maison-principale",
+      documentType: "facture-energie",
+      issuer: "edf",
+      proposedName: "2026-02_maison-principale_facture-energie_edf.pdf"
+    });
+    expect(result.ok && result.value.suggestion.detail).toBeUndefined();
   });
 
   it("uses the AI subject for proposed name generation when no target is provided", async () => {

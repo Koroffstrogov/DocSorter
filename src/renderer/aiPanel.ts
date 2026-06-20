@@ -13,6 +13,9 @@ interface AiPanelOptions {
   onFieldManualValueChange: (field: AiSelectionFieldKey, value: string) => void;
   onFieldManualEditFinish: () => void;
   onFolderCandidateSelect: (relativePath: string) => void;
+  onFolderManualEditStart: () => void;
+  onFolderManualValueChange: (relativePath: string) => void;
+  onFolderManualEditFinish: () => void;
   onApplySuggestionToEmptyFields: () => void;
   onExportDiagnostic: () => void;
   onIgnoreSuggestion: () => void;
@@ -223,7 +226,10 @@ var DocSorterAiPanel: AiPanelFactoryApi;
 
       if (elements.folderCandidates) {
         elements.folderCandidates.replaceChildren(...aiFolderCandidates.createFolderCandidateContent(state, {
-          onFolderCandidateSelect: options.onFolderCandidateSelect
+          onFolderCandidateSelect: options.onFolderCandidateSelect,
+          onFolderManualEditStart: options.onFolderManualEditStart,
+          onFolderManualValueChange: options.onFolderManualValueChange,
+          onFolderManualEditFinish: options.onFolderManualEditFinish
         }));
       }
 

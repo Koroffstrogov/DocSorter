@@ -22,14 +22,14 @@ var DocSorterAiStatusContent: AiStatusContentApi;
   function createSimpleStatusContent(state: AiState): Node[] {
     const lines: Node[] = [];
     const summary = document.createElement("strong");
+    const timingLabel = createSimpleTimingLabel(state.timing);
     summary.className = "ai-simple-status-line";
-    summary.textContent = `${aiFormatters.simpleConnectionLabel(state)} · ${aiFormatters.simpleModelLabel(state.modelStatus)}`;
+    summary.textContent = [
+      aiFormatters.simpleConnectionLabel(state),
+      aiFormatters.simpleModelLabel(state.modelStatus),
+      timingLabel
+    ].filter(Boolean).join(" · ");
     lines.push(summary);
-
-    const timingLine = createSimpleTimingLine(state.timing);
-    if (timingLine) {
-      lines.push(timingLine);
-    }
 
     if (state.dirty) {
       lines.push(createWarningLine("Réglages IA modifiés."));
@@ -42,37 +42,21 @@ var DocSorterAiStatusContent: AiStatusContentApi;
     return lines;
   }
 
-  function createSimpleTimingLine(timing: AiPipelineTimingState): HTMLElement | null {
+  function createSimpleTimingLabel(timing: AiPipelineTimingState): string | null {
     if (timing.stage !== "idle" && timing.stage !== "completed" && timing.stage !== "error") {
-      return createMetaLine(
-        `${aiFormatters.aiPipelineStageLabel(timing.stage)}... ${aiFormatters.formatDuration(timing.elapsedMs)}`,
-        undefined,
-        "ai-simple-timing-line"
-      );
+      return `${aiFormatters.aiPipelineStageLabel(timing.stage)}... ${aiFormatters.formatDuration(timing.elapsedMs)}`;
     }
 
     if (timing.lastAnalysisMs !== null) {
-      return createMetaLine(
-        `Dernière analyse : ${aiFormatters.formatDuration(timing.lastAnalysisMs)}`,
-        undefined,
-        "ai-simple-timing-line"
-      );
+      return `Dernière analyse : ${aiFormatters.formatDuration(timing.lastAnalysisMs)}`;
     }
 
     if (timing.lastLoadMs !== null) {
-      return createMetaLine(
-        `Dernier chargement : ${aiFormatters.formatDuration(timing.lastLoadMs)}`,
-        undefined,
-        "ai-simple-timing-line"
-      );
+      return `Dernier chargement : ${aiFormatters.formatDuration(timing.lastLoadMs)}`;
     }
 
     if (timing.finalElapsedMs !== null) {
-      return createMetaLine(
-        `Dernier essai : ${aiFormatters.formatDuration(timing.finalElapsedMs)}`,
-        undefined,
-        "ai-simple-timing-line"
-      );
+      return `Dernier essai : ${aiFormatters.formatDuration(timing.finalElapsedMs)}`;
     }
 
     return null;

@@ -80,6 +80,54 @@ export interface RunOllamaSuggestionForDocumentOptions {
   now?: () => Date;
 }
 
+const FULL_DATE_TOKEN_PATTERN = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+const MONTH_TOKEN_PATTERN = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/;
+const MONTHLY_PERIOD_DOCUMENT_TYPES = new Set([
+  "releve-bancaire",
+  "releve-epargne",
+  "facture-energie",
+  "facture-electricite",
+  "facture-gaz",
+  "facture-eau",
+  "quittance",
+  "quittance-loyer",
+  "loyer"
+]);
+const GENERIC_PERIOD_DETAIL_TOKENS = new Set([
+  "periode",
+  "mois",
+  "mensuel",
+  "mensuelle"
+]);
+const GENERIC_FOLDER_TARGET_VALUES = new Set([
+  "assurance",
+  "assurances",
+  "banque",
+  "finances",
+  "fiscalite",
+  "identite",
+  "identite-famille",
+  "maison",
+  "sante",
+  "scolarite",
+  "vehicule",
+  "vehicules"
+]);
+const MONTH_DETAIL_TOKENS: Record<string, string[]> = {
+  "01": ["janvier", "janv"],
+  "02": ["fevrier", "fev"],
+  "03": ["mars"],
+  "04": ["avril", "avr"],
+  "05": ["mai"],
+  "06": ["juin"],
+  "07": ["juillet", "juil"],
+  "08": ["aout"],
+  "09": ["septembre", "sept"],
+  "10": ["octobre", "oct"],
+  "11": ["novembre", "nov"],
+  "12": ["decembre", "dec"]
+};
+
 export async function runOllamaSuggestionForDocument(
   options: RunOllamaSuggestionForDocumentOptions
 ): Promise<AiSettingsResult<AiDocumentSuggestion>> {
@@ -196,6 +244,8 @@ function sanitizeAiSuggestion(
   };
   const documentType = next.documentType?.trim() ?? "";
   sanitizeNameBlocks(next);
+  normalizeMonthlyPeriodDateToken(next);
+  sanitizeDatePeriodDetail(next);
 
   if (
     next.subject &&
@@ -231,7 +281,7 @@ function sanitizeAiSuggestion(
 }
 
 function addDatePrecisionWarning(suggestion: AiClassificationSuggestion): void {
-  if (!suggestion.dateToken || !/^(19|20)\d{2}$/.test(suggestion.dateToken)) {
+  if (!suggestion.dateToken || FULL_DATE_TOKEN_PATTERN.test(suggestion.dateToken)) {
     return;
   }
 
@@ -251,6 +301,111 @@ function expectsPreciseDate(documentType: string): boolean {
     documentType.includes("passeport") ||
     documentType.includes("identite")
   );
+}
+
+function normalizeMonthlyPeriodDateToken(suggestion: AiClassificationSuggestion): void {
+  const match = suggestion.dateToken?.match(FULL_DATE_TOKEN_PATTERN);
+  if (!match || match[3] !== "01") {
+    return;
+  }
+
+  const documentType = normalizeNameBlock(suggestion.documentType);
+  if (!expectsMonthlyPeriodDate(documentType)) {
+    return;
+  }
+
+  suggestion.dateToken = `${match[1]}-${match[2]}`;
+  suggestion.warnings.push("Date IA ramenée au mois : période mensuelle détectée.");
+}
+
+function expectsMonthlyPeriodDate(documentType: string): boolean {
+  return (
+    MONTHLY_PERIOD_DOCUMENT_TYPES.has(documentType) ||
+    (documentType.includes("releve") && documentType.includes("bancaire")) ||
+    (documentType.includes("facture") && documentType.includes("energie"))
+  );
+}
+
+function sanitizeDatePeriodDetail(suggestion: AiClassificationSuggestion): void {
+  if (!suggestion.detail || !suggestion.dateToken) {
+    return;
+  }
+
+  const cleaned = removeDatePeriodTerms(suggestion.detail, suggestion.dateToken);
+  if (cleaned.value === normalizeNameBlock(suggestion.detail)) {
+    return;
+  }
+
+  if (cleaned.value) {
+    suggestion.detail = cleaned.value;
+  } else {
+    delete suggestion.detail;
+  }
+
+  suggestion.warnings.push("Détail IA ignoré : période déjà représentée par la date.");
+}
+
+function removeDatePeriodTerms(value: string, dateToken: string): { value: string } {
+  const normalized = normalizeNameBlock(value);
+  if (!normalized) {
+    return { value: "" };
+  }
+
+  const redundantTokens = buildDateRedundantTokens(dateToken);
+  if (redundantTokens.size === 0) {
+    return { value: normalized };
+  }
+
+  const tokens = normalized.split("-").filter(Boolean);
+  if (
+    tokens.length > 0 &&
+    tokens.every((token) => redundantTokens.has(token) || GENERIC_PERIOD_DETAIL_TOKENS.has(token))
+  ) {
+    return { value: "" };
+  }
+
+  const containsDateToken = tokens.some((token) => redundantTokens.has(token));
+  const kept = tokens.filter((token) => {
+    if (redundantTokens.has(token)) {
+      return false;
+    }
+
+    return !(containsDateToken && GENERIC_PERIOD_DETAIL_TOKENS.has(token));
+  });
+
+  return { value: kept.join("-") };
+}
+
+function buildDateRedundantTokens(dateToken: string): Set<string> {
+  const tokens = new Set<string>();
+  const yearMatch = dateToken.match(/^((?:19|20)\d{2})$/);
+  if (yearMatch) {
+    tokens.add(yearMatch[1]);
+    return tokens;
+  }
+
+  const monthMatch = dateToken.match(MONTH_TOKEN_PATTERN);
+  const fullDateMatch = dateToken.match(FULL_DATE_TOKEN_PATTERN);
+  const year = monthMatch?.[1] ?? fullDateMatch?.[1];
+  const month = monthMatch?.[2] ?? fullDateMatch?.[2];
+  const day = fullDateMatch?.[3];
+  if (!year || !month) {
+    return tokens;
+  }
+
+  tokens.add(year);
+  tokens.add(month);
+  tokens.add(String(Number(month)));
+  for (const monthToken of MONTH_DETAIL_TOKENS[month] ?? []) {
+    tokens.add(monthToken);
+  }
+
+  if (day) {
+    tokens.add(day);
+    tokens.add(String(Number(day)));
+  }
+
+  return tokens;
 }
 
 function sanitizeNameBlocks(suggestion: AiClassificationSuggestion): void {
@@ -458,7 +613,7 @@ function applyGeneratedProposedName(
   suggestion: AiClassificationSuggestion,
   extension: string
 ): void {
-  const namingTarget = suggestion.subject?.trim() || suggestion.target?.trim() || "";
+  const namingTarget = selectNamingTarget(suggestion);
   if (!suggestion.dateToken || !namingTarget || !suggestion.documentType) {
     delete suggestion.proposedName;
     return;
@@ -479,6 +634,15 @@ function applyGeneratedProposedName(
   }
 
   suggestion.proposedName = generated.filename;
+}
+
+function selectNamingTarget(suggestion: AiClassificationSuggestion): string {
+  const target = suggestion.target?.trim() ?? "";
+  if (target && !GENERIC_FOLDER_TARGET_VALUES.has(normalizeNameBlock(target))) {
+    return target;
+  }
+
+  return suggestion.subject?.trim() || target;
 }
 
 function findQueuedDocument(

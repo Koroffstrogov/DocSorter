@@ -153,7 +153,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       manualInput.type = "text";
       manualInput.className = "ai-field-manual-input";
       manualInput.value = selectedValue ?? "";
-      manualInput.placeholder = key === "dateToken" ? "AAAA ou AAAA-MM-JJ" : key === "issuer" || key === "detail" ? "Optionnel" : "Valeur";
+      manualInput.placeholder = key === "dateToken" ? "AAAA, AAAA-MM ou AAAA-MM-JJ" : key === "issuer" || key === "detail" ? "Optionnel" : "Valeur";
       manualInput.addEventListener("input", () => {
         row.classList.add("manual");
         badge.className = "ai-field-badge manual";

@@ -1,5 +1,8 @@
 interface AiFolderCandidatesOptions {
   onFolderCandidateSelect: (relativePath: string) => void;
+  onFolderManualEditStart: () => void;
+  onFolderManualValueChange: (relativePath: string) => void;
+  onFolderManualEditFinish: () => void;
 }
 
 interface AiFolderCandidatesApi {
@@ -40,6 +43,7 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
 
     const folderCandidates = aiFieldRows.getFolderCandidates(suggestion).slice(0, 3);
     const selectedFolder = state.selection?.selectedFolder ?? suggestion?.suggestion.targetFolder ?? "";
+    const isEditingFolder = Boolean(state.selection?.editingFolder);
 
     container.className = "folder-candidate-content";
     cards.className = "folder-candidate-cards";
@@ -58,7 +62,7 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
       cards.append(empty);
     }
 
-    container.append(cards);
+    container.append(cards, createManualFolderControl(selectedFolder, isEditingFolder, options));
     return [container];
   }
 
@@ -87,6 +91,54 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
     card.addEventListener("click", onSelect);
     card.append(marker, value, meta);
     return card;
+  }
+
+  function createManualFolderControl(
+    selectedFolder: string,
+    isEditingFolder: boolean,
+    options: AiFolderCandidatesOptions
+  ): HTMLElement {
+    const control = document.createElement("div");
+    control.className = `folder-manual-control ${isEditingFolder ? "editing" : ""}`;
+
+    if (!isEditingFolder) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "folder-manual-edit";
+      button.textContent = "✎ Modifier";
+      button.title = "Saisir manuellement le sous-dossier cible";
+      button.setAttribute("aria-label", "Modifier manuellement le sous-dossier cible");
+      button.addEventListener("click", () => {
+        options.onFolderManualEditStart();
+      });
+      control.append(button);
+      return control;
+    }
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "folder-manual-input";
+    input.value = selectedFolder;
+    input.placeholder = "Sous-dossier relatif";
+    input.title = "Sous-dossier relatif. Aucun dossier n'est créé automatiquement.";
+    input.addEventListener("input", () => {
+      options.onFolderManualValueChange(input.value);
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === "Escape") {
+        event.preventDefault();
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", () => {
+      options.onFolderManualEditFinish();
+    });
+    control.append(input);
+    window.setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, 0);
+    return control;
   }
 
   function formatRelativeFolderLabel(value: string): string {

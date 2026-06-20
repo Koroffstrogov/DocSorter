@@ -703,6 +703,7 @@ interface AiSelectionState {
   fields: AiSelectionFields;
   manualFields: AiSelectionManualFields;
   editingField: AiSelectionFieldKey | null;
+  editingFolder: boolean;
   selectedFolder: string;
   previewFilename: string;
   previewFilenameValid: boolean;

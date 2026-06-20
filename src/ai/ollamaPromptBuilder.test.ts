@@ -27,9 +27,11 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain('"source": "ollama"');
     expect(result.prompt).toContain("jusqu'à 3 candidats par champ");
     expect(result.prompt).toContain("folderCandidates doit contenir des dossiers relatifs candidats");
-    expect(result.prompt).toContain("AAAA-MM-JJ ou AAAA");
+    expect(result.prompt).toContain("AAAA-MM-JJ, AAAA-MM ou AAAA");
     expect(result.prompt).toContain("AAAA-MM-01");
-    expect(result.prompt).toContain("n'utilise pas date-inconnue");
+    expect(result.prompt).toContain("N'utilise pas AAAA-MM-01");
+    expect(result.prompt).toContain("période mensuelle");
+    expect(result.prompt).toContain("date-inconnue");
     expect(result.prompt).toContain("champ Sujet de Renommage proposé");
     expect(result.prompt).toContain("target est la valeur de nommage");
     expect(result.prompt).toContain("targetKind décrit seulement la nature optionnelle");

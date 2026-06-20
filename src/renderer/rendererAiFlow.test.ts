@@ -336,6 +336,14 @@ describe("rendererAiFlow V2 application helpers", () => {
       issuer: "aucun",
       detail: "aucun"
     }, ".pdf");
+    const monthlyDetail = buildPreview({
+      dateToken: "2026-02",
+      subject: "foyer",
+      target: "foyer",
+      documentType: "releve-bancaire",
+      issuer: "bnp-paribas",
+      detail: "fevrier-2026"
+    }, ".pdf");
     const redundant = buildPreview({
       dateToken: "2026",
       subject: "lea",
@@ -345,10 +353,11 @@ describe("rendererAiFlow V2 application helpers", () => {
       detail: "carnet-vaccination"
     }, ".pdf");
 
-    expect(none.filename).toBe("2026-02-01_lea_carnet-vaccination.pdf");
-    expect(none.messages.map((message) => message.message)).toContain(
+    expect(none.filename).toBe("2026-02_lea_carnet-vaccination.pdf");
+    expect(none.messages.map((message) => message.message)).not.toContain(
       "Date IA au mois convertie au premier jour du mois."
     );
+    expect(monthlyDetail.filename).toBe("2026-02_foyer_releve-bancaire_bnp-paribas.pdf");
     expect(redundant.filename).toBe("2026_lea_carnet-vaccination.pdf");
   });
 
@@ -376,6 +385,83 @@ describe("rendererAiFlow V2 application helpers", () => {
     );
 
     expect(updated.previewDestinationFolder).toBe("Vehicules/Captur/Entretien");
+  });
+
+  it("selects an AI folder candidate and syncs the existing target-folder state", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const buildSelection = context.buildAiSelectionFromSuggestion as (
+      suggestion: Record<string, unknown>,
+      extension: string,
+      targetRootPath: string | null
+    ) => TestAiSelection;
+    const selectFolder = context.selectAiFolderCandidate as (relativePath: string) => void;
+
+    state.ai = {
+      ...state.ai,
+      suggestion: createAiSuggestion(),
+      suggestionDocumentPath: "Z:\\source\\document.pdf",
+      selection: buildSelection(createAiSuggestion(), ".pdf", "Z:\\cible")
+    };
+
+    selectFolder("Vehicules/Captur/Entretien");
+
+    expect((state.ai.selection as TestAiSelection).selectedFolder).toBe("Vehicules/Captur/Entretien");
+    expect((state.ai.selection as TestAiSelection).previewDestinationFolder).toBe("Vehicules/Captur/Entretien");
+    expect(state.targetFolder.selectedFolder).toBe("Vehicules/Captur/Entretien");
+    expect(state.targetFolder.origin).toBe("ai-v2");
+    expect(context.targetFolderUpdates).toEqual([
+      { folder: "Vehicules/Captur/Entretien", origin: "ai-v2" }
+    ]);
+  });
+
+  it("resets modified AI choices to the initial suggestion values", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const buildSelection = context.buildAiSelectionFromSuggestion as (
+      suggestion: Record<string, unknown>,
+      extension: string,
+      targetRootPath: string | null
+    ) => TestAiSelection;
+    const updateField = context.updateAiSelectionField as (
+      selection: TestAiSelection,
+      field: string,
+      value: string,
+      source: string,
+      extension: string,
+      targetRootPath: string | null
+    ) => TestAiSelection;
+    const canReset = context.canResetAiSelectionChoices as () => boolean;
+    const reset = context.resetAiSelectionChoices as () => boolean;
+    const suggestion = createAiSuggestion();
+
+    state.ai = {
+      ...state.ai,
+      suggestion,
+      suggestionDocumentPath: "Z:\\source\\document.pdf",
+      selection: buildSelection(suggestion, ".pdf", "Z:\\cible")
+    };
+    expect(canReset()).toBe(false);
+
+    state.ai.selection = {
+      ...updateField(state.ai.selection as TestAiSelection, "documentType", "facture-entretien", "manual", ".pdf", "Z:\\cible"),
+      selectedFolder: "Vehicules/Captur/Entretien",
+      editingFolder: true
+    };
+
+    expect(canReset()).toBe(true);
+    expect(reset()).toBe(true);
+    expect(canReset()).toBe(false);
+    expect(state.ai.selection).toMatchObject({
+      fields: {
+        documentType: "facture"
+      },
+      manualFields: {},
+      editingField: null,
+      editingFolder: false,
+      selectedFolder: "Vehicules/Captur"
+    });
+    expect(state.targetFolder.selectedFolder).toBe("Vehicules/Captur");
   });
 
   it("preloads the IA model through test Ollama then preload", async () => {
@@ -499,6 +585,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 });
 
 async function loadAiFlow(): Promise<Record<string, unknown>> {
+  const targetFolderUpdates: Array<{ folder: string; origin: string }> = [];
   const state: TestState = {
     targetPath: "Z:\\cible",
     targetFolder: {
@@ -523,7 +610,16 @@ async function loadAiFlow(): Promise<Record<string, unknown>> {
     render: () => undefined,
     renderAiPanel: () => undefined,
     renderNamingPanel: () => undefined,
+    renderPaths: () => undefined,
+    resetClassificationState: () => undefined,
+    resetDestinationCheck: () => undefined,
     isClassificationBusy: () => false,
+    updateTargetFolderFromInput: async (folder: string, origin: string) => {
+      targetFolderUpdates.push({ folder, origin });
+      state.targetFolder.selectedFolder = folder;
+      state.targetFolder.origin = origin;
+    },
+    targetFolderUpdates,
     aiRequestId: 0,
     aiSuggestionRequestId: 0,
     getActiveDocument: () => ({
@@ -571,7 +667,7 @@ interface TestState {
     selectedFolder: string;
     origin: string;
   };
-  ai?: Record<string, unknown>;
+  ai: Record<string, unknown>;
   textExtraction: {
     byDocumentPath: Record<string, unknown>;
   };
@@ -580,6 +676,8 @@ interface TestState {
 interface TestAiSelection {
   fields: Record<string, string>;
   manualFields: Record<string, true>;
+  editingField?: string | null;
+  editingFolder?: boolean;
   selectedFolder: string;
   previewFilename: string;
   previewDestinationFolder: string;

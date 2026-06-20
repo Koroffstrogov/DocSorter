@@ -162,16 +162,12 @@ const namingPanelView = DocSorterNamingPanel.createNamingPanel({
     naming: state.naming,
     destination: state.destination,
     effectiveFilename: getEffectiveProposedFilename(),
-    aiPreview: getAiNamingPreview()
+    aiPreview: getAiNamingPreview(),
+    canResetChoices: canResetAiSelectionChoices()
   }),
   onDraftChange: updateNamingDraftFromInputs,
   onResetDraft: () => {
-    const activeDocument = getActiveDocument();
-    if (!activeDocument) {
-      return;
-    }
-
-    void initializeNamingDraft(activeDocument);
+    resetAiSelectionChoices();
   },
   onApplyDestinationAlternative: applyDestinationAlternative,
   onTargetFolderChange: updateTargetFolderFromInput,
@@ -237,6 +233,9 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onFieldManualValueChange: updateAiFieldManualValue,
   onFieldManualEditFinish: finishAiFieldManualEdit,
   onFolderCandidateSelect: selectAiFolderCandidate,
+  onFolderManualEditStart: startAiFolderManualEdit,
+  onFolderManualValueChange: updateAiFolderManualValue,
+  onFolderManualEditFinish: finishAiFolderManualEdit,
   onApplySuggestionToEmptyFields: applyAiSuggestionToEmptyFields,
   onExportDiagnostic: () => {
     void exportAiDiagnosticForActiveDocument();

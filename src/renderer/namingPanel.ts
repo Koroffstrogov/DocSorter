@@ -11,6 +11,7 @@ interface NamingPanelState {
     destinationFolder: string;
     messages: AiSelectionPreviewMessage[];
   } | null;
+  canResetChoices: boolean;
 }
 
 interface NamingPanelOptions {
@@ -97,7 +98,8 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         return;
       }
 
-      const { activeDocument, naming, effectiveFilename, aiPreview } = options.getState();
+      const { activeDocument, naming, effectiveFilename, aiPreview, canResetChoices } = options.getState();
+      syncResetButton(elements, canResetChoices);
       elements.panel.hidden = false;
       if (!activeDocument) {
         if (elements.proposedFilename) {
@@ -317,6 +319,18 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         "#apply-destination-alternative"
       )
     };
+  }
+
+  function syncResetButton(elements: NamingPanelElements, canResetChoices: boolean): void {
+    if (!elements.resetButton) {
+      return;
+    }
+
+    elements.resetButton.textContent = "Réinitialiser les choix";
+    elements.resetButton.disabled = !canResetChoices;
+    elements.resetButton.title = canResetChoices
+      ? "Restaurer les choix IA initiaux sans modifier le classement réel"
+      : "Aucun choix IA modifié à réinitialiser";
   }
 
   function renderTargetFolderControls(

@@ -11,7 +11,10 @@ describe("ai folder candidates renderer module", () => {
     installTestDocument();
 
     const nodes = folderCandidates.createFolderCandidateContent(createAiState(), {
-      onFolderCandidateSelect: () => undefined
+      onFolderCandidateSelect: () => undefined,
+      onFolderManualEditStart: () => undefined,
+      onFolderManualValueChange: () => undefined,
+      onFolderManualEditFinish: () => undefined
     });
 
     expect(asTestElement(nodes[0]).textContent).toBe("Analyse IA requise pour proposer un dossier.");
@@ -21,7 +24,10 @@ describe("ai folder candidates renderer module", () => {
     installTestDocument();
 
     const nodes = folderCandidates.createFolderCandidateContent(createAiState({ panelStatus: "analyzing" }), {
-      onFolderCandidateSelect: () => undefined
+      onFolderCandidateSelect: () => undefined,
+      onFolderManualEditStart: () => undefined,
+      onFolderManualValueChange: () => undefined,
+      onFolderManualEditFinish: () => undefined
     });
 
     expect(asTestElement(nodes[0]).textContent).toBe("Analyse IA en cours. Les dossiers proposés apparaîtront ici.");
@@ -30,6 +36,7 @@ describe("ai folder candidates renderer module", () => {
   it("renders three compact cards, roles, selection, badges, and callback", () => {
     installTestDocument();
     const selected: string[] = [];
+    let editStarted = false;
     const nodes = folderCandidates.createFolderCandidateContent(createAiState({
       selection: createSelectionState({ selectedFolder: "Scolarite/Lea" }),
       suggestion: createSuggestion({
@@ -43,7 +50,12 @@ describe("ai folder candidates renderer module", () => {
     }), {
       onFolderCandidateSelect: (relativePath) => {
         selected.push(relativePath);
-      }
+      },
+      onFolderManualEditStart: () => {
+        editStarted = true;
+      },
+      onFolderManualValueChange: () => undefined,
+      onFolderManualEditFinish: () => undefined
     });
 
     const root = asTestElement(nodes[0]);
@@ -64,6 +76,48 @@ describe("ai folder candidates renderer module", () => {
 
     cards.children[0].click();
     expect(selected).toEqual(["Scolarite"]);
+    root.children[1].children[0].click();
+    expect(editStarted).toBe(true);
+  });
+
+  it("renders a manual folder input and reports typed values", () => {
+    installTestDocument();
+    const values: string[] = [];
+    let finished = false;
+    const nodes = folderCandidates.createFolderCandidateContent(createAiState({
+      selection: createSelectionState({
+        selectedFolder: "Scolarite/Lea",
+        editingFolder: true
+      }),
+      suggestion: createSuggestion({
+        folderCandidates: [
+          { value: "Scolarite/Lea", score: 88, reason: "new", role: "newFolderProposal", requiresCreation: true }
+        ]
+      })
+    }), {
+      onFolderCandidateSelect: () => undefined,
+      onFolderManualEditStart: () => undefined,
+      onFolderManualValueChange: (relativePath) => {
+        values.push(relativePath);
+      },
+      onFolderManualEditFinish: () => {
+        finished = true;
+      }
+    });
+
+    const root = asTestElement(nodes[0]);
+    const manualControl = root.children[1];
+    const input = manualControl.children[0];
+    expect(manualControl.className).toContain("editing");
+    expect(input.className).toBe("folder-manual-input");
+    expect(input.value).toBe("Scolarite/Lea");
+
+    input.value = "Scolarite/Lea/2026";
+    input.dispatch("input");
+    input.dispatch("blur");
+
+    expect(values).toEqual(["Scolarite/Lea/2026"]);
+    expect(finished).toBe(true);
   });
 
   it("does not display a Windows absolute path in compact cards", () => {
@@ -76,7 +130,10 @@ describe("ai folder candidates renderer module", () => {
         ]
       })
     }), {
-      onFolderCandidateSelect: () => undefined
+      onFolderCandidateSelect: () => undefined,
+      onFolderManualEditStart: () => undefined,
+      onFolderManualValueChange: () => undefined,
+      onFolderManualEditFinish: () => undefined
     });
 
     expect(collectText(asTestElement(nodes[0]))).toContain("CNI");
@@ -88,6 +145,12 @@ function installTestDocument(): void {
   (globalThis as unknown as { document: { createElement: (tagName: string) => TestElement } }).document = {
     createElement: (tagName: string) => new TestElement(tagName)
   };
+  (globalThis as unknown as { window: { setTimeout: (callback: () => void) => number } }).window = {
+    setTimeout: (callback: () => void) => {
+      callback();
+      return 1;
+    }
+  };
 }
 
 class TestElement {
@@ -97,8 +160,10 @@ class TestElement {
   className = "";
   title = "";
   type = "";
+  value = "";
+  placeholder = "";
   private readonly attributes = new Map<string, string>();
-  private readonly listeners = new Map<string, Array<() => void>>();
+  private readonly listeners = new Map<string, Array<(event?: TestEvent) => void>>();
 
   constructor(tagName: string) {
     this.tagName = tagName;
@@ -120,7 +185,7 @@ class TestElement {
     return this.attributes.get(name) ?? null;
   }
 
-  addEventListener(name: string, listener: () => void): void {
+  addEventListener(name: string, listener: (event?: TestEvent) => void): void {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
 
@@ -128,6 +193,33 @@ class TestElement {
     for (const listener of this.listeners.get("click") ?? []) {
       listener();
     }
+  }
+
+  dispatch(name: string): void {
+    const event = new TestEvent();
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener(event);
+    }
+  }
+
+  focus(): void {
+    return;
+  }
+
+  blur(): void {
+    this.dispatch("blur");
+  }
+
+  setSelectionRange(): void {
+    return;
+  }
+}
+
+class TestEvent {
+  key = "";
+
+  preventDefault(): void {
+    return;
   }
 }
 
@@ -189,6 +281,7 @@ function createSelectionState(overrides: Partial<AiSelectionState> = {}): AiSele
     },
     manualFields: {},
     editingField: null,
+    editingFolder: false,
     selectedFolder: "",
     previewFilename: "",
     previewFilenameValid: false,

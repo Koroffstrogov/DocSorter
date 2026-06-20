@@ -98,7 +98,7 @@ describe("validateAiClassificationSuggestion", () => {
     expect(result.status === "invalid" && result.error.code).toBe("AI_DATE_INVALID");
   });
 
-  it("converts monthly AI dates to the first day of the month", () => {
+  it("accepts monthly AI date tokens without first day conversion", () => {
     const result = validateAiClassificationSuggestion({
       dateToken: "2026-05",
       confidence: 50,
@@ -110,7 +110,7 @@ describe("validateAiClassificationSuggestion", () => {
     expect(result).toMatchObject({
       status: "valid",
       suggestion: {
-        dateToken: "2026-05-01"
+        dateToken: "2026-05"
       }
     });
   });

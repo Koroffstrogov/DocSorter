@@ -557,7 +557,8 @@ function startAiFieldManualEdit(field: AiSelectionFieldKey): void {
 
   state.ai.selection = {
     ...state.ai.selection,
-    editingField: state.ai.selection.editingField === field ? null : field
+    editingField: state.ai.selection.editingField === field ? null : field,
+    editingFolder: false
   };
   renderAiPanel();
 }
@@ -597,12 +598,75 @@ function selectAiFolderCandidate(relativePath: string): void {
     return;
   }
 
+  updateAiSelectedFolder(relativePath, "Dossier IA sélectionné. Prévisualisation recalculée.", false);
+  render();
+}
+
+function startAiFolderManualEdit(): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  state.ai.selection = {
+    ...state.ai.selection,
+    editingField: null,
+    editingFolder: !state.ai.selection.editingFolder
+  };
+  renderAiPanel();
+}
+
+function updateAiFolderManualValue(relativePath: string): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  updateAiSelectedFolder(relativePath, "Dossier IA manuel modifié. Prévisualisation recalculée.", true);
+  renderNamingPanel(false);
+}
+
+function finishAiFolderManualEdit(): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  state.ai.selection = {
+    ...state.ai.selection,
+    editingFolder: false
+  };
+  render();
+}
+
+function updateAiSelectedFolder(relativePath: string, message: string, keepEditing: boolean): void {
+  if (!state.ai.selection) {
+    return;
+  }
+
+  const selectedFolder = relativePath.trim();
   state.ai.selection = recalculateAiSelection({
     ...state.ai.selection,
-    selectedFolder: relativePath.trim()
+    editingFolder: keepEditing,
+    selectedFolder
   }, getActiveDocument()?.extension ?? ".pdf", state.targetPath);
-  state.ai.message = "Dossier IA sélectionné. Prévisualisation recalculée.";
-  render();
+  state.ai.message = message;
+  syncAiSelectedFolderToTargetFolder(selectedFolder);
+}
+
+function syncAiSelectedFolderToTargetFolder(selectedFolder: string): void {
+  if (state.targetPath) {
+    void updateTargetFolderFromInput(selectedFolder, "ai-v2");
+    return;
+  }
+
+  state.targetFolder = {
+    ...state.targetFolder,
+    selectedFolder,
+    status: "idle",
+    message: selectedFolder ? "Sous-dossier cible à vérifier." : "Classement à la racine cible.",
+    origin: "ai-v2"
+  };
+  resetClassificationState();
+  resetDestinationCheck();
+  renderPaths();
 }
 
 function applyAiSuggestionToEmptyFields(): void {
@@ -1075,12 +1139,73 @@ function buildAiSelectionFromSuggestion(
     fields,
     manualFields: {},
     editingField: null,
+    editingFolder: false,
     selectedFolder,
     previewFilename: "",
     previewFilenameValid: false,
     previewMessages: [],
     previewDestinationFolder: ""
   }, extension, targetRootPath);
+}
+
+function canResetAiSelectionChoices(): boolean {
+  const activeDocument = getActiveDocument();
+  if (
+    !activeDocument ||
+    !state.ai.selection ||
+    !state.ai.suggestion ||
+    state.ai.suggestionDocumentPath !== activeDocument.filePath
+  ) {
+    return false;
+  }
+
+  const initial = buildAiSelectionFromSuggestion(
+    state.ai.suggestion,
+    activeDocument.extension,
+    state.targetPath
+  );
+  return !aiSelectionMatchesInitial(state.ai.selection, initial);
+}
+
+function resetAiSelectionChoices(): boolean {
+  const activeDocument = getActiveDocument();
+  if (
+    !activeDocument ||
+    !state.ai.suggestion ||
+    state.ai.suggestionDocumentPath !== activeDocument.filePath ||
+    !canResetAiSelectionChoices()
+  ) {
+    return false;
+  }
+
+  state.ai.selection = buildAiSelectionFromSuggestion(
+    state.ai.suggestion,
+    activeDocument.extension,
+    state.targetPath
+  );
+  state.ai.message = "Choix IA réinitialisés. Prévisualisation recalculée.";
+  syncAiSelectedFolderToTargetFolder(state.ai.selection.selectedFolder);
+  render();
+  return true;
+}
+
+function aiSelectionMatchesInitial(current: AiSelectionState, initial: AiSelectionState): boolean {
+  return (
+    current.editingField === null &&
+    !current.editingFolder &&
+    Object.keys(current.manualFields).length === 0 &&
+    normalizeAiFolderForComparison(current.selectedFolder) === normalizeAiFolderForComparison(initial.selectedFolder) &&
+    current.fields.dateToken === initial.fields.dateToken &&
+    current.fields.subject === initial.fields.subject &&
+    current.fields.target === initial.fields.target &&
+    current.fields.documentType === initial.fields.documentType &&
+    current.fields.issuer === initial.fields.issuer &&
+    current.fields.detail === initial.fields.detail
+  );
+}
+
+function normalizeAiFolderForComparison(value: string): string {
+  return value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
 }
 
 function updateAiSelectionField(
@@ -1138,7 +1263,7 @@ function buildAiSelectionPreview(
     messages.push({ level: "warning", message: dateResult.warning });
   }
   if (!dateResult.value) {
-    messages.push({ level: "error", message: "Date IA obligatoire : AAAA ou AAAA-MM-JJ." });
+    messages.push({ level: "error", message: "Date IA obligatoire : AAAA, AAAA-MM ou AAAA-MM-JJ." });
   }
   if (!target) {
     messages.push({ level: "error", message: "Cible IA obligatoire pour générer le nom." });
@@ -1148,6 +1273,7 @@ function buildAiSelectionPreview(
   }
 
   const optionalParts = removeRedundantAiNameParts({
+    dateToken: dateResult.value,
     target,
     documentType,
     issuer,
@@ -1226,11 +1352,7 @@ function readAiSelectedField(
   suggestion: RendererAiDocumentSuggestion,
   field: AiSelectionFieldKey
 ): string {
-  const selected = response?.fields?.[field]?.selected?.trim();
-  if (selected) {
-    return selected;
-  }
-
+  void response;
   const value = suggestion.suggestion[field];
   return typeof value === "string" ? value.trim() : "";
 }
@@ -1256,10 +1378,7 @@ function normalizeAiPreviewDate(value: string): { value: string; warning: string
     return { value: trimmed, warning: "" };
   }
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(trimmed)) {
-    return {
-      value: `${trimmed}-01`,
-      warning: "Date IA au mois convertie au premier jour du mois."
-    };
+    return { value: trimmed, warning: "" };
   }
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)) {
     return { value: trimmed, warning: "" };
@@ -1291,6 +1410,7 @@ function normalizeOptionalAiPreviewBlock(value: string): string {
 }
 
 function removeRedundantAiNameParts(input: {
+  dateToken: string;
   target: string;
   documentType: string;
   issuer: string;
@@ -1304,8 +1424,66 @@ function removeRedundantAiNameParts(input: {
 
   return {
     issuer,
-    detail: blocked.has(input.detail) ? "" : input.detail
+    detail: blocked.has(input.detail) || isAiDetailRedundantWithDate(input.detail, input.dateToken)
+      ? ""
+      : input.detail
   };
+}
+
+function isAiDetailRedundantWithDate(detail: string, dateToken: string): boolean {
+  const tokens = detail.split("-").filter(Boolean);
+  if (tokens.length === 0 || !dateToken) {
+    return false;
+  }
+
+  const redundantTokens = buildAiDateRedundantTokens(dateToken);
+  return redundantTokens.size > 0 && tokens.every((token) => redundantTokens.has(token));
+}
+
+function buildAiDateRedundantTokens(dateToken: string): Set<string> {
+  const tokens = new Set<string>();
+  const yearMatch = dateToken.match(/^((?:19|20)\d{2})$/);
+  if (yearMatch) {
+    tokens.add(yearMatch[1]);
+    return tokens;
+  }
+
+  const match = dateToken.match(/^((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12][0-9]|3[01]))?$/);
+  if (!match) {
+    return tokens;
+  }
+
+  const monthNames: Record<string, string[]> = {
+    "01": ["janvier", "janv"],
+    "02": ["fevrier", "fev"],
+    "03": ["mars"],
+    "04": ["avril", "avr"],
+    "05": ["mai"],
+    "06": ["juin"],
+    "07": ["juillet", "juil"],
+    "08": ["aout"],
+    "09": ["septembre", "sept"],
+    "10": ["octobre", "oct"],
+    "11": ["novembre", "nov"],
+    "12": ["decembre", "dec"]
+  };
+
+  tokens.add(match[1]);
+  tokens.add(match[2]);
+  tokens.add(String(Number(match[2])));
+  tokens.add("periode");
+  tokens.add("mois");
+  tokens.add("mensuel");
+  tokens.add("mensuelle");
+  for (const monthName of monthNames[match[2]] ?? []) {
+    tokens.add(monthName);
+  }
+  if (match[3]) {
+    tokens.add(match[3]);
+    tokens.add(String(Number(match[3])));
+  }
+
+  return tokens;
 }
 
 function formatAiPreviewDestinationFolder(targetRootPath: string | null, relativeFolder: string): string {

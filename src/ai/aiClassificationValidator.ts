@@ -85,7 +85,7 @@ export function validateAiClassificationSuggestion(
   if (!dateToken.ok) {
     return invalid(
       "AI_DATE_INVALID",
-      "Date IA invalide. Utiliser AAAA-MM-JJ ou AAAA. AAAA-MM est converti en AAAA-MM-01.",
+      "Date IA invalide. Utiliser AAAA-MM-JJ, AAAA-MM ou AAAA.",
       "dateToken"
     );
   }
@@ -162,7 +162,7 @@ function normalizeAiDateToken(value: string): { ok: true; value: string } | { ok
 
   const monthMatch = trimmed.match(/^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/);
   if (monthMatch) {
-    return { ok: true, value: `${monthMatch[1]}-${monthMatch[2]}-01` };
+    return { ok: true, value: `${monthMatch[1]}-${monthMatch[2]}` };
   }
 
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)) {
