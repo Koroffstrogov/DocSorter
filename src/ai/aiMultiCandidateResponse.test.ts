@@ -41,14 +41,20 @@ describe("validateAiMultiCandidateResponse", () => {
     });
   });
 
-  it("rejects dangerous folder candidates", () => {
+  it("drops dangerous folder candidates without invalidating the response", () => {
     const result = validateAiMultiCandidateResponse({
       ...createResponse(),
       folderCandidates: [{ value: "../Secret", score: 80, reason: "dangereux" }]
     });
 
-    expect(result.status).toBe("invalid");
-    expect(result.status === "invalid" && result.error.code).toBe("AI_TARGET_FOLDER_INVALID");
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.folderCandidates).toEqual([]);
+    expect(result.status === "valid" && result.response.rejectedCandidates[0]).toMatchObject({
+      field: "folderCandidates",
+      index: 0,
+      rawValue: "../Secret",
+      reason: "Candidat dossier IA invalide ou dangereux."
+    });
   });
 
   it("keeps at most three candidates per list", () => {
@@ -66,7 +72,7 @@ describe("validateAiMultiCandidateResponse", () => {
     expect(result.status === "valid" && result.response.folderCandidates).toHaveLength(3);
   });
 
-  it("rejects a selected field missing from its candidates", () => {
+  it("falls back to the best valid candidate when selected is missing from candidates", () => {
     const response = createResponse();
     response.fields.target = {
       selected: "foyer",
@@ -75,39 +81,120 @@ describe("validateAiMultiCandidateResponse", () => {
 
     const result = validateAiMultiCandidateResponse(response);
 
-    expect(result.status).toBe("invalid");
-    expect(result.status === "invalid" && result.error.field).toBe("fields.target.selected");
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBe("maison");
   });
 
-  it("rejects target equal to documentType", () => {
+  it("drops target equal to documentType without invalidating the response", () => {
     const response = createResponse();
     response.fields.target = field("avis-imposition");
 
     const result = validateAiMultiCandidateResponse(response);
 
-    expect(result.status).toBe("invalid");
-    expect(result.status === "invalid" && result.error.message).toContain("target ne doit pas être égal");
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.rejectedCandidates[0].reason).toContain(
+      "target ne doit pas être égal"
+    );
   });
 
-  it("rejects generic target values that belong in targetKind", () => {
+  it("drops generic target values that belong in targetKind", () => {
     const response = createResponse();
     response.fields.target = field("personne");
     response.fields.targetKind = field("person");
 
     const result = validateAiMultiCandidateResponse(response);
 
-    expect(result.status).toBe("invalid");
-    expect(result.status === "invalid" && result.error.message).toContain("nature générique");
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.rejectedCandidates[0].normalizedValue).toBe("personne");
   });
 
-  it("rejects invalid targetKind values", () => {
+  it("drops invalid targetKind values", () => {
     const response = createResponse();
     response.fields.targetKind = field("adult");
 
     const result = validateAiMultiCandidateResponse(response);
 
-    expect(result.status).toBe("invalid");
-    expect(result.status === "invalid" && result.error.field).toBe("fields.targetKind.candidates");
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.targetKind.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.rejectedCandidates[0]).toMatchObject({
+      field: "fields.targetKind.candidates",
+      rawValue: "adult",
+      normalizedValue: "adult"
+    });
+  });
+
+  it("normalizes accented issuer and spaced subject candidates", () => {
+    const response = createResponse();
+    response.fields.issuer = field("État");
+    response.fields.subject = field("Compte joint");
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.issuer.selected).toBe("etat");
+    expect(result.status === "valid" && result.response.fields.subject.selected).toBe("compte-joint");
+    expect(result.status === "valid" && result.response.rejectedCandidates).toEqual([]);
+  });
+
+  it("falls back from an invalid selected value to the best valid candidate", () => {
+    const response = createResponse();
+    response.fields.subject = {
+      selected: "C:\\secret\\document.pdf",
+      candidates: [
+        { value: "Compte joint", score: 80, reason: "compte detecte" },
+        { value: "Foyer", score: 60, reason: "fallback" }
+      ]
+    };
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.subject.selected).toBe("compte-joint");
+    expect(result.status === "valid" && result.response.rejectedCandidates[0]).toMatchObject({
+      field: "fields.subject.selected",
+      index: -1,
+      rawValue: "C:\\secret\\document.pdf"
+    });
+  });
+
+  it("drops empty candidates without invalidating the response", () => {
+    const response = createResponse();
+    response.fields.detail = {
+      selected: "",
+      candidates: [
+        { value: "   ", score: 90, reason: "vide" },
+        { value: "Carte Vitale", score: 70, reason: "detail utile" }
+      ]
+    };
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.detail.selected).toBe("carte-vitale");
+    expect(result.status === "valid" && result.response.rejectedCandidates[0]).toMatchObject({
+      field: "fields.detail.candidates",
+      index: 0,
+      reason: "Valeur vide après normalisation."
+    });
+  });
+
+  it("keeps a field incomplete with a warning when no candidate is valid", () => {
+    const response = createResponse();
+    response.fields.subject = {
+      selected: "../Secret",
+      candidates: [{ value: "../Secret", score: 80, reason: "dangereux" }]
+    };
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.subject.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.fields.subject.candidates).toEqual([]);
+    expect(result.status === "valid" && result.response.warnings).toContain(
+      "Certains candidats IA ont été ignorés. Analyse conservée."
+    );
   });
 });
 

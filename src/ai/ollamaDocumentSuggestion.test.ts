@@ -532,7 +532,7 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Cible IA ignorée");
   });
 
-  it("rejects AI responses where target equals documentType", async () => {
+  it("keeps the analysis and ignores target when target equals documentType", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -549,11 +549,15 @@ describe("runOllamaSuggestionForDocument", () => {
       })
     });
 
-    expect(result.ok).toBe(false);
-    expect(!result.ok && result.error.code).toBe("AI_OUTPUT_INVALID");
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.suggestion.target).toBeUndefined();
+    expect(result.ok && result.value.message).toBe("Certains candidats IA ont été ignorés. Analyse conservée.");
+    expect(result.ok && result.value.responseJson.rejectedCandidates[0].reason).toContain(
+      "target ne doit pas être égal"
+    );
   });
 
-  it("keeps the invalid multi-candidate field in the diagnostic error", async () => {
+  it("normalizes multi-candidate values before checking selected membership", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -586,11 +590,15 @@ describe("runOllamaSuggestionForDocument", () => {
       })
     });
 
-    expect(result.ok).toBe(false);
-    expect(!result.ok && result.error).toEqual({
-      code: "AI_OUTPUT_INVALID",
-      message: "Le candidat sélectionné IA doit être présent dans la liste des candidats.",
-      field: "fields.documentType.selected"
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.documentType).toMatchObject({
+      selected: "bulletin-scolaire",
+      candidates: [
+        {
+          value: "bulletin-scolaire",
+          score: 90
+        }
+      ]
     });
   });
 
@@ -693,6 +701,61 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
   });
 
+  it("normalizes T07 identity issuer Etat without blocking the analysis", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Carte nationale d'identité de Paul. Autorité de délivrance : État."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2023-11-02",
+          subject: "paul",
+          target: "paul",
+          targetKind: "person",
+          documentType: "carte-identite",
+          issuer: "État",
+          confidence: 84
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.issuer.selected).toBe("etat");
+    expect(result.ok && result.value.suggestion.issuer).toBe("etat");
+  });
+
+  it("normalizes T06 bank subject and issuer candidates without blocking the analysis", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Relevé bancaire BNP Paribas du compte joint pour mai 2026."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026-05",
+          subject: "Compte joint",
+          target: "foyer",
+          targetKind: "household",
+          documentType: "releve-bancaire",
+          issuer: "BNP Paribas",
+          confidence: 88
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.subject.selected).toBe("compte-joint");
+    expect(result.ok && result.value.responseJson.fields.issuer.selected).toBe("bnp-paribas");
+    expect(result.ok && result.value.suggestion.proposedName).toBe(
+      "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
+    );
+  });
+
   it("accepts an identity folder candidate requiring creation when no known folder exists", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
@@ -765,7 +828,7 @@ describe("runOllamaSuggestionForDocument", () => {
     });
   });
 
-  it("refuses dangerous target folders from Ollama output", async () => {
+  it("drops dangerous target folders from Ollama output without failing the analysis", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -781,8 +844,12 @@ describe("runOllamaSuggestionForDocument", () => {
       })
     });
 
-    expect(result.ok).toBe(false);
-    expect(!result.ok && result.error.code).toBe("AI_OUTPUT_INVALID");
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.folderCandidates).toEqual([]);
+    expect(result.ok && result.value.responseJson.rejectedCandidates[0]).toMatchObject({
+      field: "folderCandidates",
+      rawValue: "../Secret"
+    });
   });
 
   it("maps Ollama timeout to a sober error", async () => {

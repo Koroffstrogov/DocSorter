@@ -228,7 +228,9 @@ export async function runOllamaSuggestionForDocument(
       thinking: generation.value.thinkingText,
       suggestion: sanitizedSuggestion,
       promptCharacterCount: prompt.prompt.length,
-      message: "Suggestion IA autonome prête."
+      message: multiCandidateValidation.response.rejectedCandidates.length > 0
+        ? "Certains candidats IA ont été ignorés. Analyse conservée."
+        : "Suggestion IA autonome prête."
     }
   };
 }

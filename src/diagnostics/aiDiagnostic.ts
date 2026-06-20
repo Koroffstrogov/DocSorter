@@ -93,6 +93,9 @@ function createAiDiagnosticLog(
   mode: AiDiagnosticMode,
   createdAt: string
 ): unknown {
+  const aiResult = mode === "diagnosticComplet"
+    ? options.aiResult
+    : stripRejectedCandidateValues(options.aiResult);
   const log = {
     version: 1,
     createdAt,
@@ -104,10 +107,44 @@ function createAiDiagnosticLog(
       extension: options.extension
     },
     text: createDiagnosticText(options.textContext, mode),
-    ia: options.aiResult
+    ia: aiResult
   };
 
   return mode === "diagnosticComplet" ? log : redactDiagnosticValue(log);
+}
+
+function stripRejectedCandidateValues(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripRejectedCandidateValues);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "rejectedCandidates" && Array.isArray(entry)) {
+      output[key] = entry.map((candidate) => redactRejectedCandidate(candidate));
+      continue;
+    }
+
+    output[key] = stripRejectedCandidateValues(entry);
+  }
+  return output;
+}
+
+function redactRejectedCandidate(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.field === "string" ? { field: record.field } : {}),
+    ...(typeof record.index === "number" ? { index: record.index } : {}),
+    ...(typeof record.reason === "string" ? { reason: record.reason } : {})
+  };
 }
 
 function createDiagnosticText(

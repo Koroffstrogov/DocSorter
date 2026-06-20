@@ -26,6 +26,14 @@ export interface AiCandidate {
   requiresCreation?: boolean;
 }
 
+export interface AiRejectedCandidate {
+  field: string;
+  index: number;
+  rawValue?: string;
+  normalizedValue?: string;
+  reason: string;
+}
+
 export interface AiFieldCandidates {
   selected?: string;
   candidates: AiCandidate[];
@@ -36,6 +44,7 @@ export interface AiMultiCandidateResponse {
   folderCandidates: AiCandidate[];
   fileNameCandidates: AiCandidate[];
   warnings: string[];
+  rejectedCandidates: AiRejectedCandidate[];
   confidence: number;
   source: "ollama";
 }
@@ -83,6 +92,13 @@ const GENERIC_TARGET_VALUES = new Set([
   "other",
   "autre"
 ]);
+const SENSITIVE_NUMBER_PATTERN = /\b(?:[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}(?:\s?\d{2})?|\d{11,})\b/;
+const FULL_DATE_PATTERN = /\b(?:[0-3]?\d[/-][01]?\d[/-](?:19|20)\d{2}|(?:19|20)\d{2}-[01]\d-[0-3]\d)\b/;
+
+type CandidateListMode =
+  | { kind: "field"; fieldKey: AiCandidateFieldKey }
+  | { kind: "folder" }
+  | { kind: "fileName" };
 
 export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandidateValidationResult {
   if (!isJsonObject(value)) {
@@ -113,17 +129,16 @@ export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandida
     return fields;
   }
 
-  const fieldConsistency = validateSelectedFields(fields.value);
-  if (!("ok" in fieldConsistency)) {
-    return fieldConsistency;
-  }
+  const fieldConsistency = normalizeSelectedFields(fields.value);
 
-  const folderCandidates = readCandidateList(record.folderCandidates, "folderCandidates", true);
+  const folderCandidates = readCandidateList(record.folderCandidates, "folderCandidates", { kind: "folder" });
   if (!("ok" in folderCandidates)) {
     return folderCandidates;
   }
 
-  const fileNameCandidates = readCandidateList(record.fileNameCandidates, "fileNameCandidates", false);
+  const fileNameCandidates = readCandidateList(record.fileNameCandidates, "fileNameCandidates", {
+    kind: "fileName"
+  });
   if (!("ok" in fileNameCandidates)) {
     return fileNameCandidates;
   }
@@ -132,13 +147,26 @@ export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandida
     return invalid("AI_FIELD_INVALID", "Liste d'avertissements IA invalide.", "warnings");
   }
 
+  const rejectedCandidates = [
+    ...fields.rejectedCandidates,
+    ...fieldConsistency.rejectedCandidates,
+    ...folderCandidates.rejectedCandidates,
+    ...fileNameCandidates.rejectedCandidates
+  ];
+  const warnings = [
+    ...normalizeStringList(record.warnings, AI_CLASSIFICATION_LIMITS.warnings),
+    ...fieldConsistency.warnings,
+    ...(rejectedCandidates.length > 0 ? ["Certains candidats IA ont été ignorés. Analyse conservée."] : [])
+  ];
+
   return {
     status: "valid",
     response: {
       fields: fields.value,
       folderCandidates: folderCandidates.value,
       fileNameCandidates: fileNameCandidates.value,
-      warnings: normalizeStringList(record.warnings, AI_CLASSIFICATION_LIMITS.warnings),
+      warnings: uniqueStrings(warnings).slice(0, AI_CLASSIFICATION_LIMITS.warnings),
+      rejectedCandidates,
       confidence: record.confidence,
       source: "ollama"
     }
@@ -167,7 +195,13 @@ export function adaptMultiCandidateResponseToSuggestion(
 
 function readFields(
   value: unknown
-): { ok: true; value: Record<AiCandidateFieldKey, AiFieldCandidates> } | AiMultiCandidateValidationResult {
+):
+  | {
+      ok: true;
+      value: Record<AiCandidateFieldKey, AiFieldCandidates>;
+      rejectedCandidates: AiRejectedCandidate[];
+    }
+  | AiMultiCandidateValidationResult {
   if (!isJsonObject(value)) {
     return invalid("AI_FIELD_INVALID", "Bloc fields IA invalide.", "fields");
   }
@@ -180,6 +214,7 @@ function readFields(
   }
 
   const result = {} as Record<AiCandidateFieldKey, AiFieldCandidates>;
+  const rejectedCandidates: AiRejectedCandidate[] = [];
   for (const key of FIELD_KEYS) {
     const field = readFieldCandidates(record[key], key);
     if (!("ok" in field)) {
@@ -187,15 +222,22 @@ function readFields(
     }
 
     result[key] = field.value;
+    rejectedCandidates.push(...field.rejectedCandidates);
   }
 
-  return { ok: true, value: result };
+  return { ok: true, value: result, rejectedCandidates };
 }
 
 function readFieldCandidates(
   value: unknown,
   key: AiCandidateFieldKey
-): { ok: true; value: AiFieldCandidates } | AiMultiCandidateValidationResult {
+):
+  | {
+      ok: true;
+      value: AiFieldCandidates;
+      rejectedCandidates: AiRejectedCandidate[];
+    }
+  | AiMultiCandidateValidationResult {
   if (!isJsonObject(value)) {
     return invalid("AI_FIELD_INVALID", "Champ IA multi-candidats invalide.", `fields.${key}`);
   }
@@ -205,118 +247,143 @@ function readFieldCandidates(
     return invalid("AI_FIELD_INVALID", "Sélection IA invalide.", `fields.${key}.selected`);
   }
 
-  const candidates = readCandidateList(record.candidates, `fields.${key}.candidates`, false);
+  const candidates = readCandidateList(record.candidates, `fields.${key}.candidates`, {
+    kind: "field",
+    fieldKey: key
+  });
   if (!("ok" in candidates)) {
     return candidates;
   }
 
-  if (key === "targetKind") {
-    for (const candidate of candidates.value) {
-      if (!TARGET_KIND_VALUES.has(normalizeNameBlock(candidate.value))) {
-        return invalid(
-          "AI_FIELD_INVALID",
-          "targetKind IA invalide. Valeurs attendues : person, household, vehicle, property, other.",
-          `fields.${key}.candidates`
-        );
-      }
-    }
-  }
+  const selected = readSelectedCandidate(record.selected, key);
+  const rejectedCandidates = [
+    ...candidates.rejectedCandidates,
+    ...selected.rejectedCandidates
+  ];
+  const selectedValue = selectFieldValue(selected.value, candidates.value);
 
   return {
     ok: true,
     value: {
-      ...(typeof record.selected === "string" && record.selected.trim()
-        ? { selected: limitString(record.selected.trim(), AI_CLASSIFICATION_LIMITS.listItemChars) }
-        : {}),
+      ...(selectedValue ? { selected: selectedValue } : {}),
       candidates: candidates.value
-    }
+    },
+    rejectedCandidates
   };
 }
 
 function readCandidateList(
   value: unknown,
   field: string,
-  isFolderList: boolean
-): { ok: true; value: AiCandidate[] } | AiMultiCandidateValidationResult {
+  mode: CandidateListMode
+):
+  | {
+      ok: true;
+      value: AiCandidate[];
+      rejectedCandidates: AiRejectedCandidate[];
+    }
+  | AiMultiCandidateValidationResult {
   if (!Array.isArray(value)) {
     return invalid("AI_FIELD_INVALID", "Liste de candidats IA invalide.", field);
   }
 
   const candidates: AiCandidate[] = [];
+  const rejectedCandidates: AiRejectedCandidate[] = [];
   for (const [index, entry] of value.entries()) {
-    const candidate = readCandidate(entry, `${field}.${index}`, isFolderList);
+    const candidate = readCandidate(entry, field, index, mode);
     if (!("ok" in candidate)) {
       return candidate;
     }
 
-    candidates.push(candidate.value);
+    if (candidate.value) {
+      candidates.push(candidate.value);
+    } else if (candidate.rejectedCandidate) {
+      rejectedCandidates.push(candidate.rejectedCandidate);
+    }
   }
 
   return {
     ok: true,
-    value: candidates.slice(0, MAX_CANDIDATES)
+    value: candidates.slice(0, MAX_CANDIDATES),
+    rejectedCandidates
   };
 }
 
 function readCandidate(
   value: unknown,
   field: string,
-  isFolderCandidate: boolean
-): { ok: true; value: AiCandidate } | AiMultiCandidateValidationResult {
+  index: number,
+  mode: CandidateListMode
+):
+  | {
+      ok: true;
+      value: AiCandidate | null;
+      rejectedCandidate?: AiRejectedCandidate;
+    }
+  | AiMultiCandidateValidationResult {
   if (!isJsonObject(value)) {
-    return invalid("AI_FIELD_INVALID", "Candidat IA invalide.", field);
+    return invalid("AI_FIELD_INVALID", "Candidat IA invalide.", `${field}.${index}`);
   }
 
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     if (!CANDIDATE_KEYS.has(key)) {
-      return invalid("AI_OUTPUT_UNKNOWN_FIELD", "Champ de candidat IA non prévu.", `${field}.${key}`);
+      return invalid("AI_OUTPUT_UNKNOWN_FIELD", "Champ de candidat IA non prévu.", `${field}.${index}.${key}`);
     }
   }
 
-  if (typeof record.value !== "string" || !record.value.trim()) {
-    return invalid("AI_FIELD_INVALID", "Valeur de candidat IA invalide.", `${field}.value`);
-  }
-
   if (typeof record.score !== "number" || !Number.isFinite(record.score) || record.score < 0 || record.score > 100) {
-    return invalid("AI_CONFIDENCE_INVALID", "Score de candidat IA hors bornes.", `${field}.score`);
+    return invalid("AI_CONFIDENCE_INVALID", "Score de candidat IA hors bornes.", `${field}.${index}.score`);
   }
 
   if (typeof record.reason !== "string" || !record.reason.trim()) {
-    return invalid("AI_FIELD_INVALID", "Raison de candidat IA invalide.", `${field}.reason`);
+    return invalid("AI_FIELD_INVALID", "Raison de candidat IA invalide.", `${field}.${index}.reason`);
   }
 
   if (record.role !== undefined && typeof record.role !== "string") {
-    return invalid("AI_FIELD_INVALID", "Rôle de candidat IA invalide.", `${field}.role`);
+    return invalid("AI_FIELD_INVALID", "Rôle de candidat IA invalide.", `${field}.${index}.role`);
   }
 
   if (record.exists !== undefined && typeof record.exists !== "boolean") {
-    return invalid("AI_FIELD_INVALID", "Indicateur exists de candidat IA invalide.", `${field}.exists`);
+    return invalid("AI_FIELD_INVALID", "Indicateur exists de candidat IA invalide.", `${field}.${index}.exists`);
   }
 
   if (record.requiresCreation !== undefined && typeof record.requiresCreation !== "boolean") {
     return invalid(
       "AI_FIELD_INVALID",
       "Indicateur requiresCreation de candidat IA invalide.",
-      `${field}.requiresCreation`
+      `${field}.${index}.requiresCreation`
     );
   }
 
-  if (!isFolderCandidate && looksLikePath(record.value)) {
-    return invalid("AI_FIELD_INVALID", "Candidat IA invalide : les chemins locaux sont refusés.", `${field}.value`);
+  if (typeof record.value !== "string") {
+    return {
+      ok: true,
+      value: null,
+      rejectedCandidate: createRejectedCandidate(field, index, "", "", "Valeur de candidat IA invalide.")
+    };
   }
 
-  const normalizedValue = isFolderCandidate
-    ? normalizeFolderCandidate(record.value)
-    : limitString(record.value.trim(), AI_CLASSIFICATION_LIMITS.listItemChars);
-  if (!normalizedValue) {
-    return invalid("AI_TARGET_FOLDER_INVALID", "Candidat dossier IA invalide ou dangereux.", `${field}.value`);
+  const rawValue = record.value;
+  const normalized = normalizeCandidateValue(rawValue, mode);
+  if (!normalized.ok) {
+    return {
+      ok: true,
+      value: null,
+      rejectedCandidate: createRejectedCandidate(
+        field,
+        index,
+        rawValue,
+        normalized.normalizedValue,
+        normalized.reason
+      )
+    };
   }
 
   return {
     ok: true,
     value: {
-      value: normalizedValue,
+      value: normalized.value,
       score: Math.round(record.score),
       reason: limitString(record.reason.trim(), AI_CLASSIFICATION_LIMITS.listItemChars),
       ...(typeof record.role === "string" && record.role.trim()
@@ -330,54 +397,225 @@ function readCandidate(
   };
 }
 
-function validateSelectedFields(
+function normalizeSelectedFields(
   fields: Record<AiCandidateFieldKey, AiFieldCandidates>
-): { ok: true } | Extract<AiMultiCandidateValidationResult, { status: "invalid" }> {
-  for (const key of FIELD_KEYS) {
-    const selected = fields[key].selected?.trim();
-    if (!selected) {
-      continue;
-    }
-
-    const hasSelectedCandidate = fields[key].candidates.some((candidate) => candidate.value === selected);
-    if (!hasSelectedCandidate) {
-      return invalid(
-        "AI_FIELD_INVALID",
-        "Le candidat sélectionné IA doit être présent dans la liste des candidats.",
-        `fields.${key}.selected`
-      );
-    }
-  }
+): { rejectedCandidates: AiRejectedCandidate[]; warnings: string[] } {
+  const rejectedCandidates: AiRejectedCandidate[] = [];
+  const warnings: string[] = [];
 
   const selectedTarget = normalizeNameBlock(fields.target.selected);
   const selectedDocumentType = normalizeNameBlock(fields.documentType.selected);
-  const selectedTargetKind = normalizeNameBlock(fields.targetKind.selected);
-
-  if (selectedTargetKind && !TARGET_KIND_VALUES.has(selectedTargetKind)) {
-    return invalid(
-      "AI_FIELD_INVALID",
-      "targetKind IA invalide. Valeurs attendues : person, household, vehicle, property, other.",
-      "fields.targetKind.selected"
-    );
-  }
 
   if (selectedTarget && GENERIC_TARGET_VALUES.has(selectedTarget)) {
-    return invalid(
-      "AI_FIELD_INVALID",
-      "Cible IA invalide : target doit être la valeur de nommage, pas une nature générique.",
-      "fields.target.selected"
+    rejectSelectedField(
+      fields,
+      "target",
+      "Cible IA ignorée : target doit être la valeur de nommage, pas une nature générique.",
+      rejectedCandidates,
+      warnings
     );
   }
 
   if (selectedTarget && selectedDocumentType && selectedTarget === selectedDocumentType) {
-    return invalid(
-      "AI_FIELD_INVALID",
-      "Cible IA invalide : target ne doit pas être égal à documentType.",
-      "fields.target.selected"
+    rejectSelectedField(
+      fields,
+      "target",
+      "Cible IA ignorée : target ne doit pas être égal à documentType.",
+      rejectedCandidates,
+      warnings
     );
   }
 
-  return { ok: true };
+  return { rejectedCandidates, warnings };
+}
+
+function readSelectedCandidate(
+  value: unknown,
+  key: AiCandidateFieldKey
+): { value: string; rejectedCandidates: AiRejectedCandidate[] } {
+  if (value === undefined || value === null || value === "") {
+    return { value: "", rejectedCandidates: [] };
+  }
+
+  if (typeof value !== "string") {
+    return {
+      value: "",
+      rejectedCandidates: [
+        createRejectedCandidate(`fields.${key}.selected`, -1, "", "", "Sélection IA invalide.")
+      ]
+    };
+  }
+
+  const normalized = normalizeCandidateValue(value, { kind: "field", fieldKey: key });
+  if (!normalized.ok) {
+    return {
+      value: "",
+      rejectedCandidates: [
+        createRejectedCandidate(
+          `fields.${key}.selected`,
+          -1,
+          value,
+          normalized.normalizedValue,
+          normalized.reason
+        )
+      ]
+    };
+  }
+
+  return { value: normalized.value, rejectedCandidates: [] };
+}
+
+function selectFieldValue(selected: string, candidates: AiCandidate[]): string {
+  if (selected && candidates.some((candidate) => candidate.value === selected)) {
+    return selected;
+  }
+
+  return selectBestCandidate(candidates)?.value ?? "";
+}
+
+function rejectSelectedField(
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>,
+  key: AiCandidateFieldKey,
+  reason: string,
+  rejectedCandidates: AiRejectedCandidate[],
+  warnings: string[]
+): void {
+  const selected = fields[key].selected;
+  if (!selected) {
+    return;
+  }
+
+  const index = fields[key].candidates.findIndex((candidate) => candidate.value === selected);
+  if (index >= 0) {
+    rejectedCandidates.push(createRejectedCandidate(`fields.${key}.candidates`, index, selected, selected, reason));
+    fields[key].candidates = fields[key].candidates.filter((_, candidateIndex) => candidateIndex !== index);
+  } else {
+    rejectedCandidates.push(createRejectedCandidate(`fields.${key}.selected`, -1, selected, selected, reason));
+  }
+
+  fields[key].selected = selectBestCandidate(fields[key].candidates)?.value;
+  warnings.push(reason);
+}
+
+function normalizeCandidateValue(
+  value: string,
+  mode: CandidateListMode
+):
+  | { ok: true; value: string }
+  | { ok: false; normalizedValue?: string; reason: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: false, normalizedValue: "", reason: "Valeur vide après normalisation." };
+  }
+
+  if (mode.kind === "folder") {
+    const normalizedFolder = normalizeFolderCandidate(trimmed);
+    return normalizedFolder
+      ? { ok: true, value: normalizedFolder }
+      : {
+          ok: false,
+          normalizedValue: "",
+          reason: "Candidat dossier IA invalide ou dangereux."
+        };
+  }
+
+  if (mode.kind === "fileName") {
+    if (looksLikePath(trimmed) || containsParentTraversal(trimmed) || hasWindowsDriveReference(trimmed)) {
+      return {
+        ok: false,
+        normalizedValue: trimmed,
+        reason: "Candidat IA invalide : les chemins locaux sont refusés."
+      };
+    }
+
+    return { ok: true, value: limitString(trimmed, AI_CLASSIFICATION_LIMITS.listItemChars) };
+  }
+
+  if (looksLikePath(trimmed) || containsParentTraversal(trimmed) || hasWindowsDriveReference(trimmed)) {
+    return {
+      ok: false,
+      normalizedValue: normalizeNameBlock(trimmed),
+      reason: "Candidat IA invalide : les chemins locaux sont refusés."
+    };
+  }
+
+  if (SENSITIVE_NUMBER_PATTERN.test(trimmed)) {
+    return {
+      ok: false,
+      normalizedValue: normalizeNameBlock(trimmed),
+      reason: "Candidat IA rejeté : numéro sensible probable."
+    };
+  }
+
+  if (mode.fieldKey !== "dateToken" && FULL_DATE_PATTERN.test(trimmed)) {
+    return {
+      ok: false,
+      normalizedValue: normalizeNameBlock(trimmed),
+      reason: "Candidat IA rejeté : date brute hors champ date."
+    };
+  }
+
+  if (mode.fieldKey === "dateToken") {
+    const normalizedDate = normalizeCandidateDateToken(trimmed);
+    return normalizedDate
+      ? { ok: true, value: normalizedDate }
+      : { ok: false, normalizedValue: trimmed, reason: "Date IA invalide." };
+  }
+
+  const normalized = normalizeNameBlock(trimmed);
+  if (!normalized) {
+    return { ok: false, normalizedValue: "", reason: "Valeur vide après normalisation." };
+  }
+
+  if (mode.fieldKey === "targetKind" && !TARGET_KIND_VALUES.has(normalized)) {
+    return {
+      ok: false,
+      normalizedValue: normalized,
+      reason: "targetKind IA invalide. Valeurs attendues : person, household, vehicle, property, other."
+    };
+  }
+
+  if (mode.fieldKey === "target" && GENERIC_TARGET_VALUES.has(normalized)) {
+    return {
+      ok: false,
+      normalizedValue: normalized,
+      reason: "Cible IA invalide : target doit être la valeur de nommage, pas une nature générique."
+    };
+  }
+
+  return { ok: true, value: limitString(normalized, AI_CLASSIFICATION_LIMITS.listItemChars) };
+}
+
+function normalizeCandidateDateToken(value: string): string {
+  if (/^(19|20)\d{2}$/.test(value)) {
+    return value;
+  }
+
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(value)) {
+    return value;
+  }
+
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(value)) {
+    return value;
+  }
+
+  return "";
+}
+
+function createRejectedCandidate(
+  field: string,
+  index: number,
+  rawValue: string,
+  normalizedValue: string | undefined,
+  reason: string
+): AiRejectedCandidate {
+  return {
+    field,
+    index,
+    ...(rawValue ? { rawValue } : {}),
+    ...(normalizedValue ? { normalizedValue } : {}),
+    reason
+  };
 }
 
 function normalizeFolderCandidate(value: string): string | null {
@@ -387,6 +625,14 @@ function normalizeFolderCandidate(value: string): string | null {
 
 function looksLikePath(value: string): boolean {
   return /^[a-zA-Z]:[\\/]/.test(value) || /^\\\\/.test(value) || /[\\/]/.test(value);
+}
+
+function hasWindowsDriveReference(value: string): boolean {
+  return /^[a-zA-Z]:/.test(value.trim());
+}
+
+function containsParentTraversal(value: string): boolean {
+  return value.split(/[\\/]+/).some((segment) => segment.trim() === "..") || value.includes("..");
 }
 
 function readSelectedFields(response: AiMultiCandidateResponse): Partial<AiClassificationSuggestion> {

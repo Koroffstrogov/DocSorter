@@ -42,4 +42,129 @@ describe("AI diagnostics", () => {
       field: "fields.documentType.selected"
     });
   });
+
+  it("keeps rejected candidate raw values in complete diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "T07-carte-identite-paul.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: true,
+        value: createAiDiagnosticSuggestion()
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.ia.value.responseJson.rejectedCandidates[0]).toMatchObject({
+      field: "fields.issuer.candidates",
+      index: 0,
+      rawValue: "C:\\secret\\etat",
+      normalizedValue: "c-secret-etat",
+      reason: "Candidat IA invalide : les chemins locaux sont refusés."
+    });
+  });
+
+  it("removes rejected candidate raw values from redacted diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "carte-identite-paul.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: true,
+        value: createAiDiagnosticSuggestion()
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.mode).toBe("diagnosticExpurge");
+    expect(log.ia.value.responseJson.rejectedCandidates[0]).toEqual({
+      field: "fields.issuer.candidates",
+      index: 0,
+      reason: "Candidat IA invalide : les chemins locaux sont refusés."
+    });
+  });
 });
+
+function createAiDiagnosticSuggestion(): any {
+  return {
+    status: "ready",
+    documentName: "T07-carte-identite-paul.pdf",
+    extension: ".pdf",
+    model: "gemma3:4b",
+    suggestedAt: "2026-06-19T15:05:04.635Z",
+    textSource: "pdf-native",
+    modelStatus: {
+      status: "ready",
+      model: "gemma3:4b",
+      message: "Modèle prêt.",
+      loadedAt: null,
+      keepAliveUntil: null,
+      lastCheckedAt: null,
+      error: null
+    },
+    input: {
+      filename: "T07-carte-identite-paul.pdf",
+      extension: ".pdf",
+      extractedTextExcerpt: "",
+      ocrTextExcerpt: "",
+      knownRelativeFolders: [],
+      availableRootFolders: [],
+      namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
+      detectedDate: "",
+      detectedYear: ""
+    },
+    profile: {
+      id: "gemma3-4b",
+      label: "Gemma 3 4B",
+      model: "gemma3:4b",
+      think: false
+    },
+    responseJson: {
+      fields: {},
+      folderCandidates: [],
+      fileNameCandidates: [],
+      warnings: ["Certains candidats IA ont été ignorés. Analyse conservée."],
+      rejectedCandidates: [
+        {
+          field: "fields.issuer.candidates",
+          index: 0,
+          rawValue: "C:\\secret\\etat",
+          normalizedValue: "c-secret-etat",
+          reason: "Candidat IA invalide : les chemins locaux sont refusés."
+        }
+      ],
+      confidence: 80,
+      source: "ollama"
+    },
+    thinking: null,
+    suggestion: {
+      dateToken: "2023-11-02",
+      target: "paul",
+      documentType: "carte-identite",
+      confidence: 80,
+      reasons: [],
+      warnings: ["Certains candidats IA ont été ignorés. Analyse conservée."],
+      source: "ollama"
+    },
+    promptCharacterCount: 120,
+    message: "Certains candidats IA ont été ignorés. Analyse conservée."
+  };
+}
