@@ -9,6 +9,7 @@ import {
   normalizeTargetFolderRelative,
   type TargetFolderResult
 } from "../naming/targetFolder";
+import type { FolderLearningPreference } from "./folderLearningPreferences";
 
 export interface FolderLearningTargetEntry {
   name: string;
@@ -18,6 +19,7 @@ export interface FolderLearningTargetEntry {
 export interface FolderLearningTargetFolderNames {
   targetFolder: string;
   entries: FolderLearningTargetEntry[];
+  preference?: FolderLearningPreference;
   truncated: boolean;
   entryLimit: number;
   warnings: string[];

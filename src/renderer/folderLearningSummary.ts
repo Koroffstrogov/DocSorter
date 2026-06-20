@@ -1,6 +1,7 @@
 interface FolderLearningSummaryInput {
   targetFolder?: string;
   entries: FolderLearningNameEntry[];
+  preference?: FolderLearningPreference | null;
   aiName: string;
   aiFields: AiSelectionFields | null;
   extension: SupportedDocumentExtension;
@@ -74,11 +75,11 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
   ];
 
   function buildAnalysis(input: FolderLearningSummaryInput): FolderLearningAnalysis {
-    const profile = buildProfile(input.entries, input.warnings ?? []);
+    const profile = buildProfile(input.entries, input.warnings ?? [], input.preference ?? null);
     const aiInput = readAiInput(input);
     const schema = aiInput ? analyzeSchema(profile, aiInput) : blockedSchema("Champs IA incomplets.");
-    const comparison = buildComparison(profile, input, aiInput, schema);
     const profileWithSchema = applySchemaSemantics(profile, schema);
+    const comparison = buildComparison(profileWithSchema, input, aiInput, schema);
     return {
       profile: profileWithSchema,
       comparison,
@@ -86,7 +87,11 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     };
   }
 
-  function buildProfile(entries: FolderLearningNameEntry[], externalWarnings: string[]): FolderLearningProfile {
+  function buildProfile(
+    entries: FolderLearningNameEntry[],
+    externalWarnings: string[],
+    preference: FolderLearningPreference | null
+  ): FolderLearningProfile {
     const analyzableEntries = entries.filter((entry) => entry.isFile);
     const parsed = analyzableEntries.map((entry) => parseName(entry.name)).filter(isParsedName);
     const ignoredCount = analyzableEntries.length - parsed.length;
@@ -96,8 +101,12 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         status: "none",
         analyzedFileCount: analyzableEntries.length,
         recognizedFileCount: 0,
+        localPreference: preference ?? undefined,
         examples: [],
-        reasons: ["Aucun nom compatible détecté dans le dossier cible."],
+        reasons: uniqueStrings([
+          "Aucun nom compatible détecté dans le dossier cible.",
+          preference ? `Préférence locale confirmée ${preference.confirmedCount} fois.` : ""
+        ]),
         warnings: uniqueStrings([
           ...externalWarnings,
           ignoredCount > 0 ? `${ignoredCount} fichier(s) ignoré(s) car non conformes.` : ""
@@ -134,12 +143,14 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       dominantDocumentType: dominantDocumentType?.value,
       dominantIssuer: dominantIssuer?.value,
       detailUsage,
+      localPreference: preference ?? undefined,
       examples: parsed.slice(0, 3).map((entry) => entry.originalName),
       reasons: uniqueStrings([
         `${parsed.length} nom(s) compatible(s) détecté(s).`,
         dominantTarget ? `Cible dominante : ${dominantTarget.value}.` : "",
         dominantDocumentType ? `Type documentaire dominant : ${dominantDocumentType.value}.` : "",
-        dominantIssuer ? `Émetteur dominant : ${dominantIssuer.value}.` : ""
+        dominantIssuer ? `Émetteur dominant : ${dominantIssuer.value}.` : "",
+        preference ? `Préférence locale confirmée ${preference.confirmedCount} fois.` : ""
       ]),
       warnings: uniqueStrings([
         ...externalWarnings,
@@ -160,14 +171,31 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       return null;
     }
 
+    const preferenceSignal = preferenceSignalFor(profile);
+    const preferenceReasons = preferenceSignal.reasons;
+    const preferenceWarnings = preferenceSignal.warnings;
+    if (preferenceSignal.status === "contradictory") {
+      return {
+        aiName: input.aiName,
+        recommendation: "manual-review",
+        confidence: 35,
+        appliedChanges: [],
+        reasons: [
+          "La préférence locale confirmée contredit les noms présents dans le dossier.",
+          ...preferenceReasons
+        ],
+        warnings: preferenceWarnings
+      };
+    }
+
     if (profile.status === "none") {
       return {
         aiName: input.aiName,
         recommendation: "keep-ai",
         confidence: 40,
         appliedChanges: [],
-        reasons: ["Aucun profil exploitable dans le dossier."],
-        warnings: []
+        reasons: ["Aucun profil exploitable dans le dossier.", ...preferenceReasons],
+        warnings: preferenceWarnings
       };
     }
 
@@ -177,8 +205,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         recommendation: hasNotableDivergence(aiInput, profile) ? "manual-review" : "keep-ai",
         confidence: 35,
         appliedChanges: [],
-        reasons: ["Profil faible : aucun alignement automatique proposé."],
-        warnings: ["Profil trop faible pour proposer un nom aligné."]
+        reasons: ["Profil faible : aucun alignement automatique proposé.", ...preferenceReasons],
+        warnings: uniqueStrings(["Profil trop faible pour proposer un nom aligné.", ...preferenceWarnings])
       };
     }
 
@@ -188,8 +216,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         recommendation: "manual-review",
         confidence: 40,
         appliedChanges: [],
-        reasons: ["Précisions de date mélangées dans le dossier."],
-        warnings: ["Convention de date hétérogène : alignement non appliqué."]
+        reasons: ["Précisions de date mélangées dans le dossier.", ...preferenceReasons],
+        warnings: uniqueStrings(["Convention de date hétérogène : alignement non appliqué.", ...preferenceWarnings])
       };
     }
 
@@ -200,9 +228,9 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         confidence: schema.status === "ambiguous" ? 45 : 35,
         appliedChanges: [],
         reasons: schema.reasons.length
-          ? schema.reasons
-          : ["Le schéma réel du dossier n'a pas pu être inféré."],
-        warnings: uniqueStrings([...schema.warnings, schema.blockingReason ?? ""])
+          ? [...schema.reasons, ...preferenceReasons]
+          : ["Le schéma réel du dossier n'a pas pu être inféré.", ...preferenceReasons],
+        warnings: uniqueStrings([...schema.warnings, schema.blockingReason ?? "", ...preferenceWarnings])
       };
     }
 
@@ -214,15 +242,18 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         recommendation: "manual-review",
         confidence: 45,
         appliedChanges: [],
-        reasons: ["Type documentaire différent du profil dominant du dossier."],
-        warnings: [`Type documentaire dominant incompatible : ${schemaDocumentType || "absent"}.`]
+        reasons: ["Type documentaire différent du profil dominant du dossier.", ...preferenceReasons],
+        warnings: uniqueStrings([
+          `Type documentaire dominant incompatible : ${schemaDocumentType || "absent"}.`,
+          ...preferenceWarnings
+        ])
       };
     }
 
     const aligned = { ...aiInput };
     const appliedChanges: string[] = [];
     const reasons: string[] = [];
-    const warnings: string[] = [...schema.warnings];
+    const warnings: string[] = [...schema.warnings, ...preferenceWarnings];
 
     const alignedDate = alignDatePrecision(aiInput.dateToken, profile.dominantDatePrecision);
     if (alignedDate !== aiInput.dateToken) {
@@ -275,22 +306,22 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         appliedChanges,
         reasons: warnings.length > 0
           ? ["Profil hétérogène : validation manuelle recommandée."]
-          : ["Le nom IA est compatible avec la convention du dossier."],
+          : ["Le nom IA est compatible avec la convention du dossier.", ...preferenceReasons],
         warnings
       };
     }
 
     const alignedName = buildName(aligned, schema, input.extension);
-    return {
+    return applyPreferenceSignal({
       aiName: input.aiName,
       alignedName,
       detectedPattern: schema.pattern,
       recommendation: profile.status === "strong" ? "prefer-folder-profile" : "manual-review",
       confidence: profile.status === "strong" ? 85 : 65,
       appliedChanges,
-      reasons,
+      reasons: [...reasons, ...preferenceReasons],
       warnings
-    };
+    }, preferenceSignal);
   }
 
   function parseName(fileName: string): ParsedName | null {
@@ -534,7 +565,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
           status: profile.status,
           recognizedFileCount: profile.recognizedFileCount,
           dominantDatePrecision: profile.dominantDatePrecision,
-          dominantBlocks: profile.dominantBlocks ?? []
+          dominantBlocks: profile.dominantBlocks ?? [],
+          localPreferenceConfirmedCount: profile.localPreference?.confirmedCount ?? 0
         },
         output: { dominantPattern: profile.dominantPattern ?? "" },
         warnings: profile.warnings,
@@ -791,6 +823,108 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       return dateToken.slice(0, 4);
     }
     return dateToken;
+  }
+
+  function applyPreferenceSignal(
+    comparison: FolderLearningComparison,
+    signal: { status: "none" | "coherent" | "contradictory"; confirmedCount: number; reasons: string[]; warnings: string[] }
+  ): FolderLearningComparison {
+    if (signal.status !== "coherent") {
+      return comparison;
+    }
+
+    const reasons = uniqueStrings([...comparison.reasons, ...signal.reasons]);
+    if (
+      comparison.alignedName &&
+      signal.confirmedCount >= 2 &&
+      comparison.recommendation === "manual-review"
+    ) {
+      return {
+        ...comparison,
+        recommendation: "prefer-folder-profile",
+        confidence: Math.max(comparison.confidence, 75),
+        reasons: uniqueStrings(["Préférence locale confirmée : nom aligné renforcé.", ...reasons])
+      };
+    }
+
+    return {
+      ...comparison,
+      reasons
+    };
+  }
+
+  function preferenceSignalFor(profile: FolderLearningProfile): {
+    status: "none" | "coherent" | "contradictory";
+    confirmedCount: number;
+    reasons: string[];
+    warnings: string[];
+  } {
+    const preference = profile.localPreference;
+    if (!preference) {
+      return {
+        status: "none",
+        confirmedCount: 0,
+        reasons: [],
+        warnings: []
+      };
+    }
+
+    const reasons = [`Préférence locale confirmée ${preference.confirmedCount} fois.`];
+    if (profile.recognizedFileCount === 0) {
+      return {
+        status: "coherent",
+        confirmedCount: preference.confirmedCount,
+        reasons,
+        warnings: []
+      };
+    }
+
+    const conflicts = [
+      profile.dominantDatePrecision &&
+        profile.dominantDatePrecision !== "mixed" &&
+        preference.preferredDatePrecision &&
+        profile.dominantDatePrecision !== preference.preferredDatePrecision
+        ? "précision de date"
+        : "",
+      profile.dominantTarget &&
+        preference.preferredTarget &&
+        normalizeBlock(profile.dominantTarget) !== normalizeBlock(preference.preferredTarget)
+        ? "cible"
+        : "",
+      profile.dominantDocumentType &&
+        preference.preferredDocumentType &&
+        normalizeBlock(profile.dominantDocumentType) !== normalizeBlock(preference.preferredDocumentType)
+        ? "type documentaire"
+        : "",
+      profile.dominantIssuer &&
+        preference.preferredIssuer &&
+        normalizeBlock(profile.dominantIssuer) !== normalizeBlock(preference.preferredIssuer)
+        ? "émetteur"
+        : "",
+      profile.detailUsage &&
+        preference.detailUsage &&
+        profile.detailUsage !== preference.detailUsage &&
+        profile.detailUsage !== "sometimes" &&
+        preference.detailUsage !== "sometimes"
+        ? "usage du détail"
+        : ""
+    ].filter(Boolean);
+
+    if (conflicts.length > 0) {
+      return {
+        status: "contradictory",
+        confirmedCount: preference.confirmedCount,
+        reasons,
+        warnings: [`Préférence locale contradictoire avec le dossier : ${conflicts.join(", ")}.`]
+      };
+    }
+
+    return {
+      status: "coherent",
+      confirmedCount: preference.confirmedCount,
+      reasons,
+      warnings: []
+    };
   }
 
   function blockedSchema(reason: string): SchemaAnalysis {

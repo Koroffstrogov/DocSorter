@@ -648,6 +648,11 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
     const example = document.createElement("span");
     example.textContent = profile.examples[0] ? `Exemple : ${profile.examples[0]}` : "";
 
+    const preference = document.createElement("span");
+    preference.textContent = profile.localPreference
+      ? `Préférence locale confirmée ${profile.localPreference.confirmedCount} fois`
+      : "";
+
     const recommendation = document.createElement("span");
     recommendation.textContent = folderLearning.comparison
       ? `Recommandation : ${recommendationLabel(folderLearning.comparison.recommendation)}`
@@ -668,6 +673,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       title,
       stats,
       example,
+      preference,
       recommendation,
       aligned
     ];

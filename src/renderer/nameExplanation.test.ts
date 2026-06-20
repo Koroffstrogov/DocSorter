@@ -171,6 +171,69 @@ describe("name explanation renderer model", () => {
     expect(model.result).toContain("2026-05_foyer_releve-bancaire_bnp.pdf");
   });
 
+  it("mentions confirmed local preference in folder convention source", () => {
+    const model = explanation.buildNameExplanation({
+      filename: "2026-05_foyer_releve-bancaire_bnp.pdf",
+      filenameValid: true,
+      extension: ".pdf",
+      fields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp",
+        detail: ""
+      },
+      destinationFolder: "Finances/Banque",
+      messages: [],
+      folderLearning: {
+        status: "ready",
+        targetFolder: "Finances/Banque",
+        entries: [],
+        profile: {
+          status: "medium",
+          analyzedFileCount: 4,
+          recognizedFileCount: 4,
+          dominantDatePrecision: "month",
+          dominantTarget: "compte-joint",
+          dominantDocumentType: "releve-bancaire",
+          dominantIssuer: "bnp-paribas",
+          detailUsage: "never",
+          localPreference: {
+            folderRelativePath: "Finances/Banque",
+            preferredSchema: "DATE_CIBLE_DOCUMENT_EMETTEUR",
+            preferredDatePrecision: "month",
+            preferredTarget: "compte-joint",
+            preferredDocumentType: "releve-bancaire",
+            preferredIssuer: "bnp-paribas",
+            detailUsage: "never",
+            confirmedCount: 3,
+            lastConfirmedAt: "2026-06-20T10:00:00.000Z"
+          },
+          examples: ["2026-04_compte-joint_releve-bancaire_bnp-paribas.pdf"],
+          reasons: [],
+          warnings: []
+        },
+        comparison: {
+          aiName: "2026-05_foyer_releve-bancaire_bnp.pdf",
+          alignedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+          recommendation: "prefer-folder-profile",
+          confidence: 75,
+          appliedChanges: ["target", "issuer"],
+          reasons: ["Préférence locale confirmée 3 fois."],
+          warnings: []
+        },
+        pipeline: [],
+        message: "",
+        error: "",
+        warnings: []
+      }
+    });
+
+    expect(line(model, "Convention du dossier")).toMatchObject({
+      source: "Convention du dossier + confirmations utilisateur"
+    });
+  });
+
   it("explains when the final name is explicitly replaced by folder convention", () => {
     const model = explanation.buildNameExplanation({
       filename: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",

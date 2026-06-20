@@ -54,6 +54,7 @@ describe("renderer right panel layout", () => {
 
   it("keeps the quick IA actions visible and advanced IA/OCR settings collapsed", async () => {
     const html = await readRendererHtml();
+    const namingPanel = await readFile(path.join(process.cwd(), "src", "renderer", "namingPanel.ts"), "utf8");
 
     expect(html).toContain('class="simple-mode-toolbar"');
     expect(html).toContain('id="simple-mode-button"');
@@ -107,6 +108,7 @@ describe("renderer right panel layout", () => {
     expect(sortProposalPanel).toContain('id="name-explanation-content"');
     expect(sortProposalPanel).toContain('id="folder-learning-summary"');
     expect(sortProposalPanel).toContain("Convention du dossier : non analysée.");
+    expect(namingPanel).toContain("Préférence locale confirmée");
     expect(html).not.toContain("Utiliser ce nom aligné</button>");
     expect(sortProposalPanel).not.toMatch(/<details id="name-explanation"[^>]*\sopen[\s>]/);
     expect(sortProposalPanel).toContain('id="destination-final-path"');

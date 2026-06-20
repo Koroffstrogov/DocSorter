@@ -88,6 +88,84 @@ describe("folderLearningSummary", () => {
     ]);
   });
 
+  it("uses a confirmed local preference to strengthen a medium folder convention", () => {
+    const analysis = summary.buildAnalysis({
+      targetFolder: "Banque/Releves",
+      entries: [
+        name("2026-01_compte-joint_releve-bancaire_bnp-paribas.pdf"),
+        name("2026-02_compte-joint_releve-bancaire_bnp-paribas.pdf"),
+        name("2026-03_compte-joint_releve-bancaire_bnp-paribas.pdf"),
+        name("2026-04_compte-joint_releve-bancaire_bnp-paribas.pdf")
+      ],
+      preference: {
+        folderRelativePath: "Banque/Releves",
+        preferredSchema: "DATE_CIBLE_DOCUMENT_EMETTEUR",
+        preferredDatePrecision: "month",
+        preferredTarget: "compte-joint",
+        preferredDocumentType: "releve-bancaire",
+        preferredIssuer: "bnp-paribas",
+        detailUsage: "never",
+        confirmedCount: 3,
+        lastConfirmedAt: "2026-06-20T10:00:00.000Z"
+      },
+      aiName: "2026-05-18_foyer_releve-bancaire_bnp_mai.pdf",
+      aiFields: {
+        dateToken: "2026-05-18",
+        subject: "",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp",
+        detail: "mai"
+      },
+      extension: ".pdf"
+    });
+
+    expect(analysis.profile.localPreference).toMatchObject({ confirmedCount: 3 });
+    expect(analysis.comparison).toMatchObject({
+      recommendation: "prefer-folder-profile",
+      alignedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+    });
+    expect(analysis.comparison?.reasons.join(" ")).toContain("Préférence locale confirmée");
+  });
+
+  it("marks contradictory local preference for manual review", () => {
+    const analysis = summary.buildAnalysis({
+      targetFolder: "Banque/Releves",
+      entries: [
+        name("2026-01_compte-joint_releve-bancaire_bnp-paribas.pdf"),
+        name("2026-02_compte-joint_releve-bancaire_bnp-paribas.pdf"),
+        name("2026-03_compte-joint_releve-bancaire_bnp-paribas.pdf"),
+        name("2026-04_compte-joint_releve-bancaire_bnp-paribas.pdf")
+      ],
+      preference: {
+        folderRelativePath: "Banque/Releves",
+        preferredSchema: "DATE_CIBLE_DOCUMENT",
+        preferredDatePrecision: "year",
+        preferredTarget: "captur",
+        preferredDocumentType: "facture-entretien",
+        detailUsage: "never",
+        confirmedCount: 2,
+        lastConfirmedAt: "2026-06-20T10:00:00.000Z"
+      },
+      aiName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+      aiFields: {
+        dateToken: "2026-05",
+        subject: "",
+        target: "compte-joint",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas",
+        detail: ""
+      },
+      extension: ".pdf"
+    });
+
+    expect(analysis.comparison).toMatchObject({
+      recommendation: "manual-review"
+    });
+    expect(analysis.comparison?.alignedName).toBeUndefined();
+    expect(analysis.comparison?.warnings.join(" ")).toContain("Préférence locale contradictoire");
+  });
+
   it("ignores directories and non-conforming names without failing", () => {
     const analysis = summary.buildAnalysis({
       entries: [

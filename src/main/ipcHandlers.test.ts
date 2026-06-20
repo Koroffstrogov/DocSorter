@@ -53,8 +53,8 @@ describe("sensitive IPC handler contract", () => {
       acceptsRendererPath: false,
       usesMainSource: false,
       usesMainTarget: true,
-      usesUserDataPath: false,
-      serviceName: "listTargetFolderNames"
+      usesUserDataPath: true,
+      serviceName: "listTargetFolderNames + getFolderLearningPreferenceForFolder"
     });
   });
 });
@@ -113,6 +113,10 @@ describe("registerIpcHandlers", () => {
     await harness.invoke(IPC_CHANNELS.folderLearningListNames);
 
     expect(harness.services.listTargetFolderNames).toHaveBeenCalledWith(TARGET_PATH, "Vehicules");
+    expect(harness.services.getFolderLearningPreferenceForFolder).toHaveBeenCalledWith(
+      USER_DATA_PATH,
+      "Vehicules"
+    );
   });
 
   it("preloads the IA model only with userData from main state", async () => {
@@ -229,6 +233,45 @@ describe("registerIpcHandlers", () => {
       queuedDocumentPaths: harness.state.queuedDocumentPaths,
       journalFilePath: path.join(USER_DATA_PATH, "classification-actions.jsonl")
     });
+  });
+
+  it("records folder-learning preference only after successful classification", async () => {
+    const harness = createHarness();
+
+    await harness.invoke(
+      IPC_CHANNELS.classificationExecute,
+      DOCUMENT_PATH,
+      "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+    );
+    await Promise.resolve();
+
+    expect(harness.services.recordFolderLearningPreferenceFromClassification).toHaveBeenCalledWith({
+      userDataPath: USER_DATA_PATH,
+      folderRelativePath: "Vehicules",
+      classifiedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+      confirmedAt: "2026-06-18T10:00:00.000Z"
+    });
+  });
+
+  it("does not learn from IA analysis or failed classification", async () => {
+    const harness = createHarness({
+      executeClassification: vi.fn(async () => ({
+        ok: false,
+        error: {
+          code: "INVALID_FILENAME",
+          message: "Nom invalide."
+        }
+      }))
+    });
+
+    await harness.invoke(IPC_CHANNELS.aiRunSuggestion, DOCUMENT_PATH, {
+      source: "pdf-native",
+      excerpt: "texte extrait"
+    });
+    await harness.invoke(IPC_CHANNELS.classificationExecute, DOCUMENT_PATH, "bad/name.pdf");
+    await Promise.resolve();
+
+    expect(harness.services.recordFolderLearningPreferenceFromClassification).not.toHaveBeenCalled();
   });
 });
 
@@ -358,6 +401,18 @@ function createServices(): IpcHandlerServices {
         warnings: []
       }
     })),
+    getFolderLearningPreferenceForFolder: vi.fn(async () => ({
+      value: {
+        folderRelativePath: "Vehicules",
+        preferredSchema: "DATE_CIBLE_DOCUMENT",
+        preferredDatePrecision: "year",
+        preferredTarget: "captur",
+        preferredDocumentType: "facture-entretien",
+        confirmedCount: 2,
+        lastConfirmedAt: "2026-06-18T10:00:00.000Z"
+      },
+      warnings: []
+    })),
     prepareClassificationPlan: vi.fn(async () => ({
       status: "ready",
       plan: null,
@@ -367,24 +422,43 @@ function createServices(): IpcHandlerServices {
     executeClassification: vi.fn(async () => ({
       ok: true,
       value: {
-        action: {
-          id: "action-1",
-          kind: "classification",
-          createdAt: "2026-06-18T10:00:00.000Z",
+        status: "completed",
+        plan: {
+          status: "ready",
           sourcePath: DOCUMENT_PATH,
-          destinationPath: path.join(TARGET_PATH, "Vehicules", "document.pdf"),
-          originalName: "document.pdf",
-          finalName: "document.pdf",
+          currentName: "document.pdf",
+          proposedFilename: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+          extension: ".pdf",
           targetRootPath: TARGET_PATH,
-          targetFolder: "Vehicules"
+          targetFolder: "Vehicules",
+          targetPath: path.join(TARGET_PATH, "Vehicules"),
+          destinationPath: path.join(
+            TARGET_PATH,
+            "Vehicules",
+            "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+          ),
+          checks: []
         },
         undoableAction: {
           id: "action-1",
+          completedAt: "2026-06-18T10:00:00.000Z",
           originalPath: DOCUMENT_PATH,
-          classifiedPath: path.join(TARGET_PATH, "Vehicules", "document.pdf")
+          classifiedPath: path.join(
+            TARGET_PATH,
+            "Vehicules",
+            "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+          ),
+          originalName: "document.pdf",
+          classifiedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+          sourceHashSha256: "a".repeat(64)
         },
-        warning: null
+        message: "Document classé"
       }
+    })),
+    recordFolderLearningPreferenceFromClassification: vi.fn(async () => ({
+      ok: true,
+      value: null,
+      warnings: []
     })),
     undoLastClassification: vi.fn(async () => ({
       ok: true,

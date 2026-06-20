@@ -236,6 +236,9 @@ var DocSorterNameExplanation: NameExplanationApi;
 
     const comparison = folderLearning.comparison;
     const alignedName = comparison?.alignedName ?? "";
+    const source = profile.localPreference
+      ? "Convention du dossier + confirmations utilisateur"
+      : "Lecture seule";
     const isApplied = Boolean(
       alignedName &&
         filenameSource === "folder-learning" &&
@@ -250,7 +253,7 @@ var DocSorterNameExplanation: NameExplanationApi;
         : alignedName
         ? `Nom aligné proposé : ${alignedName}.`
         : folderLearningBlockingReason(folderLearning) || folderLearningReason(profile),
-      source: isApplied ? "Convention du dossier" : "Lecture seule"
+      source
     };
   }
 

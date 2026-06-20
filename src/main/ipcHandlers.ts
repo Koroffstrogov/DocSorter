@@ -59,6 +59,13 @@ import {
   type FolderLearningTargetFolderNamesResult
 } from "../folder-learning/targetFolderNameListing";
 import {
+  getFolderLearningPreferenceForFolder as getFolderLearningPreferenceForFolderService,
+  recordFolderLearningPreferenceFromClassification as recordFolderLearningPreferenceFromClassificationService,
+  type FolderLearningPreference,
+  type FolderLearningPreferencesResult,
+  type FolderLearningPreferencesValue
+} from "../folder-learning/folderLearningPreferences";
+import {
   getActionJournalFilePath as getActionJournalFilePathService,
   readLastUndoableClassification as readLastUndoableClassificationService,
   readRecentActions as readRecentActionsService,
@@ -169,6 +176,16 @@ export interface IpcHandlerServices {
     targetPath: string | null | undefined,
     targetFolder: string
   ) => Promise<FolderLearningTargetFolderNamesResult>;
+  getFolderLearningPreferenceForFolder: (
+    userDataPath: string,
+    targetFolder: string
+  ) => Promise<FolderLearningPreferencesValue<FolderLearningPreference | null>>;
+  recordFolderLearningPreferenceFromClassification: (options: {
+    userDataPath: string;
+    folderRelativePath: string;
+    classifiedName: string;
+    confirmedAt?: string;
+  }) => Promise<FolderLearningPreferencesResult<FolderLearningPreference | null>>;
   prepareClassificationPlan: (options: {
     documentPath: string;
     proposedFilename: string;
@@ -313,8 +330,8 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     acceptsRendererPath: false,
     usesMainSource: false,
     usesMainTarget: true,
-    usesUserDataPath: false,
-    serviceName: "listTargetFolderNames"
+    usesUserDataPath: true,
+    serviceName: "listTargetFolderNames + getFolderLearningPreferenceForFolder"
   },
   {
     channel: IPC_CHANNELS.documentsRefreshSource,
@@ -529,6 +546,8 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   listTargetSubdirectories: listTargetSubdirectoriesService,
   createTargetSubdirectory: createTargetSubdirectoryService,
   listTargetFolderNames: listTargetFolderNamesService,
+  getFolderLearningPreferenceForFolder: getFolderLearningPreferenceForFolderService,
+  recordFolderLearningPreferenceFromClassification: recordFolderLearningPreferenceFromClassificationService,
   prepareClassificationPlan: prepareClassificationPlanService,
   executeClassification: executeClassificationService,
   undoLastClassification: undoLastClassificationService,
@@ -604,9 +623,26 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
 
     return result;
   });
-  options.ipcMain.handle(IPC_CHANNELS.folderLearningListNames, () =>
-    services.listTargetFolderNames(state.selectedTargetPath, state.selectedTargetFolder)
-  );
+  options.ipcMain.handle(IPC_CHANNELS.folderLearningListNames, async () => {
+    const result = await services.listTargetFolderNames(state.selectedTargetPath, state.selectedTargetFolder);
+    if (!result.ok) {
+      return result;
+    }
+
+    const preference = await services.getFolderLearningPreferenceForFolder(
+      options.app.getPath("userData"),
+      result.value.targetFolder
+    );
+
+    return {
+      ok: true,
+      value: {
+        ...result.value,
+        ...(preference.value ? { preference: preference.value } : {}),
+        warnings: [...result.value.warnings, ...preference.warnings]
+      }
+    } satisfies FolderLearningTargetFolderNamesResult;
+  });
   options.ipcMain.handle(IPC_CHANNELS.namingCreateInitialDraft, (_event, originalName: unknown) => {
     if (typeof originalName !== "string") {
       return services.createInitialNamingDraft("");
@@ -673,6 +709,12 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
             path.resolve(documentItem.filePath) !==
             path.resolve(result.value.undoableAction.originalPath)
         );
+        void services.recordFolderLearningPreferenceFromClassification({
+          userDataPath: options.app.getPath("userData"),
+          folderRelativePath: result.value.plan.targetFolder,
+          classifiedName: result.value.plan.proposedFilename,
+          confirmedAt: result.value.undoableAction.completedAt
+        }).catch(() => undefined);
       }
 
       return result;

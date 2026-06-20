@@ -9,6 +9,7 @@ import {
   type FolderNamingPattern,
   type ParsedFolderFileName
 } from "./parseFolderFileName";
+import type { FolderLearningPreference } from "./folderLearningPreferences";
 
 export type FolderProfileNameRecommendation = "keep-ai" | "prefer-folder-profile" | "manual-review";
 
@@ -50,16 +51,20 @@ export interface FolderLearningPipelineStep {
 }
 
 export type CompareNameWithFolderProfileInput =
-  | {
-      aiName: string;
-      extension?: string;
-      profile: FolderNamingProfile;
-    }
-  | {
-      aiFields: FolderProfileNameFields;
-      extension: string;
-      profile: FolderNamingProfile;
-    };
+  (
+    | {
+        aiName: string;
+        extension?: string;
+        profile: FolderNamingProfile;
+      }
+    | {
+        aiFields: FolderProfileNameFields;
+        extension: string;
+        profile: FolderNamingProfile;
+      }
+  ) & {
+    preference?: FolderLearningPreference | null;
+  };
 
 interface ResolvedAiName {
   aiName: string;
@@ -75,6 +80,13 @@ interface FolderSchemaAnalysis {
   reasons: string[];
   warnings: string[];
   blockingReason?: string;
+}
+
+interface PreferenceSignal {
+  status: "none" | "coherent" | "contradictory";
+  confirmedCount: number;
+  reasons: string[];
+  warnings: string[];
 }
 
 type FolderSchemaField = "target" | "documentType" | "issuer" | "detail";
@@ -95,8 +107,9 @@ export function compareNameWithFolderProfile(
 ): FolderProfileNameComparison {
   const profile = input.profile;
   const resolved = resolveAiName(input);
-  const reasons: string[] = [];
-  const warnings = [...resolved.warnings];
+  const preferenceSignal = analyzePreferenceSignal(profile, input.preference ?? null);
+  const reasons: string[] = [...preferenceSignal.reasons];
+  const warnings = [...resolved.warnings, ...preferenceSignal.warnings];
 
   if (profile.status === "none") {
     const comparison: FolderProfileNameComparison = {
@@ -126,6 +139,22 @@ export function compareNameWithFolderProfile(
     return {
       ...comparison
     };
+  }
+
+  if (preferenceSignal.status === "contradictory") {
+    const comparison: FolderProfileNameComparison = {
+      aiName: resolved.aiName,
+      recommendation: "manual-review",
+      confidence: 35,
+      appliedChanges: [],
+      reasons: [
+        "La préférence locale confirmée contredit les noms présents dans le dossier.",
+        ...preferenceSignal.reasons
+      ],
+      warnings
+    };
+    comparison.pipeline = createPipeline(profile, resolved, null, comparison);
+    return comparison;
   }
 
   const schema = analyzeFolderSchema(profile, resolved.input);
@@ -234,7 +263,7 @@ export function compareNameWithFolderProfile(
     return comparison;
   }
 
-  const comparison: FolderProfileNameComparison = {
+  const comparison = applyPreferenceSignal({
     aiName: resolved.aiName,
     alignedName: generated.filename,
     detectedPattern: schema.pattern,
@@ -248,9 +277,108 @@ export function compareNameWithFolderProfile(
       ...reasons
     ],
     warnings
-  };
+  }, preferenceSignal);
   comparison.pipeline = createPipeline(profile, resolved, schema, comparison);
   return comparison;
+}
+
+function applyPreferenceSignal(
+  comparison: FolderProfileNameComparison,
+  preference: PreferenceSignal
+): FolderProfileNameComparison {
+  if (preference.status !== "coherent") {
+    return comparison;
+  }
+
+  const reasons = Array.from(new Set([...comparison.reasons, ...preference.reasons]));
+  if (
+    comparison.alignedName &&
+    preference.confirmedCount >= 2 &&
+    comparison.recommendation === "manual-review"
+  ) {
+    return {
+      ...comparison,
+      recommendation: "prefer-folder-profile",
+      confidence: Math.max(comparison.confidence, 75),
+      reasons: Array.from(new Set(["Préférence locale confirmée : nom aligné renforcé.", ...reasons]))
+    };
+  }
+
+  return {
+    ...comparison,
+    reasons
+  };
+}
+
+function analyzePreferenceSignal(
+  profile: FolderNamingProfile,
+  preference: FolderLearningPreference | null
+): PreferenceSignal {
+  if (!preference) {
+    return {
+      status: "none",
+      confirmedCount: 0,
+      reasons: [],
+      warnings: []
+    };
+  }
+
+  const reasons = [`Préférence locale confirmée ${preference.confirmedCount} fois.`];
+  if (profile.recognizedFileCount === 0) {
+    return {
+      status: "coherent",
+      confirmedCount: preference.confirmedCount,
+      reasons,
+      warnings: []
+    };
+  }
+
+  const conflicts = [
+    profile.dominantDatePrecision &&
+      profile.dominantDatePrecision !== "mixed" &&
+      preference.preferredDatePrecision &&
+      profile.dominantDatePrecision !== preference.preferredDatePrecision
+      ? "précision de date"
+      : "",
+    profile.dominantTarget &&
+      preference.preferredTarget &&
+      normalizeNameBlock(profile.dominantTarget) !== normalizeNameBlock(preference.preferredTarget)
+      ? "cible"
+      : "",
+    profile.dominantDocumentType &&
+      preference.preferredDocumentType &&
+      normalizeNameBlock(profile.dominantDocumentType) !== normalizeNameBlock(preference.preferredDocumentType)
+      ? "type documentaire"
+      : "",
+    profile.dominantIssuer &&
+      preference.preferredIssuer &&
+      normalizeNameBlock(profile.dominantIssuer) !== normalizeNameBlock(preference.preferredIssuer)
+      ? "émetteur"
+      : "",
+    profile.detailUsage &&
+      preference.detailUsage &&
+      profile.detailUsage !== preference.detailUsage &&
+      profile.detailUsage !== "sometimes" &&
+      preference.detailUsage !== "sometimes"
+      ? "usage du détail"
+      : ""
+  ].filter(Boolean);
+
+  if (conflicts.length > 0) {
+    return {
+      status: "contradictory",
+      confirmedCount: preference.confirmedCount,
+      reasons,
+      warnings: [`Préférence locale contradictoire avec le dossier : ${conflicts.join(", ")}.`]
+    };
+  }
+
+  return {
+    status: "coherent",
+    confirmedCount: preference.confirmedCount,
+    reasons,
+    warnings: []
+  };
 }
 
 function resolveAiName(input: CompareNameWithFolderProfileInput): ResolvedAiName {
@@ -584,7 +712,12 @@ function createPipeline(
       variables: {
         status: profile.status,
         dominantDatePrecision: profile.dominantDatePrecision,
-        dominantBlocks: profile.dominantBlocks ?? []
+        dominantBlocks: profile.dominantBlocks ?? [],
+        localPreferenceSignal: comparison.reasons.find((reason) =>
+          reason.includes("Préférence locale confirmée")
+        )
+          ? comparison.reasons.find((reason) => reason.includes("Préférence locale confirmée"))
+          : ""
       },
       output: {
         recognizedFileCount: profile.recognizedFileCount,

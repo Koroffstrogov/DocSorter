@@ -14,7 +14,10 @@ describe("rendererFolderLearningFlow", () => {
     expect(harness.listTargetFolderNames).toHaveBeenCalledTimes(1);
     expect(harness.context.state.folderLearning).toMatchObject({
       status: "ready",
-      targetFolder: "Finances/Banque"
+      targetFolder: "Finances/Banque",
+      preference: {
+        confirmedCount: 3
+      }
     });
     expect(harness.context.state.folderLearning.profile).toMatchObject({
       status: "medium",
@@ -97,6 +100,17 @@ async function createHarness(): Promise<{
         name("2026-04_compte-joint_releve-bancaire_bnp-paribas.pdf"),
         name("notes.txt")
       ],
+      preference: {
+        folderRelativePath: "Finances/Banque",
+        preferredSchema: "DATE_CIBLE_DOCUMENT_EMETTEUR",
+        preferredDatePrecision: "month",
+        preferredTarget: "compte-joint",
+        preferredDocumentType: "releve-bancaire",
+        preferredIssuer: "bnp-paribas",
+        detailUsage: "never",
+        confirmedCount: 3,
+        lastConfirmedAt: "2026-06-20T10:00:00.000Z"
+      },
       truncated: false,
       entryLimit: 500,
       warnings: []

@@ -58,6 +58,7 @@ function applyFolderLearningNameList(nameList: FolderLearningNameList): void {
     status: "ready",
     targetFolder: nameList.targetFolder,
     entries: nameList.entries,
+    ...(nameList.preference ? { preference: nameList.preference } : {}),
     profile: analysis.profile,
     comparison: analysis.comparison,
     pipeline: analysis.pipeline,
@@ -77,6 +78,7 @@ function recalculateFolderLearningComparison(): void {
   const nameList: FolderLearningNameList = {
     targetFolder: state.folderLearning.targetFolder,
     entries: state.folderLearning.entries,
+    ...(state.folderLearning.preference ? { preference: state.folderLearning.preference } : {}),
     truncated: false,
     entryLimit: state.folderLearning.entries.length,
     warnings: []
@@ -100,6 +102,7 @@ function buildFolderLearningAnalysis(
   return DocSorterFolderLearningSummary.buildAnalysis({
     entries: nameList.entries,
     targetFolder: nameList.targetFolder,
+    preference: nameList.preference ?? null,
     aiName: aiPreview?.filename ?? "",
     aiFields: aiPreview?.fields ?? null,
     extension: activeDocument.extension,

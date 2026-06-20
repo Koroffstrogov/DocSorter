@@ -209,9 +209,22 @@ interface FolderLearningNameEntry {
 interface FolderLearningNameList {
   targetFolder: string;
   entries: FolderLearningNameEntry[];
+  preference?: FolderLearningPreference;
   truncated: boolean;
   entryLimit: number;
   warnings: string[];
+}
+
+interface FolderLearningPreference {
+  folderRelativePath: string;
+  preferredSchema?: string;
+  preferredDatePrecision?: "day" | "month" | "year";
+  preferredTarget?: string;
+  preferredDocumentType?: string;
+  preferredIssuer?: string;
+  detailUsage?: FolderLearningDetailUsage;
+  confirmedCount: number;
+  lastConfirmedAt: string;
 }
 
 interface FolderLearningProfile {
@@ -226,6 +239,7 @@ interface FolderLearningProfile {
   dominantDocumentType?: string;
   dominantIssuer?: string;
   detailUsage?: FolderLearningDetailUsage;
+  localPreference?: FolderLearningPreference;
   examples: string[];
   reasons: string[];
   warnings: string[];
@@ -272,6 +286,7 @@ interface FolderLearningState {
   status: FolderLearningStatus;
   targetFolder: string;
   entries: FolderLearningNameEntry[];
+  preference?: FolderLearningPreference;
   profile: FolderLearningProfile | null;
   comparison: FolderLearningComparison | null;
   pipeline: FolderLearningPipelineStep[];

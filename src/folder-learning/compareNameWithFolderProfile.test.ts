@@ -62,6 +62,61 @@ describe("compareNameWithFolderProfile", () => {
     });
   });
 
+  it("uses a coherent confirmed preference to strengthen a medium aligned name", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas"
+      },
+      extension: ".pdf",
+      profile: buildMonthlyBankProfile(4),
+      preference: {
+        folderRelativePath: "Banque/Releves",
+        preferredSchema: "DATE_CIBLE_DOCUMENT_EMETTEUR",
+        preferredDatePrecision: "month",
+        preferredTarget: "compte-joint",
+        preferredDocumentType: "releve-bancaire",
+        preferredIssuer: "bnp-paribas",
+        detailUsage: "never",
+        confirmedCount: 3,
+        lastConfirmedAt: "2026-06-20T10:00:00.000Z"
+      }
+    });
+
+    expect(comparison.recommendation).toBe("prefer-folder-profile");
+    expect(comparison.confidence).toBeGreaterThanOrEqual(75);
+    expect(comparison.alignedName).toBe("2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf");
+    expect(comparison.reasons.join(" ")).toContain("Préférence locale confirmée");
+  });
+
+  it("keeps a contradictory confirmed preference for manual review", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas"
+      },
+      extension: ".pdf",
+      profile: buildMonthlyBankProfile(8),
+      preference: {
+        folderRelativePath: "Banque/Releves",
+        preferredSchema: "DATE_CIBLE_DOCUMENT_EMETTEUR",
+        preferredDatePrecision: "year",
+        preferredTarget: "captur",
+        preferredDocumentType: "facture-entretien",
+        confirmedCount: 2,
+        lastConfirmedAt: "2026-06-20T10:00:00.000Z"
+      }
+    });
+
+    expect(comparison.recommendation).toBe("manual-review");
+    expect(comparison.alignedName).toBeUndefined();
+    expect(comparison.warnings.join(" ")).toContain("Préférence locale contradictoire");
+  });
+
   it("prefers the folder profile for a strong compatible bank statement profile", () => {
     const comparison = compareNameWithFolderProfile({
       aiFields: {
