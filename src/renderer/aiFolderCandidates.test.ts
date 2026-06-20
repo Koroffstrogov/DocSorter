@@ -27,7 +27,7 @@ describe("ai folder candidates renderer module", () => {
     expect(asTestElement(nodes[0]).textContent).toBe("Analyse IA en cours. Les dossiers proposés apparaîtront ici.");
   });
 
-  it("renders current folder, three cards, roles, selection, and callback", () => {
+  it("renders three compact cards, roles, selection, badges, and callback", () => {
     installTestDocument();
     const selected: string[] = [];
     const nodes = folderCandidates.createFolderCandidateContent(createAiState({
@@ -47,19 +47,40 @@ describe("ai folder candidates renderer module", () => {
     });
 
     const root = asTestElement(nodes[0]);
-    const cards = root.children[1];
+    const cards = root.children[0];
     expect(root.className).toBe("folder-candidate-content");
-    expect(root.children[0].textContent).toBe("Dossier proposé actuel : Scolarite/Lea");
     expect(cards.children).toHaveLength(3);
     expect(cards.children[0].className).toContain("existing");
     expect(cards.children[1].className).toContain("new");
     expect(cards.children[1].className).toContain("selected");
     expect(cards.children[1].getAttribute("aria-pressed")).toBe("true");
+    expect(cards.children[1].children[0].textContent).toBe("✓");
+    expect(collectText(cards.children[0])).toContain("existe");
+    expect(collectText(cards.children[1])).toContain("à créer");
+    expect(collectText(cards.children[2])).toContain("fallback");
+    expect(collectText(root)).not.toContain("score");
     expect(cards.children[2].className).toContain("fallback");
     expect(collectText(root)).not.toContain("Autre");
 
     cards.children[0].click();
     expect(selected).toEqual(["Scolarite"]);
+  });
+
+  it("does not display a Windows absolute path in compact cards", () => {
+    installTestDocument();
+    const nodes = folderCandidates.createFolderCandidateContent(createAiState({
+      selection: createSelectionState({ selectedFolder: "C:\\Users\\Seb\\Documents\\CNI" }),
+      suggestion: createSuggestion({
+        folderCandidates: [
+          { value: "C:\\Users\\Seb\\Documents\\CNI", score: 90, reason: "absolute", role: "existing", exists: true }
+        ]
+      })
+    }), {
+      onFolderCandidateSelect: () => undefined
+    });
+
+    expect(collectText(asTestElement(nodes[0]))).toContain("CNI");
+    expect(collectText(asTestElement(nodes[0]))).not.toContain("C:\\");
   });
 });
 

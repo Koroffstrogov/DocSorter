@@ -202,8 +202,8 @@
               </div>
             </section>
 
-            <section id="field-refinement-panel" class="detail-section field-refinement-panel" aria-label="Affiner les champs">
-              <div class="section-heading">
+            <section id="field-refinement-panel" class="detail-section field-refinement-panel ds-card" aria-label="Affiner les champs">
+              <div class="section-heading field-refinement-header ds-section-header">
                 <h3>Affiner les champs</h3>
                 <button id="apply-ai-suggestion-empty" type="button" disabled hidden>
                   Appliquer aux champs vides
@@ -212,7 +212,7 @@
               <div id="ai-suggestion-details" class="ai-suggestion-details">
                 Analyse IA requise pour afficher les choix par champ.
               </div>
-              <details class="naming-manual-fields">
+              <details class="naming-manual-fields" hidden>
                 <summary>Champs appliqués au classement réel</summary>
                 <form id="naming-form" class="naming-form">
                   <label>
@@ -236,12 +236,12 @@
               <ul id="naming-messages" class="naming-messages"></ul>
             </section>
 
-            <section id="target-folder-panel" class="detail-section target-folder-panel" aria-label="Dossier cible">
-              <div class="section-heading">
+            <section id="target-folder-panel" class="detail-section target-folder-panel ds-card" aria-label="Dossier cible">
+              <div class="section-heading target-folder-header ds-section-header">
                 <h3>Dossier cible</h3>
-                <strong id="destination-status" class="status-neutral">Contrôle cible non lancé</strong>
+                <strong id="destination-status" class="status-neutral" hidden>Contrôle cible non lancé</strong>
               </div>
-              <div class="target-folder-controls" aria-label="Sous-dossier cible">
+              <div class="target-folder-controls" aria-label="Sous-dossier cible" hidden>
                 <label>
                   Sous-dossier cible
                   <input
@@ -258,7 +258,7 @@
               <div id="ai-folder-candidates" class="folder-candidate-list">
                 Analyse IA requise pour proposer un dossier.
               </div>
-              <dl class="destination-details">
+              <dl class="destination-details" hidden>
                 <div>
                   <dt>Racine cible</dt>
                   <dd id="destination-target">Aucune racine cible sélectionnée</dd>

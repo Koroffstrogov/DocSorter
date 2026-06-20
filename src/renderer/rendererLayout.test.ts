@@ -148,6 +148,9 @@ describe("renderer right panel layout", () => {
       "execute-classification",
       "prepare-classification",
       "target-folder-input",
+      "ai-folder-candidates",
+      "destination-target",
+      "destination-alternative",
       "diagnostic-panel",
       "advanced-panel"
     ]) {
@@ -237,9 +240,14 @@ describe("renderer right panel layout", () => {
     );
 
     expect(html).toContain('id="ai-suggestion-details"');
+    expect(html).toContain('id="field-refinement-panel" class="detail-section field-refinement-panel ds-card"');
+    expect(html).toContain('class="section-heading field-refinement-header ds-section-header"');
     expect(html).toContain('id="ai-folder-candidates"');
     expect(html).toContain('id="target-folder-input"');
+    expect(html).toContain('class="target-folder-controls" aria-label="Sous-dossier cible" hidden');
+    expect(html).toContain('<dl class="destination-details" hidden>');
     expect(html).toContain('id="apply-ai-suggestion-empty"');
+    expect(html).toContain('<details class="naming-manual-fields" hidden>');
     expect(aiPanel).toContain("aiFieldRows.createSuggestionContent");
     expect(aiFieldRows).toContain('createAiFieldRow("Date"');
     expect(aiFieldRows).toContain('createAiFieldRow("Sujet"');
@@ -251,12 +259,20 @@ describe("renderer right panel layout", () => {
     expect(aiFieldRows).toContain('textContent = "✎"');
     expect(aiFieldRows).toContain("aria-label");
     expect(aiFieldRows).toContain("Analyse IA requise pour afficher les choix par champ.");
+    expect(aiFieldRows).toContain("Analyse IA en cours. Les choix par champ apparaîtront ici.");
+    expect(aiFieldRows).toContain('button.textContent = `${candidate.value} ${candidate.score}%`;');
+    expect(aiFieldRows).toContain("emptyValueLabel(key)");
+    expect(aiFieldRows).toContain("badge.hidden = !isManual");
+    expect(aiFieldRows).not.toContain('"[x] "');
     expect(aiPanel).toContain("aiFolderCandidates.createFolderCandidateContent");
     expect(aiFolderCandidates).toContain("Analyse IA requise pour proposer un dossier.");
     expect(aiFolderCandidates).toContain("return [container];");
-    expect(aiFieldRows).toContain("createCandidateButton");
-    expect(aiFieldRows).toContain("fieldCandidates.slice(0, 3)");
     expect(aiFolderCandidates).toContain("folderCandidates = aiFieldRows.getFolderCandidates(suggestion).slice(0, 3)");
+    expect(aiFolderCandidates).toContain('marker.textContent = selected ? "✓" : "";');
+    expect(aiFolderCandidates).toContain("formatRelativeFolderLabel");
+    expect(aiFolderCandidates).not.toContain("Dossier proposé actuel");
+    expect(aiFieldRows).toContain("createCandidateButton");
+    expect(aiFieldRows).toContain(".slice(0, 3)");
     expect(aiFolderCandidates).toContain("onFolderCandidateSelect");
     expect(aiFolderCandidates).toContain("folder-candidate-badge");
     expect(aiFieldRows).toContain("requiresCreation");
@@ -300,12 +316,16 @@ describe("renderer right panel layout", () => {
     const css = await readFile(path.join(process.cwd(), "src", "renderer", "styles.css"), "utf8");
 
     expect(css).toContain(".ai-field-row");
-    expect(css).toContain("grid-template-columns: 68px minmax(0, 1fr) 30px");
+    expect(css).toContain("grid-template-columns: 72px minmax(0, 1fr) 28px");
     expect(css).toContain(".ai-field-edit");
     expect(css).toContain("width: 28px");
+    expect(css).toContain(".naming-manual-fields[hidden]");
     expect(css).toContain(".ai-candidate-chip");
     expect(css).toContain("min-height: 22px !important");
     expect(css).toContain(".folder-candidate-badge");
+    expect(css).toContain(".target-folder-controls[hidden]");
+    expect(css).toContain(".destination-details[hidden]");
+    expect(css).toContain("#destination-status[hidden]");
   });
 
   it("keeps the simple right panel visible without an active document", async () => {

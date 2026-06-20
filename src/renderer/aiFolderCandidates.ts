@@ -22,7 +22,6 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
   function createFolderCandidateContent(state: AiState, options: AiFolderCandidatesOptions): Node[] {
     const suggestion = state.suggestion;
     const container = document.createElement("div");
-    const current = document.createElement("p");
     const cards = document.createElement("div");
 
     if (state.panelStatus === "analyzing") {
@@ -43,8 +42,6 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
     const selectedFolder = state.selection?.selectedFolder ?? suggestion?.suggestion.targetFolder ?? "";
 
     container.className = "folder-candidate-content";
-    current.className = "folder-current";
-    current.textContent = `Dossier proposé actuel : ${selectedFolder.trim() || "Aucun"}`;
     cards.className = "folder-candidate-cards";
     cards.replaceChildren(
       ...folderCandidates.map((candidate) =>
@@ -61,7 +58,7 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
       cards.append(empty);
     }
 
-    container.append(current, cards);
+    container.append(cards);
     return [container];
   }
 
@@ -71,21 +68,34 @@ var DocSorterAiFolderCandidates: AiFolderCandidatesApi;
     onSelect: () => void
   ): HTMLElement {
     const card = document.createElement("button");
+    const marker = document.createElement("span");
     const value = document.createElement("strong");
     const meta = document.createElement("span");
-    const reason = document.createElement("p");
     const selected = aiFormatters.normalizeFolderForDisplay(candidate.value) === aiFormatters.normalizeFolderForDisplay(selectedFolder);
+    const label = formatRelativeFolderLabel(candidate.value);
     card.type = "button";
     card.className = `folder-candidate-card ${aiFormatters.folderRoleClass(candidate)} ${selected ? "selected" : ""}`;
     card.setAttribute("aria-pressed", String(selected));
-    value.textContent = selected ? `✓ ${candidate.value}` : candidate.value;
-    value.title = candidate.value;
+    card.title = candidate.reason;
+    marker.className = "folder-candidate-marker";
+    marker.textContent = selected ? "✓" : "";
+    marker.setAttribute("aria-hidden", "true");
+    value.textContent = label;
+    value.title = label;
     meta.className = "folder-candidate-badge";
-    meta.textContent = `${aiFormatters.folderRoleLabel(candidate)} · score ${candidate.score}`;
-    reason.textContent = candidate.reason;
+    meta.textContent = aiFormatters.folderRoleLabel(candidate);
     card.addEventListener("click", onSelect);
-    card.append(value, meta, reason);
+    card.append(marker, value, meta);
     return card;
+  }
+
+  function formatRelativeFolderLabel(value: string): string {
+    const normalized = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    if (/^[a-z]:\//i.test(normalized)) {
+      const parts = normalized.split("/").filter(Boolean);
+      return parts[parts.length - 1] ?? "Dossier invalide";
+    }
+    return normalized || "Aucun dossier";
   }
 
   globalThis.DocSorterAiFolderCandidates = {

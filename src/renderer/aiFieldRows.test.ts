@@ -43,12 +43,16 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain('createAiFieldRow("Type"');
     expect(source).toContain('createAiFieldRow("Émetteur"');
     expect(source).toContain('createAiFieldRow("Détail"');
-    expect(source).toContain("fieldCandidates.slice(0, 3)");
+    expect(source).toContain(".slice(0, 3)");
     expect(source).toContain('editButton.textContent = "✎"');
     expect(source).toContain('editButton.setAttribute("aria-label"');
-    expect(source).toContain('badge.textContent = isManual ? "manuel" : "IA"');
+    expect(source).toContain('badge.textContent = "manuel"');
+    expect(source).toContain("badge.hidden = !isManual");
+    expect(source).toContain('button.textContent = `${candidate.value} ${candidate.score}%`;');
+    expect(source).toContain("emptyValueLabel(key)");
     expect(source).toContain('key === "issuer" || key === "detail"');
     expect(source).toContain("createEmptyCandidateButton");
+    expect(source).not.toContain('"[x] "');
   });
 });
 

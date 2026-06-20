@@ -99,10 +99,9 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     const row = document.createElement("div");
     const title = document.createElement("div");
     const labelElement = document.createElement("strong");
-    const scoreElement = document.createElement("span");
     const badge = document.createElement("span");
     const selected = document.createElement("p");
-    const candidates = document.createElement("div");
+    const candidateLine = document.createElement("div");
     const editButton = document.createElement("button");
     const manualInput = document.createElement("input");
     const fieldCandidates = getFieldCandidates(suggestion, key);
@@ -113,24 +112,28 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     row.className = `ai-field-row ${isManual ? "manual" : ""}`;
     title.className = "ai-field-title";
     labelElement.textContent = label;
-    scoreElement.textContent = selectedScore === null ? "Score non disponible" : `Score ${selectedScore}`;
-    badge.className = `ai-field-badge ${isManual ? "manual" : "candidate"}`;
-    badge.textContent = isManual ? "manuel" : "IA";
+    badge.className = "ai-field-badge manual";
+    badge.textContent = "manuel";
+    badge.hidden = !isManual;
     selected.textContent = selectedValue?.trim()
       ? `${selectedValue.trim()}${selectedScore === null ? "" : ` ${selectedScore}%`}`
-      : "à compléter";
+      : emptyValueLabel(key);
     selected.title = selectedValue?.trim() || "";
     selected.className = selectedValue?.trim() ? "ai-field-selected" : "ai-field-selected empty";
-    candidates.className = "ai-field-candidates";
-    candidates.replaceChildren(
-      ...fieldCandidates.slice(0, 3).map((candidate) =>
-        createCandidateButton(candidate, selectedValue, () => {
-          options.onFieldCandidateSelect(key, candidate.value);
-        })
-      )
+    candidateLine.className = "ai-field-candidates";
+    candidateLine.replaceChildren(
+      selected,
+      ...fieldCandidates
+        .filter((candidate) => !isSelectedCandidate(candidate.value, selectedValue))
+        .slice(0, 3)
+        .map((candidate) =>
+          createCandidateButton(candidate, selectedValue, () => {
+            options.onFieldCandidateSelect(key, candidate.value);
+          })
+        )
     );
     if ((key === "issuer" || key === "detail") && suggestion) {
-      candidates.append(createEmptyCandidateButton(selectedValue, () => {
+      candidateLine.append(createEmptyCandidateButton(selectedValue, () => {
         options.onFieldCandidateSelect(key, "");
       }));
     }
@@ -144,8 +147,8 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       options.onFieldManualEditStart(key);
     });
 
-    title.append(labelElement, scoreElement, badge);
-    row.append(title, selected, candidates, editButton);
+    title.append(labelElement, badge);
+    row.append(title, candidateLine, editButton);
     if (isEditing) {
       manualInput.type = "text";
       manualInput.className = "ai-field-manual-input";
@@ -155,7 +158,8 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
         row.classList.add("manual");
         badge.className = "ai-field-badge manual";
         badge.textContent = "manuel";
-        selected.textContent = manualInput.value.trim() || "à compléter";
+        badge.hidden = false;
+        selected.textContent = manualInput.value.trim() || emptyValueLabel(key);
         selected.title = manualInput.value.trim();
         selected.className = manualInput.value.trim() ? "ai-field-selected" : "ai-field-selected empty";
         options.onFieldManualValueChange(key, manualInput.value);
@@ -187,7 +191,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     const isSelected = selectedValue?.trim().toLowerCase() === candidate.value.trim().toLowerCase();
     button.type = "button";
     button.className = `ai-candidate-chip ${isSelected ? "selected" : ""}`;
-    button.textContent = `${isSelected ? "[x] " : ""}${candidate.value} (${candidate.score})`;
+    button.textContent = `${candidate.value} ${candidate.score}%`;
     button.title = candidate.reason;
     button.setAttribute("aria-pressed", String(isSelected));
     button.addEventListener("click", onSelect);
@@ -202,7 +206,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     const isSelected = !selectedValue?.trim();
     button.type = "button";
     button.className = `ai-candidate-chip empty ${isSelected ? "selected" : ""}`;
-    button.textContent = `${isSelected ? "[x] " : ""}aucun`;
+    button.textContent = "aucun";
     button.title = "Ne pas utiliser ce champ optionnel dans le nom.";
     button.setAttribute("aria-pressed", String(isSelected));
     button.addEventListener("click", onSelect);
@@ -248,6 +252,17 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       .sort((left, right) =>
         right.score - left.score || left.value.localeCompare(right.value, "fr", { sensitivity: "base" })
       );
+  }
+
+  function isSelectedCandidate(value: string, selectedValue: string | undefined): boolean {
+    return Boolean(
+      selectedValue?.trim() &&
+      value.trim().toLowerCase() === selectedValue.trim().toLowerCase()
+    );
+  }
+
+  function emptyValueLabel(key: AiCandidateFieldKey): string {
+    return key === "issuer" || key === "detail" ? "aucun" : "à compléter";
   }
 
   globalThis.DocSorterAiFieldRows = {
