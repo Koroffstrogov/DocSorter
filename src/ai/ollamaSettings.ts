@@ -38,6 +38,12 @@ export interface AiSettingsError {
   code: AiSettingsErrorCode;
   message: string;
   field?: string;
+  validationErrors?: Array<{
+    field?: string;
+    rawValue?: string;
+    normalizedValue?: string;
+    reason: string;
+  }>;
 }
 
 export type AiSettingsResult<T> = { ok: true; value: T } | { ok: false; error: AiSettingsError };

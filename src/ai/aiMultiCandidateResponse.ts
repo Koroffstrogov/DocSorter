@@ -3,6 +3,7 @@ import { normalizeTargetFolderRelative } from "../naming/targetFolder";
 import {
   AI_CLASSIFICATION_LIMITS,
   type AiClassificationSuggestion,
+  type AiClassificationValidationIssue,
   type AiClassificationValidationError,
   type AiClassificationValidationResult
 } from "./aiClassificationTypes";
@@ -92,6 +93,28 @@ const GENERIC_TARGET_VALUES = new Set([
   "other",
   "autre"
 ]);
+const UNKNOWN_DATE_VALUES = new Set([
+  "date-inconnue",
+  "date-inconnuee",
+  "unknown",
+  "inconnue",
+  "inconnu",
+  "non-renseignee",
+  "non-renseigne",
+  "n-a",
+  "na",
+  "aucune",
+  "aucun"
+]);
+const GENERIC_DETAIL_VALUES = new Set([
+  "consommation",
+  "facture",
+  "document",
+  "paiement",
+  "total",
+  "service",
+  "contrat"
+]);
 const SENSITIVE_NUMBER_PATTERN = /\b(?:[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}(?:\s?\d{2})?|\d{11,})\b/;
 const FULL_DATE_PATTERN = /\b(?:[0-3]?\d[/-][01]?\d[/-](?:19|20)\d{2}|(?:19|20)\d{2}-[01]\d-[0-3]\d)\b/;
 
@@ -154,7 +177,7 @@ export function validateAiMultiCandidateResponse(value: unknown): AiMultiCandida
     ...fileNameCandidates.rejectedCandidates
   ];
   const warnings = [
-    ...normalizeStringList(record.warnings, AI_CLASSIFICATION_LIMITS.warnings),
+    ...normalizeWarnings(record.warnings),
     ...fieldConsistency.warnings,
     ...(rejectedCandidates.length > 0 ? ["Certains candidats IA ont été ignorés. Analyse conservée."] : [])
   ];
@@ -190,7 +213,18 @@ export function adaptMultiCandidateResponseToSuggestion(
     source: "ollama"
   };
 
-  return validateAiClassificationSuggestion(rawSuggestion);
+  const validation = validateAiClassificationSuggestion(rawSuggestion);
+  if (validation.status === "valid") {
+    return validation;
+  }
+
+  return {
+    status: "invalid",
+    error: {
+      ...validation.error,
+      validationErrors: createGlobalValidationErrors(validation.error, response)
+    }
+  };
 }
 
 function readFields(
@@ -406,6 +440,14 @@ function normalizeSelectedFields(
   const selectedTarget = normalizeNameBlock(fields.target.selected);
   const selectedDocumentType = normalizeNameBlock(fields.documentType.selected);
 
+  if (selectedDocumentType === "releve-bancaire") {
+    preferJointAccountTarget(fields);
+  }
+
+  if (!fields.dateToken.selected) {
+    warnings.push("Date IA absente ou invalide : aucun nom final ne sera généré sans date fiable.");
+  }
+
   if (selectedTarget && GENERIC_TARGET_VALUES.has(selectedTarget)) {
     rejectSelectedField(
       fields,
@@ -426,7 +468,102 @@ function normalizeSelectedFields(
     );
   }
 
+  rejectGenericDetailCandidates(fields, rejectedCandidates, warnings);
+
   return { rejectedCandidates, warnings };
+}
+
+function preferJointAccountTarget(fields: Record<AiCandidateFieldKey, AiFieldCandidates>): void {
+  const target = normalizeNameBlock(fields.target.selected);
+  const subject = normalizeNameBlock(fields.subject.selected);
+  const candidates = [
+    ...fields.target.candidates,
+    ...fields.subject.candidates
+  ];
+  const jointAccount = candidates.find((candidate) => normalizeNameBlock(candidate.value) === "compte-joint");
+  if (!jointAccount || target === "compte-joint" || subject !== "compte-joint") {
+    return;
+  }
+
+  const existingIndex = fields.target.candidates.findIndex(
+    (candidate) => normalizeNameBlock(candidate.value) === "compte-joint"
+  );
+  if (existingIndex >= 0) {
+    fields.target.candidates[existingIndex] = {
+      ...fields.target.candidates[existingIndex],
+      score: Math.max(fields.target.candidates[existingIndex].score, jointAccount.score)
+    };
+  } else {
+    fields.target.candidates.unshift({
+      value: "compte-joint",
+      score: Math.max(jointAccount.score, 90),
+      reason: "Compte joint explicite détecté.",
+      role: "selected"
+    });
+  }
+  fields.target.selected = "compte-joint";
+  fields.target.candidates = fields.target.candidates.slice(0, MAX_CANDIDATES);
+}
+
+function rejectGenericDetailCandidates(
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>,
+  rejectedCandidates: AiRejectedCandidate[],
+  warnings: string[]
+): void {
+  const before = fields.detail.candidates;
+  fields.detail.candidates = before.filter((candidate, index) => {
+    const normalized = normalizeNameBlock(candidate.value);
+    if (!normalized || !isGenericDetail(normalized, fields)) {
+      return true;
+    }
+
+    rejectedCandidates.push(createRejectedCandidate(
+      "fields.detail.candidates",
+      index,
+      candidate.value,
+      normalized,
+      "Détail IA ignoré : valeur générique ou déjà portée par le type documentaire."
+    ));
+    return false;
+  });
+
+  const selectedDetail = normalizeNameBlock(fields.detail.selected);
+  if (selectedDetail && isGenericDetail(selectedDetail, fields)) {
+    rejectedCandidates.push(createRejectedCandidate(
+      "fields.detail.selected",
+      -1,
+      fields.detail.selected ?? "",
+      selectedDetail,
+      "Détail IA ignoré : valeur générique ou déjà portée par le type documentaire."
+    ));
+    fields.detail.selected = selectBestCandidate(fields.detail.candidates)?.value;
+  } else if (selectedDetail && !fields.detail.candidates.some((candidate) => candidate.value === selectedDetail)) {
+    fields.detail.selected = selectBestCandidate(fields.detail.candidates)?.value;
+  }
+
+  if (before.length === fields.detail.candidates.length) {
+    return;
+  }
+
+  warnings.push("Détail IA ignoré : valeur générique ou déjà portée par le type documentaire.");
+}
+
+function isGenericDetail(
+  detail: string,
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>
+): boolean {
+  if (GENERIC_DETAIL_VALUES.has(detail)) {
+    return true;
+  }
+
+  const documentType = normalizeNameBlock(fields.documentType.selected);
+  if (!documentType) {
+    return false;
+  }
+
+  const detailTokens = detail.split("-").filter(Boolean);
+  const documentTypeTokens = new Set(documentType.split("-").filter(Boolean));
+  return detailTokens.length > 0 && detailTokens.every((token) => documentTypeTokens.has(token));
 }
 
 function readSelectedCandidate(
@@ -587,12 +724,9 @@ function normalizeCandidateValue(
 }
 
 function normalizeCandidateDateToken(value: string): string {
-  if (/^(19|20)\d{2}$/.test(value)) {
-    return value;
-  }
-
-  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(value)) {
-    return value;
+  const normalized = normalizeNameBlock(value);
+  if (!normalized || UNKNOWN_DATE_VALUES.has(normalized) || /^a+$/.test(normalized)) {
+    return "";
   }
 
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(value)) {
@@ -600,6 +734,31 @@ function normalizeCandidateDateToken(value: string): string {
   }
 
   return "";
+}
+
+function createGlobalValidationErrors(
+  error: AiClassificationValidationError,
+  response: AiMultiCandidateResponse
+): AiClassificationValidationIssue[] {
+  const issues: AiClassificationValidationIssue[] = [
+    {
+      ...(error.field ? { field: error.field } : {}),
+      ...(error.rawValue ? { rawValue: error.rawValue } : {}),
+      ...(error.normalizedValue ? { normalizedValue: error.normalizedValue } : {}),
+      reason: error.message
+    }
+  ];
+
+  for (const candidate of response.rejectedCandidates) {
+    issues.push({
+      field: candidate.field,
+      ...(candidate.rawValue ? { rawValue: candidate.rawValue } : {}),
+      ...(candidate.normalizedValue ? { normalizedValue: candidate.normalizedValue } : {}),
+      reason: candidate.reason
+    });
+  }
+
+  return issues;
 }
 
 function createRejectedCandidate(
@@ -704,6 +863,21 @@ function normalizeStringList(value: unknown, maxItems: number): string[] {
     .map((item) => limitString(item.trim(), AI_CLASSIFICATION_LIMITS.listItemChars))
     .filter(Boolean)
     .slice(0, maxItems);
+}
+
+function normalizeWarnings(value: unknown): string[] {
+  return normalizeStringList(value, AI_CLASSIFICATION_LIMITS.warnings)
+    .filter((warning) => !isNeutralWarning(warning));
+}
+
+function isNeutralWarning(value: string): boolean {
+  const normalized = normalizeNameBlock(value);
+  return (
+    normalized === "pas-de-probleme-majeur-detecte" ||
+    normalized === "aucun-probleme-majeur-detecte" ||
+    normalized === "aucun-avertissement" ||
+    normalized === "pas-d-avertissement"
+  );
 }
 
 function uniqueStrings(values: string[]): string[] {

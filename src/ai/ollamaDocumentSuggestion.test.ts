@@ -234,12 +234,13 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026-05",
       target: "captur",
       documentType: "facture-entretien",
-      proposedName: "2026-05_captur_facture-entretien.pdf",
       source: "ollama"
     });
+    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA absente ou invalide");
   });
 
   it("builds a clean monthly bank statement name and removes period detail", async () => {
@@ -269,18 +270,18 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026-05",
       target: "foyer",
       documentType: "releve-bancaire",
-      issuer: "bnp-paribas",
-      proposedName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
+      issuer: "bnp-paribas"
     });
+    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
     expect(result.ok && result.value.suggestion.subject).toBeUndefined();
-    expect(result.ok && result.value.suggestion.detail).toBeUndefined();
-    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("période déjà représentée");
+    expect(result.ok && result.value.suggestion.detail).toBe("mai-2026");
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA absente ou invalide");
   });
 
-  it("downgrades a monthly bank statement first-day date to the covered month", async () => {
+  it("keeps a monthly bank statement first-day date as a complete date", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -306,17 +307,16 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026-05",
+      dateToken: "2026-05-01",
       target: "foyer",
       documentType: "releve-bancaire",
       issuer: "bnp-paribas",
-      proposedName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
+      proposedName: "2026-05-01_foyer_releve-bancaire_bnp-paribas.pdf"
     });
     expect(result.ok && result.value.suggestion.detail).toBeUndefined();
-    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA ramenée au mois");
   });
 
-  it("downgrades monthly energy invoice first-day dates to the covered month", async () => {
+  it("keeps monthly energy invoice first-day dates as complete dates", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -342,11 +342,11 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026-02",
+      dateToken: "2026-02-01",
       target: "maison-principale",
       documentType: "facture-energie",
       issuer: "edf",
-      proposedName: "2026-02_maison-principale_facture-energie_edf.pdf"
+      proposedName: "2026-02-01_maison-principale_facture-energie_edf.pdf"
     });
     expect(result.ok && result.value.suggestion.detail).toBeUndefined();
   });
@@ -372,12 +372,12 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026",
       subject: "paul",
       documentType: "carnet-vaccination",
-      proposedName: "2026_paul_carnet-vaccination.pdf",
       source: "ollama"
     });
+    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
   });
 
   it("cleans test artifacts, repeated terms and infers a known target folder", async () => {
@@ -498,11 +498,11 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2025",
       target: "foyer",
-      documentType: "avis-imposition",
-      proposedName: "2025_foyer_avis-imposition.pdf"
+      documentType: "avis-imposition"
     });
+    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
     expect(result.ok && result.value.suggestion.subject).toBeUndefined();
   });
 
@@ -552,9 +552,9 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion.target).toBeUndefined();
     expect(result.ok && result.value.message).toBe("Certains candidats IA ont été ignorés. Analyse conservée.");
-    expect(result.ok && result.value.responseJson.rejectedCandidates[0].reason).toContain(
-      "target ne doit pas être égal"
-    );
+    expect(result.ok && result.value.responseJson.rejectedCandidates.some((candidate) =>
+      candidate.reason.includes("target ne doit pas être égal")
+    )).toBe(true);
   });
 
   it("normalizes multi-candidate values before checking selected membership", async () => {
@@ -624,11 +624,11 @@ describe("runOllamaSuggestionForDocument", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
-      dateToken: "2026",
       target: "lea",
-      documentType: "certificat-scolarite",
-      proposedName: "2026_lea_certificat-scolarite.pdf"
+      documentType: "certificat-scolarite"
     });
+    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
     expect(result.ok && result.value.suggestion.subject).toBeUndefined();
     expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
   });
@@ -751,9 +751,34 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.responseJson.fields.subject.selected).toBe("compte-joint");
     expect(result.ok && result.value.responseJson.fields.issuer.selected).toBe("bnp-paribas");
-    expect(result.ok && result.value.suggestion.proposedName).toBe(
-      "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
-    );
+    expect(result.ok && result.value.suggestion.target).toBe("compte-joint");
+    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
+  });
+
+  it("prefers compte-joint from text for bank statements even when the model selects foyer", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Relevé bancaire BNP Paribas du Compte joint pour mai 2026."
+      }),
+      fetchClient: createSuccessfulFetch({
+        response: createAiResponse({
+          dateToken: "2026-05",
+          target: "foyer",
+          targetKind: "household",
+          documentType: "releve-bancaire",
+          issuer: "BNP Paribas",
+          confidence: 88
+        })
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.responseJson.fields.target.selected).toBe("compte-joint");
+    expect(result.ok && result.value.suggestion.target).toBe("compte-joint");
+    expect(result.ok && result.value.responseJson.fields.documentType.selected).toBe("releve-bancaire");
   });
 
   it("accepts an identity folder candidate requiring creation when no known folder exists", async () => {
@@ -808,8 +833,8 @@ describe("runOllamaSuggestionForDocument", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.ok && result.value.suggestion.dateToken).toBe("2023");
-    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA à préciser");
+    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA absente ou invalide");
   });
 
   it("refuses invalid JSON without crashing", async () => {

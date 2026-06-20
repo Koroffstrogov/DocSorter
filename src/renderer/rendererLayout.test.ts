@@ -102,6 +102,10 @@ describe("renderer right panel layout", () => {
     expect(sortProposalPanel).toContain('class="sort-proposal-card ds-card"');
     expect(sortProposalPanel).toContain('id="proposed-filename"');
     expect(sortProposalPanel).toContain("Nom final non généré");
+    expect(sortProposalPanel).toContain('id="name-explanation"');
+    expect(sortProposalPanel).toContain("Pourquoi ce nom ?");
+    expect(sortProposalPanel).toContain('id="name-explanation-content"');
+    expect(sortProposalPanel).not.toMatch(/<details id="name-explanation"[^>]*\sopen[\s>]/);
     expect(sortProposalPanel).toContain('id="destination-final-path"');
     expect(sortProposalPanel).toContain("Aucun dossier final");
     expect(sortProposalPanel).toContain("Réinitialiser les choix");
@@ -142,6 +146,8 @@ describe("renderer right panel layout", () => {
       "preload-ai-model",
       "run-ai-suggestion",
       "proposed-filename",
+      "name-explanation",
+      "name-explanation-content",
       "proposal-state",
       "destination-final-path",
       "destination-folder-badge",
@@ -217,8 +223,12 @@ describe("renderer right panel layout", () => {
     expect(css).toContain(".diagnostic-panel,");
     expect(css).toContain(".advanced-panel");
     expect(css).toContain("minmax(var(--right-panel-min-width), var(--right-panel-width))");
-    expect(css).toContain("--right-panel-width: 500px");
+    expect(css).toContain("--right-panel-width: 560px");
+    expect(css).toContain("@media (max-width: 1320px)");
+    expect(css).toContain("@media (max-width: 1180px)");
     expect(css).toContain(".proposal-final-name");
+    expect(css).toContain(".name-explanation");
+    expect(css).toContain(".name-explanation-list");
     expect(css).toContain(".folder-status-badge");
     expect(css).toContain("border: 1px solid var(--border-subtle)");
     expect(css).toContain("background: var(--surface-card)");
@@ -228,6 +238,7 @@ describe("renderer right panel layout", () => {
   it("loads ai panel field helpers before the ai panel script", async () => {
     const html = await readRendererHtml();
 
+    expect(indexOf(html, "nameExplanation.js")).toBeLessThan(indexOf(html, "namingPanel.js"));
     expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiPanel.js"));
     expect(indexOf(html, "aiPanelFormatters.js")).toBeLessThan(indexOf(html, "aiStatusContent.js"));
     expect(indexOf(html, "aiStatusContent.js")).toBeLessThan(indexOf(html, "aiFieldRows.js"));
@@ -329,7 +340,7 @@ describe("renderer right panel layout", () => {
     const css = await readFile(path.join(process.cwd(), "src", "renderer", "styles.css"), "utf8");
 
     expect(css).toContain(".ai-field-row");
-    expect(css).toContain("grid-template-columns: 72px minmax(0, 1fr) 28px");
+    expect(css).toContain("grid-template-columns: 78px minmax(0, 1fr) 28px");
     expect(css).toContain(".ai-field-edit");
     expect(css).toContain("width: 28px");
     expect(css).toContain(".naming-manual-fields[hidden]");
@@ -351,6 +362,7 @@ describe("renderer right panel layout", () => {
     expect(namingPanel).toContain("elements.panel.hidden = false");
     expect(namingPanel).toContain("Nom final non généré");
     expect(namingPanel).toContain("Sélectionnez un document à trier.");
+    expect(namingPanel).toContain("DocSorterNameExplanation.buildNameExplanation");
     expect(namingPanel).toContain("syncResetButton");
     expect(namingPanel).toContain("Réinitialiser les choix");
   });

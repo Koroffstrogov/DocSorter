@@ -73,6 +73,50 @@ describe("AI diagnostics", () => {
     });
   });
 
+  it("keeps global validation errors with raw values in complete diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "T07-carte-identite-paul.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: false,
+        error: {
+          code: "AI_OUTPUT_INVALID",
+          message: "Dossier cible IA invalide ou dangereux.",
+          field: "targetFolder",
+          validationErrors: [
+            {
+              field: "targetFolder",
+              rawValue: "C:\\secret\\Identite",
+              normalizedValue: "c-secret-identite",
+              reason: "Dossier cible IA invalide ou dangereux."
+            }
+          ]
+        }
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.validationErrors[0]).toMatchObject({
+      field: "targetFolder",
+      rawValue: "C:\\secret\\Identite",
+      normalizedValue: "c-secret-identite",
+      reason: "Dossier cible IA invalide ou dangereux."
+    });
+    expect(log.ia.error.validationErrors[0]).toMatchObject({
+      rawValue: "C:\\secret\\Identite"
+    });
+  });
+
   it("removes rejected candidate raw values from redacted diagnostics", async () => {
     const writes: Array<{ filePath: string; content: string }> = [];
 
@@ -99,6 +143,49 @@ describe("AI diagnostics", () => {
       field: "fields.issuer.candidates",
       index: 0,
       reason: "Candidat IA invalide : les chemins locaux sont refusés."
+    });
+  });
+
+  it("removes global validation raw values from redacted diagnostics", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "carte-identite-paul.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: false,
+        error: {
+          code: "AI_OUTPUT_INVALID",
+          message: "Dossier cible IA invalide ou dangereux.",
+          field: "targetFolder",
+          validationErrors: [
+            {
+              field: "targetFolder",
+              rawValue: "C:\\secret\\Identite",
+              normalizedValue: "c-secret-identite",
+              reason: "Dossier cible IA invalide ou dangereux."
+            }
+          ]
+        }
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.validationErrors[0]).toEqual({
+      field: "targetFolder",
+      reason: "Dossier cible IA invalide ou dangereux."
+    });
+    expect(log.ia.error.validationErrors[0]).toEqual({
+      field: "targetFolder",
+      reason: "Dossier cible IA invalide ou dangereux."
     });
   });
 });

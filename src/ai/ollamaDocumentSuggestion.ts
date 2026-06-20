@@ -199,6 +199,8 @@ export async function runOllamaSuggestionForDocument(
     return aiOutputValidationFailure(multiCandidateValidation.error);
   }
 
+  applyTextContextCandidateHints(multiCandidateValidation.response, prompt.input);
+
   const adapted = adaptMultiCandidateResponseToSuggestion(multiCandidateValidation.response);
   if (adapted.status !== "valid") {
     return aiOutputValidationFailure(adapted.error);
@@ -246,7 +248,6 @@ function sanitizeAiSuggestion(
   };
   const documentType = next.documentType?.trim() ?? "";
   sanitizeNameBlocks(next);
-  normalizeMonthlyPeriodDateToken(next);
   sanitizeDatePeriodDetail(next);
 
   if (
@@ -282,6 +283,42 @@ function sanitizeAiSuggestion(
   return next;
 }
 
+function applyTextContextCandidateHints(
+  response: AiMultiCandidateResponse,
+  input: BoundedAiClassificationInput
+): void {
+  const documentType = normalizeNameBlock(response.fields.documentType.selected);
+  if (documentType !== "releve-bancaire" || !textContainsJointAccount(input)) {
+    return;
+  }
+
+  const existing = response.fields.target.candidates.find(
+    (candidate) => normalizeNameBlock(candidate.value) === "compte-joint"
+  );
+  if (existing) {
+    existing.score = Math.max(existing.score, 95);
+    existing.role = existing.role || "selected";
+  } else {
+    response.fields.target.candidates.unshift({
+      value: "compte-joint",
+      score: 95,
+      reason: "Mention explicite Compte joint détectée dans le texte.",
+      role: "selected"
+    });
+    response.fields.target.candidates = response.fields.target.candidates.slice(0, 3);
+  }
+  response.fields.target.selected = "compte-joint";
+}
+
+function textContainsJointAccount(input: BoundedAiClassificationInput): boolean {
+  const signal = normalizeNameBlock([
+    input.filename,
+    input.extractedTextExcerpt,
+    input.ocrTextExcerpt
+  ].filter(Boolean).join(" "));
+  return signal.includes("compte-joint");
+}
+
 function addDatePrecisionWarning(suggestion: AiClassificationSuggestion): void {
   if (!suggestion.dateToken || FULL_DATE_TOKEN_PATTERN.test(suggestion.dateToken)) {
     return;
@@ -303,21 +340,6 @@ function expectsPreciseDate(documentType: string): boolean {
     documentType.includes("passeport") ||
     documentType.includes("identite")
   );
-}
-
-function normalizeMonthlyPeriodDateToken(suggestion: AiClassificationSuggestion): void {
-  const match = suggestion.dateToken?.match(FULL_DATE_TOKEN_PATTERN);
-  if (!match || match[3] !== "01") {
-    return;
-  }
-
-  const documentType = normalizeNameBlock(suggestion.documentType);
-  if (!expectsMonthlyPeriodDate(documentType)) {
-    return;
-  }
-
-  suggestion.dateToken = `${match[1]}-${match[2]}`;
-  suggestion.warnings.push("Date IA ramenée au mois : période mensuelle détectée.");
 }
 
 function expectsMonthlyPeriodDate(documentType: string): boolean {
@@ -773,7 +795,8 @@ function aiOutputValidationFailure<T = never>(
     error: {
       code: "AI_OUTPUT_INVALID",
       message: error.message,
-      ...(error.field ? { field: error.field } : {})
+      ...(error.field ? { field: error.field } : {}),
+      ...(error.validationErrors?.length ? { validationErrors: error.validationErrors } : {})
     }
   };
 }

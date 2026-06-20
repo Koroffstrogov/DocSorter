@@ -1325,6 +1325,8 @@ function getAiNamingPreview(): {
   filenameValid: boolean;
   destinationFolder: string;
   messages: AiSelectionPreviewMessage[];
+  fields: AiSelectionFields;
+  manualFields: AiSelectionManualFields;
 } | null {
   const activeDocument = getActiveDocument();
   if (
@@ -1351,7 +1353,9 @@ function getAiNamingPreview(): {
     filename: state.ai.selection.previewFilename,
     filenameValid: state.ai.selection.previewFilenameValid,
     destinationFolder: state.ai.selection.previewDestinationFolder,
-    messages: state.ai.selection.previewMessages
+    messages: state.ai.selection.previewMessages,
+    fields: state.ai.selection.fields,
+    manualFields: state.ai.selection.manualFields
   };
 }
 

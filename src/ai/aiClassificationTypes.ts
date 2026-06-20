@@ -51,6 +51,16 @@ export interface AiClassificationValidationError {
   code: AiClassificationValidationErrorCode;
   message: string;
   field?: string;
+  rawValue?: string;
+  normalizedValue?: string;
+  validationErrors?: AiClassificationValidationIssue[];
+}
+
+export interface AiClassificationValidationIssue {
+  field?: string;
+  rawValue?: string;
+  normalizedValue?: string;
+  reason: string;
 }
 
 export type AiClassificationValidationResult =

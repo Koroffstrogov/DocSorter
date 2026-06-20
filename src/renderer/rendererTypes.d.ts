@@ -602,6 +602,12 @@ interface RendererAiError {
     | "UNKNOWN_ERROR";
   message: string;
   field?: string;
+  validationErrors?: Array<{
+    field?: string;
+    rawValue?: string;
+    normalizedValue?: string;
+    reason: string;
+  }>;
 }
 
 interface RendererAiSettings {

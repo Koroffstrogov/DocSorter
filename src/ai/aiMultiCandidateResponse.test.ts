@@ -30,7 +30,7 @@ describe("validateAiMultiCandidateResponse", () => {
     expect(adapted).toMatchObject({
       status: "valid",
       suggestion: {
-        dateToken: "2025",
+        dateToken: "2025-01-01",
         subject: "foyer",
         target: "foyer",
         documentType: "avis-imposition",
@@ -125,6 +125,66 @@ describe("validateAiMultiCandidateResponse", () => {
     });
   });
 
+  it("drops partial and placeholder dates without invalidating the response", () => {
+    const response = createResponse();
+    response.fields.dateToken = {
+      selected: "2025",
+      candidates: [
+        { value: "2025", score: 90, reason: "année seule" },
+        { value: "2025-06", score: 80, reason: "mois seul" },
+        { value: "date-inconnue", score: 70, reason: "placeholder" }
+      ]
+    };
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.dateToken.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.fields.dateToken.candidates).toEqual([]);
+    expect(result.status === "valid" && result.response.rejectedCandidates.map((candidate) => candidate.rawValue)).toEqual([
+      "2025",
+      "2025-06",
+      "date-inconnue",
+      "2025"
+    ]);
+  });
+
+  it("removes neutral positive warnings", () => {
+    const result = validateAiMultiCandidateResponse({
+      ...createResponse(),
+      warnings: ["Pas de problème majeur détecté", "Date incertaine"]
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.warnings).toContain("Date incertaine");
+    expect(result.status === "valid" && result.response.warnings).not.toContain("Pas de problème majeur détecté");
+  });
+
+  it("drops generic detail values without invalidating the response", () => {
+    const response = createResponse();
+    response.fields.detail = field("consommation");
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.detail.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.fields.detail.candidates).toEqual([]);
+    expect(result.status === "valid" && result.response.rejectedCandidates[0].reason).toContain("Détail IA ignoré");
+  });
+
+  it("prefers compte-joint target for bank statements when explicitly detected", () => {
+    const response = createResponse();
+    response.fields.subject = field("Compte joint");
+    response.fields.target = field("foyer");
+    response.fields.documentType = field("releve-bancaire");
+
+    const result = validateAiMultiCandidateResponse(response);
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBe("compte-joint");
+    expect(result.status === "valid" && result.response.fields.documentType.selected).toBe("releve-bancaire");
+  });
+
   it("normalizes accented issuer and spaced subject candidates", () => {
     const response = createResponse();
     response.fields.issuer = field("État");
@@ -201,7 +261,7 @@ describe("validateAiMultiCandidateResponse", () => {
 function createResponse() {
   return {
     fields: {
-      dateToken: field("2025"),
+      dateToken: field("2025-01-01"),
       subject: field("foyer"),
       target: field("foyer"),
       targetKind: field("household"),
@@ -214,7 +274,7 @@ function createResponse() {
       { value: "Divers/A-traiter-manuellement", score: 20, reason: "Fallback.", role: "fallback", exists: false }
     ],
     fileNameCandidates: [
-      { value: "2025_foyer_avis-imposition.pdf", score: 88, reason: "Convention respectée.", role: "selected" }
+      { value: "2025-01-01_foyer_avis-imposition.pdf", score: 88, reason: "Convention respectée.", role: "selected" }
     ],
     warnings: [],
     confidence: 84,

@@ -32,10 +32,10 @@
   --candidate-pill-bg: #f7fafc;
   --candidate-pill-selected-bg: #e9f7ef;
   --section-header-height: 36px;
-  --right-panel-width: 500px;
-  --right-panel-min-width: 460px;
-  --right-panel-section-gap: 7px;
-  --right-panel-card-padding: 8px;
+  --right-panel-width: 560px;
+  --right-panel-min-width: 500px;
+  --right-panel-section-gap: 6px;
+  --right-panel-card-padding: 9px;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -380,9 +380,9 @@ h2 {
 .workspace {
   display: grid;
   grid-template-columns: 320px minmax(420px, 1fr) minmax(var(--right-panel-min-width), var(--right-panel-width));
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
-  padding: 14px;
+  padding: 12px;
   overflow: hidden;
 }
 
@@ -916,10 +916,12 @@ details.detail-section[open] > summary {
 .advanced-panel {
   display: grid;
   gap: var(--right-panel-section-gap);
+  min-width: 0;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--right-panel-card-padding);
   background: var(--surface-card);
+  box-shadow: 0 1px 2px rgba(34, 45, 56, 0.04);
 }
 
 .simple-mode-toolbar {
@@ -1066,7 +1068,132 @@ details.detail-section[open] > summary {
   font-size: 15px;
   font-weight: 820;
   line-height: 1.25;
+  word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.name-explanation {
+  margin-top: 6px;
+}
+
+.name-explanation > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.name-explanation > summary:hover,
+.name-explanation > summary:focus-visible {
+  color: var(--accent-strong);
+}
+
+.name-explanation[open] > summary {
+  margin-bottom: 6px;
+}
+
+.name-explanation-content {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px;
+  background: #fbfcfe;
+}
+
+.name-explanation-formula,
+.name-explanation-result,
+.name-explanation-missing {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.name-explanation-formula {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--text-muted);
+}
+
+.name-explanation-formula code {
+  color: var(--text-main);
+  font-family: inherit;
+  font-weight: 780;
+}
+
+.name-explanation-result.valid {
+  color: var(--success);
+}
+
+.name-explanation-result.incomplete,
+.name-explanation-missing {
+  color: var(--warning);
+}
+
+.name-explanation-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.name-explanation-line {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+  min-width: 0;
+}
+
+.name-explanation-line dt {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.name-explanation-line dd {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.name-explanation-line strong {
+  min-width: 0;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.name-explanation-line span {
+  color: var(--text-muted);
+}
+
+.name-explanation-line small {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0 6px;
+  color: var(--text-muted);
+  background: var(--surface-card);
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.name-explanation-line.used small {
+  border-color: #badbcc;
+  color: var(--success);
+  background: var(--badge-success-bg);
+}
+
+.name-explanation-line.missing small,
+.name-explanation-line.ignored small {
+  border-color: #ead7a2;
+  color: #765d13;
+  background: var(--badge-warning-bg);
 }
 
 .proposal-summary strong.valid {
@@ -1082,6 +1209,7 @@ details.detail-section[open] > summary {
   min-width: 0;
   color: var(--text-main);
   font-weight: 760;
+  word-break: break-word;
   overflow-wrap: anywhere;
 }
 
@@ -1205,6 +1333,7 @@ details.detail-section[open] > summary {
   padding: 2px 7px;
   font-size: 11px;
   font-weight: 760;
+  line-height: 1.2;
 }
 
 .quality-badge.ok {
@@ -1460,12 +1589,12 @@ details.detail-section[open] > summary {
 
 .ai-field-row {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 28px;
+  grid-template-columns: 78px minmax(0, 1fr) 28px;
   gap: 5px;
   align-items: center;
   border: 1px solid #e3ebf3;
   border-radius: var(--radius-sm);
-  padding: 4px 6px;
+  padding: 4px 7px;
   background: var(--surface-card);
 }
 
@@ -1565,6 +1694,7 @@ details.detail-section[open] > summary {
   background: var(--candidate-pill-bg);
   font-size: 11px;
   font-weight: 720;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1648,7 +1778,7 @@ details.detail-section[open] > summary {
   gap: 6px;
   align-items: center;
   width: 100%;
-  min-height: 34px;
+  min-height: 36px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 6px 8px;
@@ -1690,11 +1820,12 @@ details.detail-section[open] > summary {
 
 .folder-candidate-card strong {
   grid-column: 2;
-  overflow: hidden;
+  min-width: 0;
   color: var(--text-main);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .folder-candidate-badge {
@@ -1707,6 +1838,7 @@ details.detail-section[open] > summary {
   border-radius: 999px;
   padding: 1px 7px;
   background: var(--candidate-pill-bg);
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -1800,12 +1932,40 @@ details.detail-section[open] > summary {
   margin: 0;
   border: 1px dashed #cbd5d0;
   border-radius: var(--radius-md);
-  padding: 8px;
+  padding: 7px 8px;
   color: var(--text-muted);
   background: #fbfcfb;
   font-size: 12px;
   font-weight: 680;
   line-height: 1.35;
+}
+
+@media (max-width: 1320px) {
+  :root {
+    --right-panel-width: 520px;
+    --right-panel-min-width: 460px;
+  }
+
+  .workspace {
+    grid-template-columns: 300px minmax(380px, 1fr) minmax(var(--right-panel-min-width), var(--right-panel-width));
+  }
+}
+
+@media (max-width: 1180px) {
+  :root {
+    --right-panel-width: 460px;
+    --right-panel-min-width: 420px;
+  }
+
+  .workspace {
+    grid-template-columns: 280px minmax(340px, 1fr) minmax(var(--right-panel-min-width), var(--right-panel-width));
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .ai-field-row {
+    grid-template-columns: 70px minmax(0, 1fr) 28px;
+  }
 }
 
 .ocr-panel,

@@ -10,6 +10,8 @@ interface NamingPanelState {
     filenameValid: boolean;
     destinationFolder: string;
     messages: AiSelectionPreviewMessage[];
+    fields: AiSelectionFields;
+    manualFields: AiSelectionManualFields;
   } | null;
   canResetChoices: boolean;
 }
@@ -37,6 +39,8 @@ interface NamingPanelElements {
   keywordsInput: HTMLInputElement | null;
   resetButton: HTMLButtonElement | null;
   proposedFilename: HTMLElement | null;
+  nameExplanation: HTMLDetailsElement | null;
+  nameExplanationContent: HTMLElement | null;
   proposalState: HTMLElement | null;
   messages: HTMLUListElement | null;
   destinationStatus: HTMLElement | null;
@@ -109,6 +113,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
         }
 
         setProposalState(elements, "Aucun document sélectionné.");
+        renderNameExplanation(elements, createNameExplanationInput(options.getState()));
 
         if (elements.messages) {
           elements.messages.replaceChildren(
@@ -142,6 +147,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       setProposalState(elements, proposalStateLabel(naming, aiPreview));
+      renderNameExplanation(elements, createNameExplanationInput(options.getState()));
 
       if (elements.messages) {
         if (aiPreview) {
@@ -170,6 +176,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       }
 
       const { activeDocument, targetPath, targetFolder, naming, destination, aiPreview } = options.getState();
+      renderNameExplanation(elements, createNameExplanationInput(options.getState()));
       const finalFolder = aiPreview
         ? formatRelativeDestinationFolder(aiPreview.destinationFolder)
         : naming.proposal?.isValid
@@ -304,6 +311,8 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       keywordsInput: root.querySelector<HTMLInputElement>("#naming-keywords"),
       resetButton: root.querySelector<HTMLButtonElement>("#reset-naming"),
       proposedFilename: root.querySelector<HTMLElement>("#proposed-filename"),
+      nameExplanation: root.querySelector<HTMLDetailsElement>("#name-explanation"),
+      nameExplanationContent: root.querySelector<HTMLElement>("#name-explanation-content"),
       proposalState: root.querySelector<HTMLElement>("#proposal-state"),
       messages: root.querySelector<HTMLUListElement>("#naming-messages"),
       destinationStatus: root.querySelector<HTMLElement>("#destination-status"),
@@ -517,6 +526,75 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       elements.proposalState.replaceChildren(message);
       elements.proposalState.title = message;
     }
+  }
+
+  function createNameExplanationInput(state: NamingPanelState): NameExplanationInput {
+    const aiPreview = state.aiPreview;
+    return {
+      filename: aiPreview?.filename ?? (state.naming.proposal?.isValid ? state.effectiveFilename : ""),
+      filenameValid: aiPreview?.filenameValid ?? Boolean(state.naming.proposal?.isValid),
+      extension: state.activeDocument?.extension ?? "",
+      fields: aiPreview?.fields ?? null,
+      manualFields: aiPreview?.manualFields ?? null,
+      destinationFolder: aiPreview?.destinationFolder ?? state.targetFolder.selectedFolder,
+      folderOrigin: state.targetFolder.origin,
+      messages: aiPreview?.messages ?? []
+    };
+  }
+
+  function renderNameExplanation(
+    elements: NamingPanelElements,
+    input: NameExplanationInput
+  ): void {
+    if (!elements.nameExplanationContent) {
+      return;
+    }
+
+    const model = DocSorterNameExplanation.buildNameExplanation(input);
+    const formula = document.createElement("p");
+    formula.className = "name-explanation-formula";
+    const formulaLabel = document.createElement("span");
+    formulaLabel.textContent = "Formule";
+    const formulaCode = document.createElement("code");
+    formulaCode.textContent = model.formula;
+    formula.replaceChildren(formulaLabel, formulaCode);
+
+    const result = document.createElement("p");
+    result.className = `name-explanation-result ${model.isComplete ? "valid" : "incomplete"}`;
+    result.textContent = model.result;
+
+    const missing = document.createElement("p");
+    missing.className = "name-explanation-missing";
+    missing.hidden = model.missingFields.length === 0;
+    missing.textContent = model.missingFields.length
+      ? `Champs manquants : ${model.missingFields.join(", ")}.`
+      : "";
+
+    const list = document.createElement("dl");
+    list.className = "name-explanation-list";
+    list.replaceChildren(...model.lines.map(createNameExplanationLine));
+
+    elements.nameExplanationContent.replaceChildren(formula, result, missing, list);
+  }
+
+  function createNameExplanationLine(line: NameExplanationLine): HTMLDivElement {
+    const item = document.createElement("div");
+    item.className = `name-explanation-line ${line.status}`;
+
+    const term = document.createElement("dt");
+    term.textContent = line.label;
+
+    const definition = document.createElement("dd");
+    const value = document.createElement("strong");
+    value.textContent = line.value;
+    const reason = document.createElement("span");
+    reason.textContent = line.reason;
+    const source = document.createElement("small");
+    source.textContent = line.source;
+    definition.replaceChildren(value, reason, source);
+
+    item.replaceChildren(term, definition);
+    return item;
   }
 
   function proposalStateLabel(

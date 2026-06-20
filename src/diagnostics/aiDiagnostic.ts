@@ -107,10 +107,36 @@ function createAiDiagnosticLog(
       extension: options.extension
     },
     text: createDiagnosticText(options.textContext, mode),
+    validationErrors: createDiagnosticValidationErrors(options.aiResult, mode),
     ia: aiResult
   };
 
   return mode === "diagnosticComplet" ? log : redactDiagnosticValue(log);
+}
+
+function createDiagnosticValidationErrors(
+  value: AiSettingsResult<AiDocumentSuggestion> | null,
+  mode: AiDiagnosticMode
+): unknown[] {
+  if (!value || value.ok) {
+    return [];
+  }
+
+  const direct = Array.isArray(value.error.validationErrors)
+    ? value.error.validationErrors
+    : [];
+  const validationErrors = direct.length > 0
+    ? direct
+    : [
+        {
+          ...(value.error.field ? { field: value.error.field } : {}),
+          reason: value.error.message
+        }
+      ];
+
+  return mode === "diagnosticComplet"
+    ? validationErrors
+    : validationErrors.map(redactValidationError);
 }
 
 function stripRejectedCandidateValues(value: unknown): unknown {
@@ -128,6 +154,10 @@ function stripRejectedCandidateValues(value: unknown): unknown {
       output[key] = entry.map((candidate) => redactRejectedCandidate(candidate));
       continue;
     }
+    if (key === "validationErrors" && Array.isArray(entry)) {
+      output[key] = entry.map((candidate) => redactValidationError(candidate));
+      continue;
+    }
 
     output[key] = stripRejectedCandidateValues(entry);
   }
@@ -143,6 +173,18 @@ function redactRejectedCandidate(value: unknown): unknown {
   return {
     ...(typeof record.field === "string" ? { field: record.field } : {}),
     ...(typeof record.index === "number" ? { index: record.index } : {}),
+    ...(typeof record.reason === "string" ? { reason: record.reason } : {})
+  };
+}
+
+function redactValidationError(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.field === "string" ? { field: record.field } : {}),
     ...(typeof record.reason === "string" ? { reason: record.reason } : {})
   };
 }
