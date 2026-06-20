@@ -416,15 +416,7 @@ function sanitizeNameBlocks(suggestion: AiClassificationSuggestion): void {
   suggestion.issuer = sanitizeOptionalBlock(suggestion.issuer, removed);
   suggestion.detail = sanitizeOptionalBlock(suggestion.detail, removed);
 
-  const documentTypeTerms = tokenSet(suggestion.documentType);
-  if (suggestion.subject && documentTypeTerms.size > 0) {
-    suggestion.subject = removeTermsIfNonEmpty(suggestion.subject, documentTypeTerms, removed);
-  }
-
-  const issuerTerms = tokenSet(suggestion.issuer);
-  if (suggestion.subject && issuerTerms.size > 0) {
-    suggestion.subject = removeTermsIfNonEmpty(suggestion.subject, issuerTerms, removed);
-  }
+  sanitizeSubjectBlock(suggestion, removed);
 
   if (suggestion.detail) {
     const detailForbiddenTerms = new Set([
@@ -440,6 +432,41 @@ function sanitizeNameBlocks(suggestion: AiClassificationSuggestion): void {
 
   if (removed.length > 0) {
     suggestion.warnings.push(`Termes IA ignorés dans le nom proposé : ${uniqueStrings(removed).join(", ")}.`);
+  }
+}
+
+function sanitizeSubjectBlock(suggestion: AiClassificationSuggestion, removed: string[]): void {
+  if (!suggestion.subject) {
+    return;
+  }
+
+  const normalizedSubject = normalizeNameBlock(suggestion.subject);
+  const exactBlockedValues = [
+    suggestion.target,
+    suggestion.documentType,
+    suggestion.issuer,
+    suggestion.detail
+  ].map((value) => normalizeNameBlock(value)).filter(Boolean);
+
+  if (exactBlockedValues.includes(normalizedSubject)) {
+    delete suggestion.subject;
+    return;
+  }
+
+  const forbiddenTerms = new Set([
+    ...tokenSet(suggestion.documentType),
+    ...tokenSet(suggestion.issuer),
+    ...tokenSet(suggestion.detail)
+  ]);
+  if (forbiddenTerms.size === 0) {
+    return;
+  }
+
+  const cleaned = removeTerms(suggestion.subject, forbiddenTerms, removed);
+  if (cleaned) {
+    suggestion.subject = cleaned;
+  } else {
+    delete suggestion.subject;
   }
 }
 
@@ -461,15 +488,6 @@ function sanitizeOptionalBlock(value: string | undefined, removed: string[]): st
   });
 
   return kept.length > 0 ? kept.join("-") : undefined;
-}
-
-function removeTermsIfNonEmpty(
-  value: string,
-  termsToRemove: Set<string>,
-  removed: string[]
-): string {
-  const cleaned = removeTerms(value, termsToRemove, removed);
-  return cleaned || value;
 }
 
 function removeTerms(

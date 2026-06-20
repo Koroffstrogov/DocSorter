@@ -28,6 +28,7 @@ interface AiFieldRowsOptions {
 
 interface AiFieldRowsApi {
   createSuggestionContent: (state: AiState, options: AiFieldRowsOptions) => Node[];
+  getFieldCandidates: (suggestion: RendererAiDocumentSuggestion | null, key: AiCandidateFieldKey) => AiCandidateView[];
   getFolderCandidates: (suggestion: RendererAiDocumentSuggestion | null) => AiCandidateView[];
 }
 
@@ -109,7 +110,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     const isManual = Boolean(selection?.manualFields[key]);
     const isEditing = selection?.editingField === key;
 
-    row.className = `ai-field-row ${isManual ? "manual" : ""}`;
+    row.className = `ai-field-row ${key === "subject" ? "secondary" : ""} ${isManual ? "manual" : ""}`;
     title.className = "ai-field-title";
     labelElement.textContent = label;
     badge.className = "ai-field-badge manual";
@@ -132,7 +133,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
           })
         )
     );
-    if ((key === "issuer" || key === "detail") && suggestion) {
+    if (isOptionalField(key) && suggestion) {
       candidateLine.append(createEmptyCandidateButton(selectedValue, () => {
         options.onFieldCandidateSelect(key, "");
       }));
@@ -218,7 +219,12 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     key: AiCandidateFieldKey
   ): AiCandidateView[] {
     const response = readResponseJson(suggestion);
-    return normalizeCandidates(response?.fields?.[key]?.candidates ?? []);
+    const candidates = normalizeCandidates(response?.fields?.[key]?.candidates ?? []);
+    if (key !== "subject") {
+      return candidates;
+    }
+
+    return candidates.filter((candidate) => !isRedundantSubjectCandidate(candidate.value, suggestion, response));
   }
 
   function getFolderCandidates(suggestion: RendererAiDocumentSuggestion | null): AiCandidateView[] {
@@ -262,11 +268,83 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
   }
 
   function emptyValueLabel(key: AiCandidateFieldKey): string {
-    return key === "issuer" || key === "detail" ? "aucun" : "à compléter";
+    if (key === "subject") {
+      return "non utilisé";
+    }
+
+    return isOptionalField(key) ? "aucun" : "à compléter";
+  }
+
+  function isOptionalField(key: AiCandidateFieldKey): boolean {
+    return key === "subject" || key === "issuer" || key === "detail";
+  }
+
+  function isRedundantSubjectCandidate(
+    value: string,
+    suggestion: RendererAiDocumentSuggestion | null,
+    response: AiMultiCandidateResponseView | null
+  ): boolean {
+    const normalized = normalizeCandidateBlock(value);
+    if (!normalized) {
+      return true;
+    }
+
+    const blockers = [
+      suggestion?.suggestion.target,
+      suggestion?.suggestion.documentType,
+      suggestion?.suggestion.issuer,
+      suggestion?.suggestion.detail,
+      response?.fields?.target?.selected,
+      response?.fields?.documentType?.selected,
+      response?.fields?.issuer?.selected,
+      response?.fields?.detail?.selected
+    ];
+
+    return blockers.some((blocker) => areCandidateBlocksRedundant(normalized, blocker));
+  }
+
+  function areCandidateBlocksRedundant(normalizedValue: string, blocker: string | undefined): boolean {
+    const normalizedBlocker = normalizeCandidateBlock(blocker ?? "");
+    if (!normalizedBlocker) {
+      return false;
+    }
+
+    if (normalizedValue === normalizedBlocker) {
+      return true;
+    }
+
+    const valueTokens = new Set(normalizedValue.split("-").filter(Boolean));
+    const blockerTokens = new Set(normalizedBlocker.split("-").filter(Boolean));
+    if (valueTokens.size === 0 || blockerTokens.size === 0) {
+      return false;
+    }
+
+    return isSubset(valueTokens, blockerTokens) || isSubset(blockerTokens, valueTokens);
+  }
+
+  function isSubset(left: Set<string>, right: Set<string>): boolean {
+    for (const value of left) {
+      if (!right.has(value)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function normalizeCandidateBlock(value: string): string {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
   }
 
   globalThis.DocSorterAiFieldRows = {
     createSuggestionContent,
+    getFieldCandidates,
     getFolderCandidates
   };
 })();

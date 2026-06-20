@@ -122,7 +122,6 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2026-06-16",
-      subject: "captur",
       target: "renault-captur",
       documentType: "facture",
       issuer: "renault",
@@ -131,6 +130,7 @@ describe("runOllamaSuggestionForDocument", () => {
       targetFolder: "Vehicules/Renault-Captur/Entretien",
       source: "ollama"
     });
+    expect(result.ok && result.value.suggestion.subject).toBeUndefined();
     expect(result.ok && result.value.suggestedAt).toBe("2026-06-16T10:00:00.000Z");
     expect(result.ok && result.value.modelStatus).toMatchObject({
       status: "ready",
@@ -253,7 +253,7 @@ describe("runOllamaSuggestionForDocument", () => {
       fetchClient: createSuccessfulFetch({
         response: createAiResponse({
           dateToken: "2026-05",
-          subject: "foyer",
+          subject: "releve-bancaire",
           target: "foyer",
           targetKind: "household",
           documentType: "releve-bancaire",
@@ -275,6 +275,7 @@ describe("runOllamaSuggestionForDocument", () => {
       issuer: "bnp-paribas",
       proposedName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf"
     });
+    expect(result.ok && result.value.suggestion.subject).toBeUndefined();
     expect(result.ok && result.value.suggestion.detail).toBeUndefined();
     expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("période déjà représentée");
   });
@@ -468,7 +469,6 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.value.suggestion.detail).toBe("foyer");
     expect(result.value.suggestion.proposedName).toBeUndefined();
     expect(result.value.suggestion.warnings.join(" ")).toContain("Cible IA ignorée");
-    expect(result.value.suggestion.warnings.join(" ")).toContain("Sujet IA ignoré");
   });
 
   it("accepts T05 fiscal target foyer from the multi-candidate response", async () => {
@@ -499,11 +499,11 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2025",
-      subject: "foyer",
       target: "foyer",
       documentType: "avis-imposition",
       proposedName: "2025_foyer_avis-imposition.pdf"
     });
+    expect(result.ok && result.value.suggestion.subject).toBeUndefined();
   });
 
   it("rejects basename-like AI targets", async () => {
@@ -617,11 +617,11 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2026",
-      subject: "lea",
       target: "lea",
       documentType: "certificat-scolarite",
       proposedName: "2026_lea_certificat-scolarite.pdf"
     });
+    expect(result.ok && result.value.suggestion.subject).toBeUndefined();
     expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
   });
 
@@ -683,12 +683,12 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.suggestion).toMatchObject({
       dateToken: "2023-11-02",
-      subject: "paul",
       target: "paul",
       documentType: "carte-identite",
       targetFolder: "CNI",
       proposedName: "2023-11-02_paul_carte-identite.pdf"
     });
+    expect(result.ok && result.value.suggestion.subject).toBeUndefined();
     expect(result.ok && result.value.suggestion.detail).toBeUndefined();
     expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
   });

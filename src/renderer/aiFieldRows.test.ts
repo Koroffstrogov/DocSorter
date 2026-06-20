@@ -32,6 +32,43 @@ describe("ai field rows renderer module", () => {
     ]);
   });
 
+  it("filters redundant subject candidates from the field rows", () => {
+    const suggestion = createSuggestion({
+      fields: {
+        subject: {
+          selected: "",
+          candidates: [
+            { value: "releve-bancaire", score: 95, reason: "type répété", role: "selected" },
+            { value: "foyer", score: 90, reason: "cible répétée" },
+            { value: "bnp-paribas", score: 80, reason: "émetteur répété" },
+            { value: "mai-2026", score: 70, reason: "détail répété" },
+            { value: "compte-courant", score: 60, reason: "sujet distinct" }
+          ]
+        },
+        target: { selected: "foyer", candidates: [{ value: "foyer", score: 90, reason: "cible" }] },
+        documentType: {
+          selected: "releve-bancaire",
+          candidates: [{ value: "releve-bancaire", score: 95, reason: "type" }]
+        },
+        issuer: {
+          selected: "bnp-paribas",
+          candidates: [{ value: "bnp-paribas", score: 80, reason: "émetteur" }]
+        },
+        detail: { selected: "mai-2026", candidates: [{ value: "mai-2026", score: 70, reason: "détail" }] }
+      }
+    }, {
+      subject: "",
+      target: "foyer",
+      documentType: "releve-bancaire",
+      issuer: "bnp-paribas",
+      detail: "mai-2026"
+    });
+
+    expect(fieldRows.getFieldCandidates(suggestion, "subject")).toEqual([
+      { value: "compte-courant", score: 60, reason: "sujet distinct", role: "" }
+    ]);
+  });
+
   it("keeps the field refinement rendering isolated in the extracted module", async () => {
     const source = await readAiFieldRowsSource();
 
@@ -50,13 +87,18 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain("badge.hidden = !isManual");
     expect(source).toContain('button.textContent = `${candidate.value} ${candidate.score}%`;');
     expect(source).toContain("emptyValueLabel(key)");
-    expect(source).toContain('key === "issuer" || key === "detail"');
+    expect(source).toContain('key === "subject"');
+    expect(source).toContain('"non utilisé"');
+    expect(source).toContain("isOptionalField(key)");
     expect(source).toContain("createEmptyCandidateButton");
     expect(source).not.toContain('"[x] "');
   });
 });
 
-function createSuggestion(responseJson: unknown): RendererAiDocumentSuggestion {
+function createSuggestion(
+  responseJson: unknown,
+  suggestionOverrides: Partial<RendererAiClassificationSuggestion> = {}
+): RendererAiDocumentSuggestion {
   return {
     status: "ready",
     documentName: "document.pdf",
@@ -93,7 +135,8 @@ function createSuggestion(responseJson: unknown): RendererAiDocumentSuggestion {
       confidence: 82,
       reasons: [],
       warnings: [],
-      source: "ollama"
+      source: "ollama",
+      ...suggestionOverrides
     },
     promptCharacterCount: 2500,
     message: "ready"

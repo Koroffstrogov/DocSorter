@@ -32,7 +32,8 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain("N'utilise pas AAAA-MM-01");
     expect(result.prompt).toContain("période mensuelle");
     expect(result.prompt).toContain("date-inconnue");
-    expect(result.prompt).toContain("champ Sujet de Renommage proposé");
+    expect(result.prompt).toContain("libellé de lecture pour l'utilisateur");
+    expect(result.prompt).toContain("subject peut rester vide");
     expect(result.prompt).toContain("target est la valeur de nommage");
     expect(result.prompt).toContain("targetKind décrit seulement la nature optionnelle");
     expect(result.prompt).toContain("person, household, vehicle, property ou other");

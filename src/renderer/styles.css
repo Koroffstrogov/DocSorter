@@ -1474,6 +1474,16 @@ details.detail-section[open] > summary {
   background: #fffaf0;
 }
 
+.ai-field-row.secondary {
+  border-color: var(--border-subtle);
+  background: var(--surface-muted);
+}
+
+.ai-field-row.secondary .ai-field-title strong,
+.ai-field-row.secondary .ai-field-selected.empty {
+  color: var(--text-muted);
+}
+
 .ai-field-title {
   display: flex;
   align-items: center;
