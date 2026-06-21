@@ -214,6 +214,8 @@ function createSettings(workspace: {
     tessdataPath: workspace.tessdataPath,
     language: "fra",
     psm: 3,
+    pdfQuality: "standard",
+    imagePreprocessingMode: "standard",
     lastTestedAt: null,
     detectedVersion: null
   };

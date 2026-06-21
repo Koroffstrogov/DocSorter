@@ -34,6 +34,7 @@ export interface OcrSettings {
   language: string;
   psm: number;
   pdfQuality: PdfOcrQuality;
+  imagePreprocessingMode: ImageOcrPreprocessingMode;
   lastTestedAt: string | null;
   detectedVersion: string | null;
 }
@@ -41,6 +42,7 @@ export interface OcrSettings {
 export type OcrSettingsInput = Partial<OcrSettings>;
 
 export type PdfOcrQuality = "fast" | "standard" | "high";
+export type ImageOcrPreprocessingMode = "none" | "standard";
 
 export type OcrStatusKind = "not-configured" | "configured" | "error";
 
@@ -67,6 +69,7 @@ export interface OcrPathSelection {
 export const DEFAULT_OCR_LANGUAGE = "fra";
 export const DEFAULT_OCR_PSM = 3;
 export const DEFAULT_PDF_OCR_QUALITY: PdfOcrQuality = "standard";
+export const DEFAULT_IMAGE_OCR_PREPROCESSING_MODE: ImageOcrPreprocessingMode = "standard";
 
 export function createOcrError(code: OcrErrorCode, message = ocrErrorMessage(code)): OcrError {
   return {

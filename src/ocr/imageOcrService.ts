@@ -24,11 +24,16 @@ import {
 } from "./tesseractCli";
 import {
   ocrFailure,
+  type ImageOcrPreprocessingMode,
   type OcrError,
   type OcrResult,
   type OcrSettings,
   type OcrStatus
 } from "./ocrTypes";
+import {
+  prepareImageForOcr,
+  type PreparedImageForOcr
+} from "./imagePreprocess";
 
 export type ImageOcrStatus = "text-found" | "empty";
 export type ImageOcrSource = "tesseract-cli";
@@ -46,6 +51,8 @@ export interface ImageOcrExtraction {
   durationMs: number;
   extractedAt: string;
   fromCache: boolean;
+  ocrPreprocessingApplied: boolean;
+  ocrPreprocessingMode: ImageOcrPreprocessingMode;
   warnings: string[];
 }
 
@@ -68,6 +75,13 @@ export interface RunImageOcrForDocumentOptions {
     imagePath: string,
     options: TesseractImageOcrOptions
   ) => Promise<OcrResult<TesseractImageOcrOutput>>;
+  prepareImageForOcr?: (
+    inputPath: string,
+    options: {
+      enabled: boolean;
+      mode: ImageOcrPreprocessingMode;
+    }
+  ) => Promise<PreparedImageForOcr>;
   readCacheFile?: (filePath: string) => Promise<string | Buffer>;
   writeCacheFile?: (filePath: string, content: string) => Promise<void>;
   makeDirectory?: (directoryPath: string) => Promise<void>;
@@ -78,6 +92,8 @@ interface ImageOcrCacheFingerprint extends PdfAnalysisCacheFingerprint {
   engineVersion: string;
   language: string;
   psm: number;
+  preprocessingMode: ImageOcrPreprocessingMode;
+  preprocessingVersion: 1;
 }
 
 interface ImageOcrCacheEntry {
@@ -153,10 +169,12 @@ export async function runImageOcrForDocument(
 
   const language = status.settings.language || "fra";
   const psm = Number.isInteger(status.settings.psm) ? status.settings.psm : DEFAULT_IMAGE_OCR_PSM;
+  const preprocessingMode = status.settings.imagePreprocessingMode ?? "standard";
   const fingerprint = createFingerprint(normalizedDocumentPath, fileCheck.stats, {
     engineVersion,
     language,
-    psm
+    psm,
+    preprocessingMode
   });
   const cacheFilePath = getAnalysisCacheFilePath(options.userDataPath, normalizedDocumentPath);
   if (!options.forceRefresh) {
@@ -165,7 +183,7 @@ export async function runImageOcrForDocument(
       return {
         ok: true,
         value: {
-          ...cached.extraction,
+          ...normalizeCachedImageOcrExtraction(cached.extraction),
           fromCache: true
         }
       };
@@ -175,12 +193,24 @@ export async function runImageOcrForDocument(
   const startedAt = (options.getTimeMs ?? Date.now)();
   const extractedAt = (options.now ?? (() => new Date()))().toISOString();
   const runOcr = options.runOcr ?? runTesseractImageOcr;
-  const result = await runOcr(status.settings, normalizedDocumentPath, {
-    language,
-    psm,
-    timeoutMs: IMAGE_OCR_TIMEOUT_MS,
-    maxOutputBytes: MAX_TESSERACT_IMAGE_OUTPUT_BYTES
-  });
+  const preparedImage = await (options.prepareImageForOcr ?? prepareImageForOcr)(
+    normalizedDocumentPath,
+    {
+      enabled: preprocessingMode !== "none",
+      mode: preprocessingMode
+    }
+  );
+  let result: OcrResult<TesseractImageOcrOutput>;
+  try {
+    result = await runOcr(status.settings, preparedImage.inputForTesseract, {
+      language,
+      psm,
+      timeoutMs: IMAGE_OCR_TIMEOUT_MS,
+      maxOutputBytes: MAX_TESSERACT_IMAGE_OUTPUT_BYTES
+    });
+  } finally {
+    await preparedImage.cleanup();
+  }
   const durationMs = Math.max(0, Math.round((options.getTimeMs ?? Date.now)() - startedAt));
 
   if (!result.ok) {
@@ -192,9 +222,15 @@ export async function runImageOcrForDocument(
     psm,
     durationMs,
     extractedAt,
+    ocrPreprocessingApplied: preparedImage.preprocessingApplied,
+    ocrPreprocessingMode: preparedImage.preprocessingMode,
     maxTextChars: options.maxTextChars ?? MAX_EXTRACTED_TEXT_CHARS,
     maxExcerptLength: options.maxExcerptLength ?? MAX_EXTRACTED_TEXT_PREVIEW_CHARS
   });
+  const extractionWithWarnings = {
+    ...extraction,
+    warnings: [...extraction.warnings, ...preparedImage.warnings]
+  };
   const cacheWritten = await writeCacheEntry(
     cacheFilePath,
     {
@@ -202,7 +238,7 @@ export async function runImageOcrForDocument(
       kind: "image-ocr",
       fingerprint,
       analyzedAt: extractedAt,
-      extraction,
+      extraction: extractionWithWarnings,
       error: null
     },
     options
@@ -211,11 +247,11 @@ export async function runImageOcrForDocument(
   return {
     ok: true,
     value: {
-      ...extraction,
+      ...extractionWithWarnings,
       fromCache: false,
       warnings: cacheWritten
-        ? extraction.warnings
-        : [...extraction.warnings, "Cache OCR non sauvegardé."]
+        ? extractionWithWarnings.warnings
+        : [...extractionWithWarnings.warnings, "Cache OCR non sauvegardé."]
     }
   };
 }
@@ -227,6 +263,8 @@ export function buildImageOcrExtraction(
     psm: number;
     durationMs: number;
     extractedAt: string;
+    ocrPreprocessingApplied?: boolean;
+    ocrPreprocessingMode?: ImageOcrPreprocessingMode;
     maxTextChars?: number;
     maxExcerptLength?: number;
   }
@@ -252,6 +290,8 @@ export function buildImageOcrExtraction(
     durationMs: options.durationMs,
     extractedAt: options.extractedAt,
     fromCache: false,
+    ocrPreprocessingApplied: options.ocrPreprocessingApplied ?? false,
+    ocrPreprocessingMode: options.ocrPreprocessingMode ?? "none",
     warnings: []
   };
 }
@@ -289,6 +329,7 @@ function createFingerprint(
     engineVersion: string;
     language: string;
     psm: number;
+    preprocessingMode: ImageOcrPreprocessingMode;
   }
 ): ImageOcrCacheFingerprint {
   return {
@@ -298,7 +339,9 @@ function createFingerprint(
     engine: "tesseract-cli",
     engineVersion: options.engineVersion,
     language: options.language,
-    psm: options.psm
+    psm: options.psm,
+    preprocessingMode: options.preprocessingMode,
+    preprocessingVersion: 1
   };
 }
 
@@ -351,8 +394,30 @@ function fingerprintsMatch(
     left.engine === right.engine &&
     left.engineVersion === right.engineVersion &&
     left.language === right.language &&
-    left.psm === right.psm
+    left.psm === right.psm &&
+    normalizeFingerprintPreprocessingMode(left) === normalizeFingerprintPreprocessingMode(right) &&
+    normalizeFingerprintPreprocessingVersion(left) === normalizeFingerprintPreprocessingVersion(right)
   );
+}
+
+function normalizeFingerprintPreprocessingMode(
+  fingerprint: Partial<ImageOcrCacheFingerprint>
+): ImageOcrPreprocessingMode {
+  return fingerprint.preprocessingMode === "standard" ? "standard" : "none";
+}
+
+function normalizeFingerprintPreprocessingVersion(
+  fingerprint: Partial<ImageOcrCacheFingerprint>
+): 1 {
+  return fingerprint.preprocessingVersion === 1 ? 1 : 1;
+}
+
+function normalizeCachedImageOcrExtraction(extraction: ImageOcrExtraction): ImageOcrExtraction {
+  return {
+    ...extraction,
+    ocrPreprocessingApplied: extraction.ocrPreprocessingApplied ?? false,
+    ocrPreprocessingMode: extraction.ocrPreprocessingMode ?? "none"
+  };
 }
 
 function isImageOcrCacheEntry(value: unknown): value is ImageOcrCacheEntry {
@@ -384,7 +449,11 @@ function isImageOcrFingerprint(value: unknown): value is ImageOcrCacheFingerprin
     candidate.engine === "tesseract-cli" &&
     typeof candidate.engineVersion === "string" &&
     typeof candidate.language === "string" &&
-    typeof candidate.psm === "number"
+    typeof candidate.psm === "number" &&
+    (candidate.preprocessingMode === undefined ||
+      candidate.preprocessingMode === "none" ||
+      candidate.preprocessingMode === "standard") &&
+    (candidate.preprocessingVersion === undefined || candidate.preprocessingVersion === 1)
   );
 }
 
@@ -406,6 +475,11 @@ function isImageOcrExtraction(value: unknown): value is ImageOcrExtraction {
     typeof candidate.truncated === "boolean" &&
     typeof candidate.durationMs === "number" &&
     typeof candidate.extractedAt === "string" &&
+    (candidate.ocrPreprocessingApplied === undefined ||
+      typeof candidate.ocrPreprocessingApplied === "boolean") &&
+    (candidate.ocrPreprocessingMode === undefined ||
+      candidate.ocrPreprocessingMode === "none" ||
+      candidate.ocrPreprocessingMode === "standard") &&
     Array.isArray(candidate.warnings)
   );
 }

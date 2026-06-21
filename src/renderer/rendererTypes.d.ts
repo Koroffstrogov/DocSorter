@@ -482,6 +482,8 @@ interface PdfTextExtraction {
   pdfTextQuality?: PdfTextQuality;
   finalTextSource?: PdfTextExtractionSource;
   pdfOcr?: PdfOcrSummary;
+  ocrPreprocessingApplied?: boolean;
+  ocrPreprocessingMode?: ImageOcrPreprocessingMode;
   fromCache?: boolean;
   warnings?: string[];
 }
@@ -578,11 +580,13 @@ interface RendererOcrSettings {
   language: string;
   psm: number;
   pdfQuality: PdfOcrQuality;
+  imagePreprocessingMode: ImageOcrPreprocessingMode;
   lastTestedAt: string | null;
   detectedVersion: string | null;
 }
 
 type PdfOcrQuality = "fast" | "standard" | "high";
+type ImageOcrPreprocessingMode = "none" | "standard";
 
 interface RendererOcrStatus {
   status: "not-configured" | "configured" | "error";
@@ -606,6 +610,7 @@ interface OcrSettingsDraft {
   language: string;
   psm: string;
   pdfQuality: PdfOcrQuality;
+  imagePreprocessingMode: ImageOcrPreprocessingMode;
 }
 
 interface OcrState {

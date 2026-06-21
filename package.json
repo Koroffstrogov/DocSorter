@@ -26,6 +26,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.0",
     "pdfjs-dist": "^6.0.227"
   }
 }

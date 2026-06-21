@@ -117,6 +117,71 @@ describe("runImageOcrForDocument", () => {
     expect(runOcr).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the preprocessed image path in standard mode and cleans it up", async () => {
+    const workspace = await createWorkspace("image.jpg");
+    const cleanup = vi.fn(async () => undefined);
+    const runOcr = vi.fn(async () => createOcrOutput("texte depuis image préparée"));
+
+    const result = await runImageOcrForDocument(
+      createOptions(workspace, {
+        runOcr,
+        prepareImageForOcr: vi.fn(async () => ({
+          inputForTesseract: path.join(workspace.root, "prepared.png"),
+          cleanup,
+          preprocessingApplied: true,
+          preprocessingMode: "standard",
+          warnings: []
+        }))
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.ocrPreprocessingApplied).toBe(true);
+    expect(result.ok && result.value.ocrPreprocessingMode).toBe("standard");
+    expect(runOcr).toHaveBeenCalledWith(
+      expect.any(Object),
+      path.join(workspace.root, "prepared.png"),
+      expect.objectContaining({ language: "fra", psm: 6 })
+    );
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the original image path in none mode", async () => {
+    const workspace = await createWorkspace("image.jpg");
+    const runOcr = vi.fn(async () => createOcrOutput("texte original"));
+    const prepareImage = vi.fn(async (inputPath: string) => ({
+      inputForTesseract: inputPath,
+      cleanup: vi.fn(async () => undefined),
+      preprocessingApplied: false,
+      preprocessingMode: "none" as const,
+      warnings: []
+    }));
+
+    const result = await runImageOcrForDocument(
+      createOptions(workspace, {
+        runOcr,
+        getStatus: async () => ({
+          ok: true,
+          value: createOcrStatus(workspace, { imagePreprocessingMode: "none" })
+        }),
+        prepareImageForOcr: prepareImage
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.ocrPreprocessingApplied).toBe(false);
+    expect(result.ok && result.value.ocrPreprocessingMode).toBe("none");
+    expect(runOcr).toHaveBeenCalledWith(
+      expect.any(Object),
+      workspace.documentPath,
+      expect.objectContaining({ language: "fra", psm: 6 })
+    );
+    expect(prepareImage).toHaveBeenCalledWith(workspace.documentPath, {
+      enabled: false,
+      mode: "none"
+    });
+  });
+
   it("returns an empty OCR result when Tesseract returns no exploitable text", async () => {
     const workspace = await createWorkspace("image.png");
 
@@ -199,6 +264,42 @@ describe("runImageOcrForDocument", () => {
     expect(second.ok).toBe(true);
     expect(second.ok && second.value.fromCache).toBe(false);
     expect(second.ok && second.value.excerpt).toBe("texte recalculé");
+    expect(secondRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reuse cache entries from another preprocessing mode", async () => {
+    const workspace = await createWorkspace("image.png");
+    const firstRun = vi.fn(async () => createOcrOutput("texte sans prétraitement"));
+    const secondRun = vi.fn(async () => createOcrOutput("texte standard"));
+
+    await runImageOcrForDocument(
+      createOptions(workspace, {
+        runOcr: firstRun,
+        getStatus: async () => ({
+          ok: true,
+          value: createOcrStatus(workspace, { imagePreprocessingMode: "none" })
+        })
+      })
+    );
+    const second = await runImageOcrForDocument(
+      createOptions(workspace, {
+        runOcr: secondRun,
+        prepareImageForOcr: vi.fn(async (inputPath: string) => ({
+          inputForTesseract: inputPath,
+          cleanup: vi.fn(async () => undefined),
+          preprocessingApplied: false,
+          preprocessingMode: "standard",
+          warnings: ["Prétraitement image indisponible, OCR lancé sur l'image originale."]
+        }))
+      })
+    );
+
+    expect(second.ok).toBe(true);
+    expect(second.ok && second.value.fromCache).toBe(false);
+    expect(second.ok && second.value.excerpt).toBe("texte standard");
+    expect(second.ok && second.value.warnings).toContain(
+      "Prétraitement image indisponible, OCR lancé sur l'image originale."
+    );
     expect(secondRun).toHaveBeenCalledTimes(1);
   });
 
@@ -290,14 +391,20 @@ function createOptions(
   };
 }
 
-function createOcrStatus(workspace: Awaited<ReturnType<typeof createWorkspace>>): OcrStatus {
+function createOcrStatus(
+  workspace: Awaited<ReturnType<typeof createWorkspace>>,
+  overrides: Partial<OcrSettings> = {}
+): OcrStatus {
   const settings: OcrSettings = {
     tesseractPath: path.join(workspace.root, "tesseract.exe"),
     tessdataPath: path.join(workspace.root, "tessdata"),
     language: "fra",
     psm: 6,
+    pdfQuality: "standard",
+    imagePreprocessingMode: "standard",
     lastTestedAt: "2026-06-16T09:00:00.000Z",
-    detectedVersion: "5.3.4"
+    detectedVersion: "5.3.4",
+    ...overrides
   };
 
   return {

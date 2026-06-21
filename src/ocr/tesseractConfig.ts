@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   DEFAULT_OCR_LANGUAGE,
   DEFAULT_OCR_PSM,
+  DEFAULT_IMAGE_OCR_PREPROCESSING_MODE,
   DEFAULT_PDF_OCR_QUALITY,
   createOcrError,
   ocrFailure,
@@ -13,6 +14,7 @@ import {
   type OcrSettings,
   type OcrSettingsInput,
   type PdfOcrQuality,
+  type ImageOcrPreprocessingMode,
   type OcrStatus
 } from "./ocrTypes";
 
@@ -33,6 +35,7 @@ export function createDefaultOcrSettings(): OcrSettings {
     language: DEFAULT_OCR_LANGUAGE,
     psm: DEFAULT_OCR_PSM,
     pdfQuality: DEFAULT_PDF_OCR_QUALITY,
+    imagePreprocessingMode: DEFAULT_IMAGE_OCR_PREPROCESSING_MODE,
     lastTestedAt: null,
     detectedVersion: null
   };
@@ -334,9 +337,14 @@ export function normalizeOcrSettings(value: unknown): OcrResult<OcrSettings> {
     ? input.psm
     : DEFAULT_OCR_PSM;
   const pdfQuality = normalizePdfOcrQuality(input.pdfQuality);
+  const imagePreprocessingMode = normalizeImageOcrPreprocessingMode(input.imagePreprocessingMode);
 
   if (!pdfQuality.ok) {
     return pdfQuality;
+  }
+
+  if (!imagePreprocessingMode.ok) {
+    return imagePreprocessingMode;
   }
 
   if (!/^[A-Za-z0-9_+\-/]+$/.test(language)) {
@@ -355,6 +363,7 @@ export function normalizeOcrSettings(value: unknown): OcrResult<OcrSettings> {
       language,
       psm,
       pdfQuality: pdfQuality.value,
+      imagePreprocessingMode: imagePreprocessingMode.value,
       lastTestedAt: readOptionalNullableString(input.lastTestedAt),
       detectedVersion: readOptionalNullableString(input.detectedVersion)
     }
@@ -371,6 +380,23 @@ function normalizePdfOcrQuality(value: unknown): OcrResult<PdfOcrQuality> {
   }
 
   return ocrFailure("OCR_CONFIG_WRITE_FAILED", "La qualité OCR PDF configurée est invalide.");
+}
+
+function normalizeImageOcrPreprocessingMode(
+  value: unknown
+): OcrResult<ImageOcrPreprocessingMode> {
+  if (value === undefined) {
+    return { ok: true, value: DEFAULT_IMAGE_OCR_PREPROCESSING_MODE };
+  }
+
+  if (value === "none" || value === "standard") {
+    return { ok: true, value };
+  }
+
+  return ocrFailure(
+    "OCR_CONFIG_WRITE_FAILED",
+    "Le prétraitement OCR image configuré est invalide."
+  );
 }
 
 function createStatus(options: {

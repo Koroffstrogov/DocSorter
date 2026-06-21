@@ -164,7 +164,9 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
         language.textContent = `${extraction.language ?? "fra"} / PSM ${extraction.psm ?? 6}`;
         duration.textContent =
           typeof extraction.durationMs === "number" ? `${extraction.durationMs} ms` : "durée OCR";
-        meta.append(engine, language, duration);
+        const preprocessing = document.createElement("span");
+        preprocessing.textContent = imagePreprocessingLabel(extraction);
+        meta.append(engine, language, duration, preprocessing);
       } else {
         const pages = document.createElement("span");
         const pageCount = extraction.pageCount ?? 1;
@@ -256,6 +258,16 @@ var DocSorterTextExtractionPanel: TextExtractionPanelFactoryApi;
     container.append(heading, helper, excerpt);
 
     return container;
+  }
+
+  function imagePreprocessingLabel(extraction: PdfTextExtraction): string {
+    if (extraction.ocrPreprocessingMode === "standard") {
+      return extraction.ocrPreprocessingApplied
+        ? "prétraitement image"
+        : "image originale";
+    }
+
+    return "sans prétraitement";
   }
 
   function createTextExtractionLimitNoticeNodes(extraction: PdfTextExtraction | null): HTMLElement[] {

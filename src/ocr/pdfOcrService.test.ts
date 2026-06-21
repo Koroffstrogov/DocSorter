@@ -316,6 +316,7 @@ function createConfiguredOcrStatus(): OcrStatus {
       language: "fra",
       psm: 3,
       pdfQuality: "standard",
+      imagePreprocessingMode: "standard",
       lastTestedAt: "2026-06-20T10:00:00.000Z",
       detectedVersion: "5.4.0"
     },

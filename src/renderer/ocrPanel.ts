@@ -23,6 +23,7 @@ interface OcrPanelElements {
   languageInput: HTMLInputElement | null;
   psmInput: HTMLInputElement | null;
   pdfQualitySelect: HTMLSelectElement | null;
+  imagePreprocessingSelect: HTMLSelectElement | null;
   chooseTesseractButton: HTMLButtonElement | null;
   chooseTessdataButton: HTMLButtonElement | null;
   saveButton: HTMLButtonElement | null;
@@ -48,7 +49,8 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       elements.tessdataPathInput,
       elements.languageInput,
       elements.psmInput,
-      elements.pdfQualitySelect
+      elements.pdfQualitySelect,
+      elements.imagePreprocessingSelect
     ];
 
     inputs.forEach((input) => {
@@ -128,6 +130,7 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       languageInput: root.querySelector<HTMLInputElement>("#ocr-language"),
       psmInput: root.querySelector<HTMLInputElement>("#ocr-psm"),
       pdfQualitySelect: root.querySelector<HTMLSelectElement>("#ocr-pdf-quality"),
+      imagePreprocessingSelect: root.querySelector<HTMLSelectElement>("#ocr-image-preprocessing"),
       chooseTesseractButton: root.querySelector<HTMLButtonElement>("#choose-tesseract"),
       chooseTessdataButton: root.querySelector<HTMLButtonElement>("#choose-tessdata"),
       saveButton: root.querySelector<HTMLButtonElement>("#save-ocr-settings"),
@@ -142,7 +145,8 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       tessdataPath: elements.tessdataPathInput?.value ?? "",
       language: elements.languageInput?.value ?? "fra",
       psm: elements.psmInput?.value ?? "3",
-      pdfQuality: readPdfQuality(elements.pdfQualitySelect?.value)
+      pdfQuality: readPdfQuality(elements.pdfQualitySelect?.value),
+      imagePreprocessingMode: readImagePreprocessingMode(elements.imagePreprocessingSelect?.value)
     };
   }
 
@@ -152,6 +156,7 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
     syncInputValue(elements.languageInput, draft.language);
     syncInputValue(elements.psmInput, draft.psm);
     syncSelectValue(elements.pdfQualitySelect, draft.pdfQuality);
+    syncSelectValue(elements.imagePreprocessingSelect, draft.imagePreprocessingMode);
   }
 
   function syncInputValue(input: HTMLInputElement | null, value: string): void {
@@ -182,6 +187,11 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       lines.push(createMetaLine(`Langue : ${state.status.language || "fra"}`));
       lines.push(createMetaLine(`PSM : ${state.status.psm}`));
       lines.push(createMetaLine(`Qualité PDF : ${pdfQualityLabel(state.status.settings.pdfQuality)}`));
+      lines.push(
+        createMetaLine(
+          `Prétraitement image : ${imagePreprocessingLabel(state.status.settings.imagePreprocessingMode)}`
+        )
+      );
 
       if (state.status.detectedVersion) {
         lines.push(createMetaLine(`Version : ${state.status.detectedVersion}`));
@@ -275,6 +285,7 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       draft.tessdataPath.trim().length > 0 &&
       draft.language.trim().length > 0 &&
       isPdfQuality(draft.pdfQuality) &&
+      isImagePreprocessingMode(draft.imagePreprocessingMode) &&
       Number.isInteger(psm) &&
       psm >= 0 &&
       psm <= 13
@@ -289,6 +300,14 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
     return value === "fast" || value === "standard" || value === "high";
   }
 
+  function readImagePreprocessingMode(value: string | undefined): ImageOcrPreprocessingMode {
+    return isImagePreprocessingMode(value) ? value : "standard";
+  }
+
+  function isImagePreprocessingMode(value: unknown): value is ImageOcrPreprocessingMode {
+    return value === "none" || value === "standard";
+  }
+
   function pdfQualityLabel(value: PdfOcrQuality): string {
     switch (value) {
       case "fast":
@@ -297,6 +316,15 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
         return "Standard (300 DPI)";
       case "high":
         return "Haute qualité (400 DPI)";
+    }
+  }
+
+  function imagePreprocessingLabel(value: ImageOcrPreprocessingMode): string {
+    switch (value) {
+      case "none":
+        return "Aucun";
+      case "standard":
+        return "Standard";
     }
   }
 

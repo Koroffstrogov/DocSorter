@@ -394,6 +394,16 @@
                       <option value="high">Haute qualité (400 DPI)</option>
                     </select>
                   </label>
+                  <label>
+                    <span class="field-label">
+                      Prétraitement image
+                      <span class="field-help" tabindex="0" title="Prépare une copie temporaire JPG/PNG en niveaux de gris, contraste modéré et agrandissement prudent avant Tesseract. L'original n'est jamais modifié.">i</span>
+                    </span>
+                    <select id="ocr-image-preprocessing" name="imagePreprocessingMode">
+                      <option value="none">Aucun</option>
+                      <option value="standard" selected>Standard</option>
+                    </select>
+                  </label>
                 </div>
                 <div class="ocr-actions">
                   <button id="save-ocr-settings" type="button" disabled>Sauvegarder</button>

@@ -1005,6 +1005,8 @@ function createOcrStatus() {
       tessdataPath: "C:\\Tools\\tessdata",
       language: "fra",
       psm: 6,
+      pdfQuality: "standard",
+      imagePreprocessingMode: "standard",
       lastTestedAt: "2026-06-18T10:00:00.000Z",
       detectedVersion: "5.3.4"
     },

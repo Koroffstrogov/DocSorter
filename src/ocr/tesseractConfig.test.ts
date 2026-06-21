@@ -63,7 +63,8 @@ describe("tesseract OCR configuration", () => {
       tessdataPath: workspace.tessdataPath,
       language: "fra",
       psm: 3,
-      pdfQuality: "high"
+      pdfQuality: "high",
+      imagePreprocessingMode: "standard"
     });
 
     expect(result.ok).toBe(true);
@@ -74,11 +75,12 @@ describe("tesseract OCR configuration", () => {
       tessdataPath: workspace.tessdataPath,
       language: "fra",
       psm: 3,
-      pdfQuality: "high"
+      pdfQuality: "high",
+      imagePreprocessingMode: "standard"
     });
   });
 
-  it("migrates old OCR settings to standard PDF quality", async () => {
+  it("migrates old OCR settings to standard PDF quality and standard image preprocessing", async () => {
     const workspace = await createWorkspace();
     await mkdir(path.dirname(getOcrSettingsPath(workspace.userData)), { recursive: true });
     await writeFile(getOcrSettingsPath(workspace.userData), JSON.stringify({
@@ -91,6 +93,7 @@ describe("tesseract OCR configuration", () => {
     const settings = await loadOcrSettings(workspace.userData);
 
     expect(settings.ok && settings.value.pdfQuality).toBe("standard");
+    expect(settings.ok && settings.value.imagePreprocessingMode).toBe("standard");
   });
 
   it("refuses an absent Tesseract path", async () => {
@@ -105,6 +108,23 @@ describe("tesseract OCR configuration", () => {
 
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error.code).toBe("OCR_ENGINE_NOT_FOUND");
+  });
+
+  it("refuses an invalid image preprocessing mode", async () => {
+    const workspace = await createWorkspace({ withLanguage: true });
+
+    const result = await saveOcrSettings(workspace.userData, {
+      tesseractPath: workspace.tesseractPath,
+      tessdataPath: workspace.tessdataPath,
+      language: "fra",
+      psm: 3,
+      imagePreprocessingMode: "aggressive" as never
+    });
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.message).toBe(
+      "Le prétraitement OCR image configuré est invalide."
+    );
   });
 
   it("refuses an absent tessdata directory", async () => {
