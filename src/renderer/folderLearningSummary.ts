@@ -199,17 +199,6 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       };
     }
 
-    if (profile.status === "weak") {
-      return {
-        aiName: input.aiName,
-        recommendation: hasNotableDivergence(aiInput, profile) ? "manual-review" : "keep-ai",
-        confidence: 35,
-        appliedChanges: [],
-        reasons: ["Profil faible : aucun alignement automatique proposé.", ...preferenceReasons],
-        warnings: uniqueStrings(["Profil trop faible pour proposer un nom aligné.", ...preferenceWarnings])
-      };
-    }
-
     if (profile.dominantDatePrecision === "mixed") {
       return {
         aiName: input.aiName,
@@ -302,11 +291,16 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         aiName: input.aiName,
         detectedPattern: schema.pattern,
         recommendation: warnings.length > 0 ? "manual-review" : "keep-ai",
-        confidence: warnings.length > 0 ? 50 : profile.status === "strong" ? 85 : 65,
+        confidence: warnings.length > 0 ? 50 : profile.status === "strong" ? 85 : profile.status === "medium" ? 65 : 45,
         appliedChanges,
         reasons: warnings.length > 0
           ? ["Profil hétérogène : validation manuelle recommandée."]
-          : ["Le nom IA est compatible avec la convention du dossier.", ...preferenceReasons],
+          : [
+              profile.status === "weak"
+                ? "Le nom IA est compatible avec la convention faible du dossier."
+                : "Le nom IA est compatible avec la convention du dossier.",
+              ...preferenceReasons
+            ],
         warnings
       };
     }
@@ -317,9 +311,15 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       alignedName,
       detectedPattern: schema.pattern,
       recommendation: profile.status === "strong" ? "prefer-folder-profile" : "manual-review",
-      confidence: profile.status === "strong" ? 85 : 65,
+      confidence: profile.status === "strong" ? 85 : profile.status === "medium" ? 65 : 45,
       appliedChanges,
-      reasons: [...reasons, ...preferenceReasons],
+      reasons: [
+        profile.status === "weak"
+          ? "Profil faible : nom aligné proposé pour validation manuelle."
+          : "",
+        ...reasons,
+        ...preferenceReasons
+      ].filter(Boolean),
       warnings
     }, preferenceSignal);
   }
@@ -801,18 +801,6 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     }
     const ratio = best[1] / values.length;
     return ratio >= DOMINANT_RATIO ? { value: best[0], count: best[1], ratio } : null;
-  }
-
-  function hasNotableDivergence(
-    fields: { target: string; documentType: string; issuer: string; detail: string },
-    profile: FolderLearningProfile
-  ): boolean {
-    return Boolean(
-      profile.dominantTarget && normalizeBlock(profile.dominantTarget) !== fields.target ||
-      profile.dominantDocumentType && normalizeBlock(profile.dominantDocumentType) !== fields.documentType ||
-      profile.dominantIssuer && normalizeBlock(profile.dominantIssuer) !== normalizeBlock(fields.issuer) ||
-      profile.detailUsage === "never" && fields.detail
-    );
   }
 
   function alignDatePrecision(dateToken: string, precision: FolderLearningDatePrecision | undefined): string {

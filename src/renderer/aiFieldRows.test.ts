@@ -91,6 +91,18 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain('"non utilisé"');
     expect(source).toContain("isOptionalField(key)");
     expect(source).toContain("createEmptyCandidateButton");
+    expect(source).toContain("createKnownTargetPicker");
+    expect(source).toContain('isEditing && key === "target"');
+    expect(source).toContain("Choisir une cible connue");
+    expect(source).toContain("Saisie libre");
+    expect(source).toContain("Gérer la liste");
+    expect(source).toContain("onKnownTargetSelect(target)");
+    expect(source).toContain("onKnownTargetCreate(input)");
+    expect(source).toContain("onKnownTargetUpdate(editingTargetId, input)");
+    expect(source).toContain("onKnownTargetDeactivate(target.id)");
+    expect(source).toContain(".filter((target) => target.isActive)");
+    expect(source).toContain('options.onFieldManualValueChange("target", freeInput.value)');
+    expect(source).toContain('freeButton.textContent = "Saisie libre"');
     expect(source).not.toContain('"[x] "');
   });
 });

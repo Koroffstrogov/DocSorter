@@ -601,6 +601,72 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(state.ai?.timing).toMatchObject({ stage: "completed" });
   });
 
+  it("runs PDF OCR automatically before AI when native PDF text is unusable", async () => {
+    const context = await loadAiFlow();
+    const calls: string[] = [];
+    const state = context.state as TestState;
+    const run = context.runAiSuggestionForActiveDocument as () => Promise<void>;
+    let capturedTextContext: RendererAiDocumentTextContext | null = null;
+    context.extractTextFromActivePdf = async () => {
+      calls.push("extract-pdf");
+      state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+        status: "empty",
+        result: {
+          status: "empty",
+          source: "pdf-native",
+          text: "",
+          excerpt: "",
+          characterCount: 0,
+          excerptCharacterCount: 0,
+          pdfTextQuality: createOcrRecommendedPdfTextQuality()
+        },
+        error: null
+      };
+    };
+    context.canRunOcrForActivePdf = () => true;
+    context.runOcrForActivePdfForAiAnalysis = async () => {
+      calls.push("ocr-pdf");
+      state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+        status: "text-found",
+        result: {
+          status: "text-found",
+          source: "pdf-ocr",
+          text: "Texte reconnu par OCR PDF",
+          excerpt: "Texte reconnu par OCR PDF",
+          characterCount: 25,
+          excerptCharacterCount: 25,
+          pdfTextQuality: createOcrRecommendedPdfTextQuality(),
+          pdfOcr: createPdfOcrSummary()
+        },
+        error: null
+      };
+    };
+    (context.window as { docSorter: Record<string, unknown> }).docSorter = {
+      testAiConnection: async () => {
+        calls.push("test");
+        return { ok: true, value: state.ai?.status };
+      },
+      preloadAiModel: async () => {
+        calls.push("preload");
+        return { ok: true, value: createReadyModelStatus() };
+      },
+      runAiSuggestionForActiveDocument: async (_documentPath: string, textContext: RendererAiDocumentTextContext) => {
+        calls.push("analyze");
+        capturedTextContext = textContext;
+        return { ok: true, value: createAiSuggestion() };
+      }
+    };
+
+    await run();
+
+    expect(calls).toEqual(["test", "preload", "extract-pdf", "ocr-pdf", "analyze"]);
+    expect(capturedTextContext).toEqual({
+      source: "pdf-ocr",
+      excerpt: "Texte reconnu par OCR PDF"
+    });
+    expect(state.ai?.panelStatus).toBe("suggestion-ready");
+  });
+
   it("keeps AI analysis available with a warning when PDF text quality is incomplete", async () => {
     const context = await loadAiFlow();
     const state = context.state as TestState;
@@ -632,6 +698,69 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(suggestion.suggestion.warnings).toContain(
       "Le texte extrait semble incomplet. L'analyse IA peut être moins fiable."
     );
+  });
+
+  it("runs PDF OCR automatically before AI when native PDF text is incomplete and OCR is available", async () => {
+    const context = await loadAiFlow();
+    const calls: string[] = [];
+    const state = context.state as TestState;
+    const run = context.runAiSuggestionForActiveDocument as () => Promise<void>;
+    let capturedTextContext: RendererAiDocumentTextContext | null = null;
+    state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+      status: "text-found",
+      result: {
+        status: "text-found",
+        source: "pdf-native",
+        text: "Texte natif partiel",
+        excerpt: "Texte natif partiel",
+        characterCount: 19,
+        excerptCharacterCount: 19,
+        pdfTextQuality: createHybridPdfTextQuality()
+      },
+      error: null
+    };
+    context.canRunOcrForActivePdf = () => true;
+    context.runOcrForActivePdfForAiAnalysis = async () => {
+      calls.push("ocr-pdf");
+      state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+        status: "text-found",
+        result: {
+          status: "text-found",
+          source: "pdf-hybrid",
+          finalTextSource: "pdf-hybrid",
+          text: "Texte natif partiel\nTexte OCR complémentaire",
+          excerpt: "Texte natif partiel\nTexte OCR complémentaire",
+          characterCount: 43,
+          excerptCharacterCount: 43,
+          pdfTextQuality: createHybridPdfTextQuality(),
+          pdfOcr: createPdfOcrSummary()
+        },
+        error: null
+      };
+    };
+    (context.window as { docSorter: Record<string, unknown> }).docSorter = {
+      testAiConnection: async () => {
+        calls.push("test");
+        return { ok: true, value: state.ai?.status };
+      },
+      preloadAiModel: async () => {
+        calls.push("preload");
+        return { ok: true, value: createReadyModelStatus() };
+      },
+      runAiSuggestionForActiveDocument: async (_documentPath: string, textContext: RendererAiDocumentTextContext) => {
+        calls.push("analyze");
+        capturedTextContext = textContext;
+        return { ok: true, value: createAiSuggestion() };
+      }
+    };
+
+    await run();
+
+    expect(calls).toEqual(["test", "preload", "ocr-pdf", "analyze"]);
+    expect(capturedTextContext).toEqual({
+      source: "pdf-hybrid",
+      excerpt: "Texte natif partiel\nTexte OCR complémentaire"
+    });
   });
 
   it("uses fused PDF OCR text as the next IA context", async () => {
@@ -693,6 +822,43 @@ describe("rendererAiFlow V2 application helpers", () => {
         failedPages: []
       }
     });
+  });
+
+  it("uses displayed OCR text even when the extraction wrapper state is not text-found", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const run = context.runAiSuggestionForActiveDocument as () => Promise<void>;
+    let capturedTextContext: RendererAiDocumentTextContext | null = null;
+    state.textExtraction.byDocumentPath["Z:\\source\\document.pdf"] = {
+      status: "empty",
+      result: {
+        status: "text-found",
+        finalTextSource: "pdf-hybrid",
+        text: "Texte fusionne affiche dans le bloc modifiable",
+        excerpt: "Texte fusionne affiche dans le bloc modifiable",
+        characterCount: 45,
+        excerptCharacterCount: 45,
+        pdfTextQuality: createHybridPdfTextQuality(),
+        pdfOcr: createPdfOcrSummary()
+      },
+      error: null
+    };
+    (context.window as { docSorter: Record<string, unknown> }).docSorter = {
+      testAiConnection: async () => ({ ok: true, value: state.ai?.status }),
+      preloadAiModel: async () => ({ ok: true, value: createReadyModelStatus() }),
+      runAiSuggestionForActiveDocument: async (_documentPath: string, textContext: RendererAiDocumentTextContext) => {
+        capturedTextContext = textContext;
+        return { ok: true, value: createAiSuggestion() };
+      }
+    };
+
+    await run();
+
+    expect(capturedTextContext).toEqual({
+      source: "pdf-hybrid",
+      excerpt: "Texte fusionne affiche dans le bloc modifiable"
+    });
+    expect(state.ai?.panelStatus).toBe("suggestion-ready");
   });
 
   it("does not launch OCR automatically when image text is missing", async () => {
@@ -927,6 +1093,8 @@ async function loadAiFlow(): Promise<Record<string, unknown>> {
       status: "pending"
     }),
     extractTextFromActivePdf: async () => undefined,
+    canRunOcrForActivePdf: () => false,
+    runOcrForActivePdfForAiAnalysis: async () => undefined,
     getTextExtractionState: (filePath: string) =>
       state.textExtraction.byDocumentPath[filePath] ?? {
         status: "idle",
@@ -1082,6 +1250,49 @@ function createHybridPdfTextQuality(): PdfTextQuality {
         status: "text-empty"
       }
     ]
+  };
+}
+
+function createOcrRecommendedPdfTextQuality(): PdfTextQuality {
+  return {
+    pageCount: 1,
+    nativeTextChars: 0,
+    usefulTextChars: 0,
+    decision: "ocr-recommended",
+    reason: "Aucun texte exploitable détecté.",
+    warnings: ["OCR PDF recommandé."],
+    pages: [
+      {
+        page: 1,
+        rawTextChars: 0,
+        usefulTextChars: 0,
+        approximateWordCount: 0,
+        readableCharRatio: 0,
+        status: "text-empty"
+      }
+    ]
+  };
+}
+
+function createPdfOcrSummary(): PdfOcrSummary {
+  return {
+    requestedPages: [1],
+    succeededPages: [1],
+    failedPages: [],
+    durationMs: 120,
+    ocrCharacterCount: 25,
+    qualityScore: 80,
+    qualityLabel: "bonne",
+    renderer: "pdftoppm",
+    dpi: 300,
+    pages: [
+      {
+        page: 1,
+        status: "success",
+        usefulTextChars: 25
+      }
+    ],
+    warnings: []
   };
 }
 

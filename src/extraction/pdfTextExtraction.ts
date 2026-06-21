@@ -127,10 +127,14 @@ export interface PdfTextExtractor {
 }
 
 interface PdfJsModule {
+  VerbosityLevel: {
+    ERRORS: number;
+  };
   getDocument: (options: {
     data: Uint8Array;
     disableWorker: true;
     useSystemFonts: true;
+    verbosity?: number;
   }) => PdfDocumentLoadingTask;
 }
 
@@ -439,7 +443,8 @@ export async function extractNativePdfText(
   const loadingTask = pdfJs.getDocument({
     data: new Uint8Array(bytes),
     disableWorker: true,
-    useSystemFonts: true
+    useSystemFonts: true,
+    verbosity: pdfJs.VerbosityLevel.ERRORS
   });
 
   try {

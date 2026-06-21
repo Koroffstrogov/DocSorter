@@ -83,6 +83,15 @@ import {
 import type { ActionJournalEntry, UndoableClassificationAction } from "../history/historyTypes";
 import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
 import {
+  createKnownTarget as createKnownTargetService,
+  deactivateKnownTarget as deactivateKnownTargetService,
+  listKnownTargets as listKnownTargetsService,
+  updateKnownTarget as updateKnownTargetService,
+  type KnownTargetInput,
+  type KnownTargetsList,
+  type KnownTargetsResult
+} from "../known-targets/knownTargets";
+import {
   checkDestinationNameAvailability as checkDestinationNameAvailabilityService,
   type DestinationAvailabilityResult
 } from "../naming/destinationNameAvailability";
@@ -303,6 +312,20 @@ export interface IpcHandlerServices {
     textContext: AiDocumentTextContext | null;
     aiResult: AiSettingsResult<AiDocumentSuggestion> | null;
   }) => Promise<AiDiagnosticResult>;
+  listKnownTargets: (userDataPath: string) => Promise<KnownTargetsResult<KnownTargetsList>>;
+  createKnownTarget: (
+    userDataPath: string,
+    input: KnownTargetInput
+  ) => Promise<KnownTargetsResult<KnownTargetsList>>;
+  updateKnownTarget: (
+    userDataPath: string,
+    id: string,
+    input: KnownTargetInput
+  ) => Promise<KnownTargetsResult<KnownTargetsList>>;
+  deactivateKnownTarget: (
+    userDataPath: string,
+    id: string
+  ) => Promise<KnownTargetsResult<KnownTargetsList>>;
 }
 
 export interface RegisterIpcHandlersOptions {
@@ -549,6 +572,38 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "writeAiDiagnostic"
   },
   {
+    channel: IPC_CHANNELS.knownTargetsList,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "listKnownTargets"
+  },
+  {
+    channel: IPC_CHANNELS.knownTargetsCreate,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "createKnownTarget"
+  },
+  {
+    channel: IPC_CHANNELS.knownTargetsUpdate,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "updateKnownTarget"
+  },
+  {
+    channel: IPC_CHANNELS.knownTargetsDeactivate,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "deactivateKnownTarget"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -644,7 +699,11 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   preloadAiModel: preloadConfiguredOllamaModelService,
   unloadAiModel: unloadConfiguredOllamaModelService,
   runAiSuggestionForDocument: runOllamaSuggestionForDocumentService,
-  writeAiDiagnostic: writeAiDiagnosticService
+  writeAiDiagnostic: writeAiDiagnosticService,
+  listKnownTargets: listKnownTargetsService,
+  createKnownTarget: createKnownTargetService,
+  updateKnownTarget: updateKnownTargetService,
+  deactivateKnownTarget: deactivateKnownTargetService
 };
 
 export function createMainProcessAppState(): MainProcessAppState {
@@ -945,6 +1004,28 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
       });
     }
   );
+  options.ipcMain.handle(IPC_CHANNELS.knownTargetsList, () =>
+    services.listKnownTargets(options.app.getPath("userData"))
+  );
+  options.ipcMain.handle(IPC_CHANNELS.knownTargetsCreate, (_event, input: unknown) =>
+    services.createKnownTarget(
+      options.app.getPath("userData"),
+      readKnownTargetInput(input)
+    )
+  );
+  options.ipcMain.handle(IPC_CHANNELS.knownTargetsUpdate, (_event, id: unknown, input: unknown) =>
+    services.updateKnownTarget(
+      options.app.getPath("userData"),
+      typeof id === "string" ? id : "",
+      readKnownTargetInput(input)
+    )
+  );
+  options.ipcMain.handle(IPC_CHANNELS.knownTargetsDeactivate, (_event, id: unknown) =>
+    services.deactivateKnownTarget(
+      options.app.getPath("userData"),
+      typeof id === "string" ? id : ""
+    )
+  );
   options.ipcMain.handle(IPC_CHANNELS.historyGetRecent, (_event, limit: unknown) =>
     services.readRecentActions(
       getJournalFilePath(options.app, services),
@@ -1145,6 +1226,32 @@ function isQueuedDocumentPath(state: MainProcessAppState, documentPath: string):
 
 function getSelectedTargetFolderCandidates(state: MainProcessAppState): string[] {
   return state.selectedTargetFolder ? [state.selectedTargetFolder] : [];
+}
+
+function readKnownTargetInput(value: unknown): KnownTargetInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const candidate = value as {
+    id?: unknown;
+    kind?: unknown;
+    displayName?: unknown;
+    fileAlias?: unknown;
+    aliases?: unknown;
+    isActive?: unknown;
+  };
+
+  return {
+    ...(typeof candidate.id === "string" ? { id: candidate.id } : {}),
+    ...(typeof candidate.kind === "string" ? { kind: candidate.kind as KnownTargetInput["kind"] } : {}),
+    ...(typeof candidate.displayName === "string" ? { displayName: candidate.displayName } : {}),
+    ...(typeof candidate.fileAlias === "string" ? { fileAlias: candidate.fileAlias } : {}),
+    ...(Array.isArray(candidate.aliases)
+      ? { aliases: candidate.aliases.filter((alias): alias is string => typeof alias === "string") }
+      : {}),
+    ...(typeof candidate.isActive === "boolean" ? { isActive: candidate.isActive } : {})
+  };
 }
 
 function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null {

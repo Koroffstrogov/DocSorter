@@ -44,6 +44,40 @@ describe("folderLearningSummary", () => {
     });
   });
 
+  it("proposes an aligned name from one recognized folder name for manual validation", () => {
+    const analysis = summary.buildAnalysis({
+      targetFolder: "Banque/Releves",
+      entries: [
+        name("2026-04_compte-joint_releve-bancaire_bnp-paribas.pdf")
+      ],
+      aiName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf",
+      aiFields: {
+        dateToken: "2026-05",
+        subject: "",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas",
+        detail: ""
+      },
+      extension: ".pdf"
+    });
+
+    expect(analysis.profile).toMatchObject({
+      status: "weak",
+      recognizedFileCount: 1
+    });
+    expect(analysis.comparison).toMatchObject({
+      recommendation: "manual-review",
+      alignedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+    });
+    expect(analysis.pipeline.find((step) => step.id === "aligned-name-proposal")).toMatchObject({
+      status: "ready",
+      output: {
+        alignedName: "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"
+      }
+    });
+  });
+
   it("detects DATE_DOCUMENT_CIBLE and exposes the pipeline", () => {
     const analysis = summary.buildAnalysis({
       targetFolder: "Banque/Releves",

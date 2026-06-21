@@ -24,6 +24,11 @@ interface AiFieldRowsOptions {
   onFieldManualEditStart: (field: AiSelectionFieldKey) => void;
   onFieldManualValueChange: (field: AiSelectionFieldKey, value: string) => void;
   onFieldManualEditFinish: () => void;
+  knownTargets: KnownTargetsState;
+  onKnownTargetSelect: (target: KnownTarget) => void;
+  onKnownTargetCreate: (input: KnownTargetInput) => void;
+  onKnownTargetUpdate: (id: string, input: KnownTargetInput) => void;
+  onKnownTargetDeactivate: (id: string) => void;
 }
 
 interface AiFieldRowsApi {
@@ -150,7 +155,9 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
 
     title.append(labelElement, badge);
     row.append(title, candidateLine, editButton);
-    if (isEditing) {
+    if (isEditing && key === "target") {
+      row.append(createKnownTargetPicker(selectedValue, options));
+    } else if (isEditing) {
       manualInput.type = "text";
       manualInput.className = "ai-field-manual-input";
       manualInput.value = selectedValue ?? "";
@@ -181,6 +188,197 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       }, 0);
     }
     return row;
+  }
+
+  function createKnownTargetPicker(
+    selectedValue: string | undefined,
+    options: AiFieldRowsOptions
+  ): HTMLElement {
+    const panel = document.createElement("div");
+    const heading = document.createElement("div");
+    const title = document.createElement("strong");
+    const status = document.createElement("span");
+    const search = document.createElement("input");
+    const list = document.createElement("div");
+    const freeBlock = document.createElement("div");
+    const freeButton = document.createElement("button");
+    const freeInput = document.createElement("input");
+    const manager = document.createElement("details");
+    const managerSummary = document.createElement("summary");
+    const managerForm = document.createElement("div");
+    const displayNameInput = document.createElement("input");
+    const kindSelect = document.createElement("select");
+    const fileAliasInput = document.createElement("input");
+    const aliasesInput = document.createElement("input");
+    const saveButton = document.createElement("button");
+    const resetButton = document.createElement("button");
+    let editingTargetId = "";
+
+    panel.className = "known-target-picker";
+    heading.className = "known-target-picker-heading";
+    title.textContent = "Choisir une cible connue";
+    status.className = `known-target-status ${options.knownTargets.status}`;
+    status.textContent = knownTargetsStatusLabel(options.knownTargets);
+    heading.append(title, status);
+
+    search.type = "search";
+    search.className = "known-target-search";
+    search.placeholder = "Rechercher une cible";
+    search.autocomplete = "off";
+
+    list.className = "known-target-list";
+
+    freeBlock.className = "known-target-free";
+    freeButton.type = "button";
+    freeButton.textContent = "Saisie libre";
+    freeButton.addEventListener("click", () => {
+      freeInput.focus();
+      freeInput.setSelectionRange(freeInput.value.length, freeInput.value.length);
+    });
+    freeInput.type = "text";
+    freeInput.value = selectedValue ?? "";
+    freeInput.placeholder = "Cible libre, ex. paul";
+    freeInput.autocomplete = "off";
+    freeInput.addEventListener("input", () => {
+      options.onFieldManualValueChange("target", freeInput.value);
+    });
+    freeInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === "Escape") {
+        event.preventDefault();
+        freeInput.blur();
+      }
+    });
+    freeInput.addEventListener("blur", options.onFieldManualEditFinish);
+    freeBlock.append(freeButton, freeInput);
+
+    manager.className = "known-target-manager";
+    managerSummary.textContent = "Gérer la liste";
+    displayNameInput.type = "text";
+    displayNameInput.placeholder = "Nom affiché, ex. Paul Martin";
+    fileAliasInput.type = "text";
+    fileAliasInput.placeholder = "Alias fichier, ex. paul";
+    aliasesInput.type = "text";
+    aliasesInput.placeholder = "Alias de détection, séparés par virgules";
+    kindSelect.replaceChildren(
+      ...KNOWN_TARGET_KIND_ORDER.map((kind) => {
+        const option = document.createElement("option");
+        option.value = kind;
+        option.textContent = knownTargetKindLabel(kind);
+        return option;
+      })
+    );
+    saveButton.type = "button";
+    saveButton.className = "known-target-save";
+    saveButton.textContent = "Ajouter";
+    saveButton.addEventListener("click", () => {
+      const input = readKnownTargetForm(kindSelect, displayNameInput, fileAliasInput, aliasesInput);
+      if (editingTargetId) {
+        options.onKnownTargetUpdate(editingTargetId, input);
+      } else {
+        options.onKnownTargetCreate(input);
+      }
+    });
+    resetButton.type = "button";
+    resetButton.textContent = "Nouvelle cible";
+    resetButton.addEventListener("click", () => {
+      editingTargetId = "";
+      saveButton.textContent = "Ajouter";
+      displayNameInput.value = "";
+      fileAliasInput.value = "";
+      aliasesInput.value = "";
+      kindSelect.value = "person";
+      displayNameInput.focus();
+    });
+
+    managerForm.className = "known-target-form";
+    managerForm.append(
+      createKnownTargetFormLabel("Nom affiché", displayNameInput),
+      createKnownTargetFormLabel("Type", kindSelect),
+      createKnownTargetFormLabel("Alias nom", fileAliasInput),
+      createKnownTargetFormLabel("Alias reconnus", aliasesInput),
+      saveButton,
+      resetButton
+    );
+    manager.append(managerSummary, managerForm);
+
+    function renderTargetList(): void {
+      const query = normalizeTargetSearch(search.value);
+      const activeTargets = options.knownTargets.targets
+        .filter((target) => target.isActive)
+        .filter((target) => targetMatchesSearch(target, query));
+      if (activeTargets.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "known-target-empty";
+        empty.textContent = options.knownTargets.status === "loading"
+          ? "Chargement des cibles locales..."
+          : "Aucune cible active.";
+        list.replaceChildren(empty);
+        return;
+      }
+
+      const groups = KNOWN_TARGET_KIND_ORDER.flatMap((kind) => {
+        const targets = activeTargets.filter((target) => target.kind === kind);
+        if (targets.length === 0) {
+          return [];
+        }
+
+        const section = document.createElement("section");
+        const groupTitle = document.createElement("strong");
+        groupTitle.textContent = knownTargetKindLabel(kind);
+        section.append(groupTitle, ...targets.map((target) => createKnownTargetRow(target)));
+        return [section];
+      });
+      list.replaceChildren(...groups);
+    }
+
+    function createKnownTargetRow(target: KnownTarget): HTMLElement {
+      const row = document.createElement("div");
+      const choose = document.createElement("button");
+      const meta = document.createElement("span");
+      const edit = document.createElement("button");
+      const deactivate = document.createElement("button");
+
+      row.className = "known-target-row";
+      choose.type = "button";
+      choose.className = "known-target-choice";
+      choose.textContent = `${target.displayName} -> ${target.fileAlias}`;
+      choose.title = `Utiliser ${target.fileAlias} dans le nom final`;
+      choose.addEventListener("click", () => {
+        options.onKnownTargetSelect(target);
+      });
+      meta.textContent = target.aliases.length ? target.aliases.join(", ") : "";
+      edit.type = "button";
+      edit.textContent = "Modifier";
+      edit.addEventListener("click", () => {
+        editingTargetId = target.id;
+        manager.open = true;
+        saveButton.textContent = "Mettre à jour";
+        displayNameInput.value = target.displayName;
+        fileAliasInput.value = target.fileAlias;
+        aliasesInput.value = target.aliases.join(", ");
+        kindSelect.value = target.kind;
+        displayNameInput.focus();
+      });
+      deactivate.type = "button";
+      deactivate.textContent = "Désactiver";
+      deactivate.addEventListener("click", () => {
+        const confirmed = window.confirm(`Désactiver la cible "${target.displayName}" ?`);
+        if (confirmed) {
+          options.onKnownTargetDeactivate(target.id);
+        }
+      });
+      row.append(choose, meta, edit, deactivate);
+      return row;
+    }
+
+    search.addEventListener("input", renderTargetList);
+    renderTargetList();
+
+    panel.append(heading, search, list, freeBlock, manager);
+    window.setTimeout(() => {
+      search.focus();
+    }, 0);
+    return panel;
   }
 
   function createCandidateButton(
@@ -340,6 +538,98 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "");
+  }
+
+  const KNOWN_TARGET_KIND_ORDER: KnownTargetKind[] = [
+    "person",
+    "household",
+    "vehicle",
+    "property",
+    "other"
+  ];
+
+  function knownTargetKindLabel(kind: KnownTargetKind): string {
+    switch (kind) {
+      case "person":
+        return "Personnes";
+      case "household":
+        return "Foyer";
+      case "vehicle":
+        return "Véhicules";
+      case "property":
+        return "Biens";
+      case "other":
+        return "Autres";
+    }
+  }
+
+  function knownTargetsStatusLabel(state: KnownTargetsState): string {
+    if (state.status === "loading") {
+      return "chargement";
+    }
+    if (state.status === "saving") {
+      return "sauvegarde";
+    }
+    if (state.status === "error") {
+      return state.error || "liste indisponible";
+    }
+    if (state.warnings.length > 0) {
+      return state.warnings[0];
+    }
+    return `${state.targets.filter((target) => target.isActive).length} cible(s) active(s)`;
+  }
+
+  function createKnownTargetFormLabel(labelText: string, control: HTMLElement): HTMLLabelElement {
+    const label = document.createElement("label");
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = labelText;
+    label.append(labelSpan, control);
+    return label;
+  }
+
+  function readKnownTargetForm(
+    kindSelect: HTMLSelectElement,
+    displayNameInput: HTMLInputElement,
+    fileAliasInput: HTMLInputElement,
+    aliasesInput: HTMLInputElement
+  ): KnownTargetInput {
+    return {
+      kind: readKnownTargetKind(kindSelect.value),
+      displayName: displayNameInput.value,
+      fileAlias: fileAliasInput.value,
+      aliases: aliasesInput.value
+        .split(",")
+        .map((alias) => alias.trim())
+        .filter(Boolean),
+      isActive: true
+    };
+  }
+
+  function readKnownTargetKind(value: string): KnownTargetKind {
+    return KNOWN_TARGET_KIND_ORDER.includes(value as KnownTargetKind)
+      ? value as KnownTargetKind
+      : "other";
+  }
+
+  function targetMatchesSearch(target: KnownTarget, normalizedQuery: string): boolean {
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return [
+      target.displayName,
+      target.fileAlias,
+      ...target.aliases
+    ].some((value) => normalizeTargetSearch(value).includes(normalizedQuery));
+  }
+
+  function normalizeTargetSearch(value: string): string {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
   }
 
   globalThis.DocSorterAiFieldRows = {

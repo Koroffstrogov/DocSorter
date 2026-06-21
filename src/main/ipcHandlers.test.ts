@@ -94,6 +94,23 @@ describe("sensitive IPC handler contract", () => {
       serviceName: "runPdfOcrForDocument"
     });
   });
+
+  it("documents bounded local known-targets channels", () => {
+    expect(contractFor(IPC_CHANNELS.knownTargetsList)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainSource: false,
+      usesMainTarget: false,
+      usesUserDataPath: true,
+      serviceName: "listKnownTargets"
+    });
+    expect(contractFor(IPC_CHANNELS.knownTargetsCreate)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainSource: false,
+      usesMainTarget: false,
+      usesUserDataPath: true,
+      serviceName: "createKnownTarget"
+    });
+  });
 });
 
 describe("registerIpcHandlers", () => {
@@ -391,6 +408,43 @@ describe("registerIpcHandlers", () => {
       }
     });
     expect(harness.services.writeAiDiagnostic).not.toHaveBeenCalled();
+  });
+
+  it("routes known-targets IPC to bounded userData services", async () => {
+    const harness = createHarness();
+
+    await harness.invoke(IPC_CHANNELS.knownTargetsList);
+    await harness.invoke(IPC_CHANNELS.knownTargetsCreate, {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul",
+      aliases: ["Paul"],
+      ignoredPath: "C:\\secret\\document.pdf"
+    });
+    await harness.invoke(IPC_CHANNELS.knownTargetsUpdate, "paul", {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul-martin",
+      aliases: ["Paul Martin"],
+      isActive: true
+    });
+    await harness.invoke(IPC_CHANNELS.knownTargetsDeactivate, "paul");
+
+    expect(harness.services.listKnownTargets).toHaveBeenCalledWith(USER_DATA_PATH);
+    expect(harness.services.createKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul",
+      aliases: ["Paul"]
+    });
+    expect(harness.services.updateKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, "paul", {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul-martin",
+      aliases: ["Paul Martin"],
+      isActive: true
+    });
+    expect(harness.services.deactivateKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, "paul");
   });
 
   it("keeps real classification on existing main-state target, queue and journal path", async () => {
@@ -801,6 +855,34 @@ function createServices(): IpcHandlerServices {
         documentName: "document.pdf",
         message: "Diagnostic IA complet exporté."
       }
+    })),
+    listKnownTargets: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targets: [],
+        warnings: []
+      }
+    })),
+    createKnownTarget: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targets: [],
+        warnings: []
+      }
+    })),
+    updateKnownTarget: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targets: [],
+        warnings: []
+      }
+    })),
+    deactivateKnownTarget: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targets: [],
+        warnings: []
+      }
     }))
   };
 }
@@ -841,6 +923,7 @@ function createSourceListing(currentPath: string) {
     fileCount: 1,
     supportedDocumentCount: 1,
     shortcuts: [],
+    drives: [],
     truncated: false,
     entryLimit: 500,
     warnings: []

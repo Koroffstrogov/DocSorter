@@ -124,6 +124,20 @@ describe("preload API surface", () => {
         }
       }
     );
+    await api.listKnownTargets();
+    await api.createKnownTarget({
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul",
+      aliases: ["Paul"]
+    });
+    await api.updateKnownTarget("paul", {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul-martin",
+      aliases: ["Paul Martin"]
+    });
+    await api.deactivateKnownTarget("paul");
     await api.getRecentHistory(8);
 
     expect(recorder.calls.map((call) => call.channel)).toEqual([
@@ -165,6 +179,10 @@ describe("preload API surface", () => {
       IPC_CHANNELS.aiUnloadModel,
       IPC_CHANNELS.aiRunSuggestion,
       IPC_CHANNELS.aiExportDiagnostic,
+      IPC_CHANNELS.knownTargetsList,
+      IPC_CHANNELS.knownTargetsCreate,
+      IPC_CHANNELS.knownTargetsUpdate,
+      IPC_CHANNELS.knownTargetsDeactivate,
       IPC_CHANNELS.historyGetRecent
     ]);
   });

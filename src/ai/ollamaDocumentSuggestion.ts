@@ -739,7 +739,15 @@ async function checkDocumentStillAvailable(
 }
 
 function normalizeTextContext(value: AiDocumentTextContext | null): AiDocumentTextContext | null {
-  if (!value || (value.source !== "pdf-native" && value.source !== "tesseract-cli")) {
+  if (
+    !value ||
+    (
+      value.source !== "pdf-native" &&
+      value.source !== "pdf-ocr" &&
+      value.source !== "pdf-hybrid" &&
+      value.source !== "tesseract-cli"
+    )
+  ) {
     return null;
   }
 
@@ -766,7 +774,11 @@ function buildAiInput(options: {
     extractedTextExcerpt:
       options.textContext.source === "pdf-native" ? options.textContext.excerpt : "",
     ocrTextExcerpt:
-      options.textContext.source === "tesseract-cli" ? options.textContext.excerpt : "",
+      options.textContext.source === "pdf-ocr" ||
+      options.textContext.source === "pdf-hybrid" ||
+      options.textContext.source === "tesseract-cli"
+        ? options.textContext.excerpt
+        : "",
     knownRelativeFolders: options.knownRelativeFolders,
     availableRootFolders: rootFoldersFromRelativeFolders(options.knownRelativeFolders),
     namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",

@@ -14,7 +14,7 @@ describe("listSourceDirectory", () => {
     await writeFile(path.join(directory, "photo.jpg"), "jpg");
     await writeFile(path.join(directory, "notes.txt"), "txt");
 
-    const result = await listSourceDirectory(directory, { homePath: directory, cwd: directory });
+    const result = await listSourceDirectory(directory, { homePath: directory, cwd: directory, driveLabels: {} });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -25,6 +25,7 @@ describe("listSourceDirectory", () => {
     expect(result.value.directoryCount).toBe(1);
     expect(result.value.fileCount).toBe(3);
     expect(result.value.supportedDocumentCount).toBe(2);
+    expect(Array.isArray(result.value.drives)).toBe(true);
     expect(result.value.entries.map((entry) => entry.name)).toEqual([
       "incoming",
       "notes.txt",
@@ -57,7 +58,7 @@ describe("listSourceDirectory", () => {
     const beforeEntries = await readdir(child);
     const beforeStats = await stat(path.join(child, "document.pdf"));
 
-    const result = await listSourceDirectory(child, { homePath: directory, cwd: directory });
+    const result = await listSourceDirectory(child, { homePath: directory, cwd: directory, driveLabels: {} });
 
     expect(result.ok).toBe(true);
     if (result.ok) {

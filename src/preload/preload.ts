@@ -67,6 +67,10 @@ const api: DocSorterApi = {
     ipcRenderer.invoke("ai:runSuggestion", documentPath, textContext),
   exportAiDiagnostic: (documentPath, textContext, aiResult) =>
     ipcRenderer.invoke("ai:exportDiagnostic", documentPath, textContext, aiResult),
+  listKnownTargets: () => ipcRenderer.invoke("knownTargets:list"),
+  createKnownTarget: (input) => ipcRenderer.invoke("knownTargets:create", input),
+  updateKnownTarget: (id, input) => ipcRenderer.invoke("knownTargets:update", id, input),
+  deactivateKnownTarget: (id) => ipcRenderer.invoke("knownTargets:deactivate", id),
   getRecentHistory: (limit) => ipcRenderer.invoke("history:getRecent", limit),
 };
 

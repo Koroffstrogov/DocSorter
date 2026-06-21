@@ -80,6 +80,15 @@
             <button id="delete-duplicate-documents" type="button" disabled>Supprimer doublons</button>
           </div>
         </div>
+        <div class="source-history-panel" aria-label="Historique des dossiers source">
+          <label>
+            <span>Sources récentes</span>
+            <select id="source-history-select" disabled>
+              <option value="">Aucun historique</option>
+            </select>
+          </label>
+          <button id="clear-source-history" type="button" disabled>Effacer l'historique</button>
+        </div>
         <div class="queue-tools" aria-label="Recherche et tri de la file">
           <div class="queue-search">
             <input id="queue-search" type="search" placeholder="Rechercher dans la file" autocomplete="off" />
@@ -487,6 +496,7 @@
     <script src="./rendererFolderLearningFlow.js"></script>
     <script src="./rendererNamingDestinationFlow.js"></script>
     <script src="./rendererClassificationFlow.js"></script>
+    <script src="./rendererKnownTargetsFlow.js"></script>
     <script src="./rendererShortcutFlow.js"></script>
     <script src="./renderer.js"></script>
   </body>

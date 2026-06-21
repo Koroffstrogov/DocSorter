@@ -5,6 +5,7 @@ interface NameExplanationInput {
   extension: string;
   fields: Partial<AiSelectionFields> | null;
   manualFields?: AiSelectionManualFields | null;
+  knownTargetSelections?: AiSelectionKnownTargets | null;
   destinationFolder: string;
   folderOrigin?: NamingFieldOrigin;
   folderLearning?: FolderLearningState | null;
@@ -73,9 +74,9 @@ var DocSorterNameExplanation: NameExplanationApi;
       missingFields,
       lines: [
         createFinalNameLine(input.filename, input.filenameValid, input.filenameSource),
-        createRequiredLine("Date", date, "dateToken", input.manualFields),
-        createRequiredLine("Cible", target, "target", input.manualFields),
-        createRequiredLine("Document", documentType, "documentType", input.manualFields),
+        createRequiredLine("Date", date, "dateToken", input.manualFields, input.knownTargetSelections),
+        createRequiredLine("Cible", target, "target", input.manualFields, input.knownTargetSelections),
+        createRequiredLine("Document", documentType, "documentType", input.manualFields, input.knownTargetSelections),
         createOptionalLine("Émetteur", issuerRaw, optionalParts.issuer, "issuer", input.manualFields, date),
         createOptionalLine("Détail", detailRaw, optionalParts.detail, "detail", input.manualFields, date),
         createFolderLine(input.destinationFolder, input.folderOrigin),
@@ -89,7 +90,8 @@ var DocSorterNameExplanation: NameExplanationApi;
     label: string,
     value: string,
     field: AiSelectionFieldKey,
-    manualFields: AiSelectionManualFields | null | undefined
+    manualFields: AiSelectionManualFields | null | undefined,
+    knownTargetSelections: AiSelectionKnownTargets | null | undefined
   ): NameExplanationLine {
     if (!value) {
       return {
@@ -101,12 +103,13 @@ var DocSorterNameExplanation: NameExplanationApi;
       };
     }
 
+    const knownTarget = field === "target" ? knownTargetSelections?.target : null;
     return {
       label,
-      value,
+      value: knownTarget ? `${knownTarget.displayName} → ${knownTarget.fileAlias}` : value,
       status: "used",
       reason: "Utilisé dans le nom final.",
-      source: sourceForField(field, manualFields)
+      source: sourceForField(field, manualFields, knownTargetSelections)
     };
   }
 
@@ -303,8 +306,12 @@ var DocSorterNameExplanation: NameExplanationApi;
 
   function sourceForField(
     field: AiSelectionFieldKey,
-    manualFields: AiSelectionManualFields | null | undefined
+    manualFields: AiSelectionManualFields | null | undefined,
+    knownTargetSelections?: AiSelectionKnownTargets | null
   ): string {
+    if (field === "target" && knownTargetSelections?.target) {
+      return "Liste locale des cibles";
+    }
     return manualFields?.[field] ? "Correction manuelle" : "IA locale";
   }
 

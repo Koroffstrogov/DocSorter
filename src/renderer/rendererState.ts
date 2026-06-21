@@ -162,6 +162,16 @@ function createIdleAiState(): AiState {
   };
 }
 
+function createIdleKnownTargetsState(): KnownTargetsState {
+  return {
+    status: "idle",
+    targets: [],
+    warnings: [],
+    message: "Liste locale des cibles non chargée.",
+    error: ""
+  };
+}
+
 function createIdleAiPipelineTimingState(): AiPipelineTimingState {
   return {
     stage: "idle",

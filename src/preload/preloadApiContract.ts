@@ -25,6 +25,11 @@ import type { ActionJournalReadResult } from "../history/actionJournal";
 import type { UndoableClassificationAction } from "../history/historyTypes";
 import type { ActionJournalEntry } from "../history/historyTypes";
 import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
+import type {
+  KnownTargetInput,
+  KnownTargetsList,
+  KnownTargetsResult
+} from "../known-targets/knownTargets";
 import type { DestinationAvailabilityResult } from "../naming/destinationNameAvailability";
 import type { NamingDraft, ProposedFilename } from "../naming/namingDraft";
 import type {
@@ -100,6 +105,10 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "unloadAiModel",
   "runAiSuggestionForActiveDocument",
   "exportAiDiagnostic",
+  "listKnownTargets",
+  "createKnownTarget",
+  "updateKnownTarget",
+  "deactivateKnownTarget",
   "getRecentHistory"
 ] as const;
 
@@ -261,6 +270,31 @@ export function createPreloadApi(ipc: IpcInvoker) {
         textContext,
         aiResult
       ) as Promise<AiDiagnosticResult>,
+    listKnownTargets: (): Promise<KnownTargetsResult<KnownTargetsList>> =>
+      ipc.invoke(IPC_CHANNELS.knownTargetsList) as Promise<KnownTargetsResult<KnownTargetsList>>,
+    createKnownTarget: (
+      input: KnownTargetInput
+    ): Promise<KnownTargetsResult<KnownTargetsList>> =>
+      ipc.invoke(
+        IPC_CHANNELS.knownTargetsCreate,
+        input
+      ) as Promise<KnownTargetsResult<KnownTargetsList>>,
+    updateKnownTarget: (
+      id: string,
+      input: KnownTargetInput
+    ): Promise<KnownTargetsResult<KnownTargetsList>> =>
+      ipc.invoke(
+        IPC_CHANNELS.knownTargetsUpdate,
+        id,
+        input
+      ) as Promise<KnownTargetsResult<KnownTargetsList>>,
+    deactivateKnownTarget: (
+      id: string
+    ): Promise<KnownTargetsResult<KnownTargetsList>> =>
+      ipc.invoke(
+        IPC_CHANNELS.knownTargetsDeactivate,
+        id
+      ) as Promise<KnownTargetsResult<KnownTargetsList>>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>
       ipc.invoke(IPC_CHANNELS.historyGetRecent, limit) as Promise<
         ActionJournalReadResult<ActionJournalEntry[]>

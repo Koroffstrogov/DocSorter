@@ -18,6 +18,7 @@ const state: AppState = {
   textExtraction: createIdleTextExtractionState(),
   ocr: createIdleOcrState(),
   ai: createIdleAiState(),
+  knownTargets: createIdleKnownTargetsState(),
   shortcutsHelpVisible: false,
   uiMode: "simple"
 };
@@ -48,6 +49,8 @@ const trashDuplicateDocumentsButton = document.querySelector<HTMLButtonElement>(
 const deleteDuplicateDocumentsButton = document.querySelector<HTMLButtonElement>("#delete-duplicate-documents");
 const sourcePath = document.querySelector<HTMLElement>("#source-path");
 const targetPath = document.querySelector<HTMLElement>("#target-path");
+const sourceHistorySelect = document.querySelector<HTMLSelectElement>("#source-history-select");
+const clearSourceHistoryButton = document.querySelector<HTMLButtonElement>("#clear-source-history");
 const prepareClassificationButton = document.querySelector<HTMLButtonElement>("#prepare-classification");
 const executeClassificationButton = document.querySelector<HTMLButtonElement>("#execute-classification");
 const simpleClassificationButton = document.querySelector<HTMLButtonElement>("#simple-classification-action");
@@ -58,6 +61,8 @@ const advancedModeButton = document.querySelector<HTMLButtonElement>("#advanced-
 const diagnosticPanel = document.querySelector<HTMLDetailsElement>("#diagnostic-panel");
 const advancedPanel = document.querySelector<HTMLDetailsElement>("#advanced-panel");
 const aiTextStatus = document.querySelector<HTMLElement>("#ai-text-status");
+const SOURCE_DIRECTORY_HISTORY_KEY = "docsorter.sourceDirectoryHistory.v1";
+const SOURCE_DIRECTORY_HISTORY_LIMIT = 8;
 
 const previewPanel = DocSorterPreviewPanel.createPreviewPanel({
   getState: () => ({
@@ -263,6 +268,10 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onFieldManualEditStart: startAiFieldManualEdit,
   onFieldManualValueChange: updateAiFieldManualValue,
   onFieldManualEditFinish: finishAiFieldManualEdit,
+  onKnownTargetSelect: selectKnownTargetForAiTarget,
+  onKnownTargetCreate: createKnownTargetFromPanel,
+  onKnownTargetUpdate: updateKnownTargetFromPanel,
+  onKnownTargetDeactivate: deactivateKnownTargetFromPanel,
   onFolderCandidateSelect: selectAiFolderCandidate,
   onFolderManualEditStart: startAiFolderManualEdit,
   onFolderManualValueChange: updateAiFolderManualValue,
@@ -278,6 +287,7 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   canUnloadModel: canUnloadAiModel,
   canApplySuggestionToEmptyFields: canApplyAiSuggestionToEmptyFields,
   canExportDiagnostic: canExportAiDiagnostic,
+  getKnownTargetsState: () => state.knownTargets,
   formatDate
 });
 
@@ -292,9 +302,22 @@ void refreshRecentHistory();
 registerPdfOcrProgressListener();
 void refreshOcrStatus();
 void refreshAiStatus();
+void refreshKnownTargets();
 
 selectSourceButton?.addEventListener("click", () => {
   void selectSourceDirectory();
+});
+
+sourceHistorySelect?.addEventListener("change", () => {
+  const selectedPath = sourceHistorySelect.value;
+  if (selectedPath) {
+    void selectSourceDirectoryFromHistory(selectedPath);
+  }
+});
+
+clearSourceHistoryButton?.addEventListener("click", () => {
+  clearSourceDirectoryHistory();
+  render();
 });
 
 refreshSourceButton?.addEventListener("click", () => {
@@ -359,6 +382,7 @@ render();
 
 function render(): void {
   renderControls();
+  renderSourceDirectoryHistory();
   renderPaths();
   renderQueue();
   renderPreview();
@@ -415,6 +439,87 @@ function renderControls(): void {
   if (refreshHistoryButton) {
     refreshHistoryButton.disabled = state.history.isLoading || isClassificationBusy();
   }
+}
+
+function rememberSourceDirectory(pathValue: string): void {
+  const normalizedPath = pathValue.trim();
+  if (!normalizedPath) {
+    return;
+  }
+
+  const nextHistory = [
+    normalizedPath,
+    ...readSourceDirectoryHistory().filter(
+      (historyPath) => historyPath.toLowerCase() !== normalizedPath.toLowerCase()
+    )
+  ].slice(0, SOURCE_DIRECTORY_HISTORY_LIMIT);
+  writeSourceDirectoryHistory(nextHistory);
+}
+
+function clearSourceDirectoryHistory(): void {
+  writeSourceDirectoryHistory([]);
+}
+
+function readSourceDirectoryHistory(): string[] {
+  try {
+    const rawValue = window.localStorage?.getItem(SOURCE_DIRECTORY_HISTORY_KEY);
+    const parsedValue = rawValue ? JSON.parse(rawValue) : [];
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSourceDirectoryHistory(history: string[]): void {
+  try {
+    window.localStorage?.setItem(SOURCE_DIRECTORY_HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // L'historique est un confort UI : une erreur de stockage ne doit pas bloquer le tri.
+  }
+}
+
+function renderSourceDirectoryHistory(): void {
+  const history = readSourceDirectoryHistory();
+  if (sourceHistorySelect) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = history.length > 0 ? "Choisir une source récente" : "Aucun historique";
+    placeholder.selected = !state.sourcePath;
+    const options = history.map((historyPath) => {
+      const option = document.createElement("option");
+      option.value = historyPath;
+      option.textContent = historyPath;
+      option.title = historyPath;
+      option.selected = Boolean(state.sourcePath && historyPath.toLowerCase() === state.sourcePath.toLowerCase());
+      return option;
+    });
+    sourceHistorySelect.replaceChildren(placeholder, ...options);
+    sourceHistorySelect.disabled = history.length === 0 || state.isLoading || isClassificationBusy();
+  }
+
+  if (clearSourceHistoryButton) {
+    clearSourceHistoryButton.disabled = history.length === 0 || state.isLoading || isClassificationBusy();
+  }
+}
+
+async function selectSourceDirectoryFromHistory(sourceDirectoryPath: string): Promise<void> {
+  setControlsDisabled(true);
+  const selection = await window.docSorter.selectSourceDirectory(sourceDirectoryPath);
+  setControlsDisabled(false);
+
+  if (!selection.ok) {
+    state.queueMessage = selection.error.message;
+    render();
+    return;
+  }
+
+  if (!selection.value) {
+    return;
+  }
+
+  await applySelectedSourceDirectory(selection.value);
 }
 
 function setUiDisplayMode(mode: UiDisplayMode): void {

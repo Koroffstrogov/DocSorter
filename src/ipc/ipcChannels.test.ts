@@ -41,6 +41,10 @@ const REVIEWED_IPC_CHANNELS = [
   "ai:unloadModel",
   "ai:runSuggestion",
   "ai:exportDiagnostic",
+  "knownTargets:list",
+  "knownTargets:create",
+  "knownTargets:update",
+  "knownTargets:deactivate",
   "history:getRecent"
 ] as const;
 

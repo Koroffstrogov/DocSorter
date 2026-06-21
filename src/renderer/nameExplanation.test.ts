@@ -76,6 +76,35 @@ describe("name explanation renderer model", () => {
     expect(line(model, "Dossier")).toMatchObject({ source: "Correction manuelle" });
   });
 
+  it("explains a target chosen from the local known-target list", () => {
+    const model = explanation.buildNameExplanation({
+      filename: "2026_paul_carte-identite.pdf",
+      filenameValid: true,
+      filenameSource: "ai",
+      extension: ".pdf",
+      fields: {
+        dateToken: "2026",
+        target: "paul",
+        documentType: "carte-identite"
+      },
+      manualFields: { target: true },
+      knownTargetSelections: {
+        target: {
+          displayName: "Paul Martin",
+          fileAlias: "paul"
+        }
+      },
+      destinationFolder: "Identite-famille/Paul",
+      messages: []
+    });
+
+    expect(line(model, "Cible")).toMatchObject({
+      value: "Paul Martin → paul",
+      status: "used",
+      source: "Liste locale des cibles"
+    });
+  });
+
   it("explains incomplete names and missing required fields", () => {
     const model = explanation.buildNameExplanation({
       filename: "",

@@ -1,6 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import {
   formatBytes,
@@ -36,6 +38,7 @@ export interface SourceDirectoryListing {
   fileCount: number;
   supportedDocumentCount: number;
   shortcuts: SourceDirectoryShortcut[];
+  drives: SourceDirectoryShortcut[];
   truncated: boolean;
   entryLimit: number;
   warnings: string[];
@@ -45,9 +48,11 @@ interface SourceDirectoryBrowserOptions {
   entryLimit?: number;
   homePath?: string;
   cwd?: string;
+  driveLabels?: Record<string, string>;
 }
 
 const DEFAULT_ENTRY_LIMIT = 500;
+const execFileAsync = promisify(execFile);
 
 export async function listSourceDirectory(
   requestedPath?: string | null,
@@ -91,6 +96,7 @@ export async function listSourceDirectory(
         fileCount,
         supportedDocumentCount,
         shortcuts: await buildShortcuts(currentPath, options),
+        drives: await buildDriveShortcuts(options),
         truncated: sortedEntries.length > entryLimit,
         entryLimit,
         warnings: sortedEntries.length > entryLimit
@@ -192,6 +198,87 @@ async function buildShortcuts(
       available: await isDirectoryAvailable(candidate.path)
     }))
   );
+}
+
+async function buildDriveShortcuts(options: SourceDirectoryBrowserOptions): Promise<SourceDirectoryShortcut[]> {
+  if (process.platform !== "win32") {
+    const rootPath = path.parse(process.cwd()).root;
+    return [
+      {
+        label: rootPath,
+        path: rootPath,
+        available: await isDirectoryAvailable(rootPath)
+      }
+    ];
+  }
+
+  const driveLabels = options.driveLabels ?? await readWindowsDriveLabels();
+  const candidates = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => ({
+    label: formatDriveLabel(`${letter}:`, driveLabels[`${letter}:`]),
+    path: `${letter}:\\`
+  }));
+  const checkedCandidates = await Promise.all(
+    candidates.map(async (candidate) => ({
+      ...candidate,
+      available: await isDirectoryAvailable(candidate.path)
+    }))
+  );
+
+  return checkedCandidates.filter((candidate) => candidate.available);
+}
+
+async function readWindowsDriveLabels(): Promise<Record<string, string>> {
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,VolumeName | ConvertTo-Json -Compress"
+      ],
+      {
+        timeout: 3000,
+        windowsHide: true
+      }
+    );
+    return parseWindowsDriveLabels(String(stdout));
+  } catch {
+    return {};
+  }
+}
+
+function parseWindowsDriveLabels(rawValue: string): Record<string, string> {
+  const text = rawValue.trim();
+  if (!text) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(text);
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    const labels: Record<string, string> = {};
+    for (const row of rows) {
+      if (!row || typeof row !== "object") {
+        continue;
+      }
+      const deviceId = String((row as { DeviceID?: unknown }).DeviceID ?? "").toUpperCase();
+      const volumeName = String((row as { VolumeName?: unknown }).VolumeName ?? "").trim();
+      if (/^[A-Z]:$/.test(deviceId) && volumeName) {
+        labels[deviceId] = volumeName;
+      }
+    }
+    return labels;
+  } catch {
+    return {};
+  }
+}
+
+function formatDriveLabel(deviceId: string, volumeName: string | undefined): string {
+  const label = volumeName?.trim();
+  return label ? `${deviceId} ${label}` : deviceId;
 }
 
 async function isDirectoryAvailable(directoryPath: string): Promise<boolean> {

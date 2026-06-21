@@ -22,7 +22,7 @@ describe("compareNameWithFolderProfile", () => {
     expect(comparison.aiName).toBe("2026-05_foyer_releve-bancaire_bnp-paribas.pdf");
   });
 
-  it("does not automatically align against a weak profile", () => {
+  it("proposes a manually reviewed aligned name even with one recognized file", () => {
     const comparison = compareNameWithFolderProfile({
       aiFields: {
         dateToken: "2026-05",
@@ -35,8 +35,9 @@ describe("compareNameWithFolderProfile", () => {
     });
 
     expect(comparison.recommendation).toBe("manual-review");
-    expect(comparison.alignedName).toBeUndefined();
-    expect(comparison.appliedChanges).toEqual([]);
+    expect(comparison.alignedName).toBe("2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf");
+    expect(comparison.appliedChanges).toContain("target");
+    expect(comparison.reasons.join(" ")).toContain("Profil faible");
   });
 
   it("proposes an aligned name for a medium bank statement profile", () => {

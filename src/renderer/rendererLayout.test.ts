@@ -129,6 +129,9 @@ describe("renderer right panel layout", () => {
     expect(sortProposalPanel).toContain('id="execute-classification"');
     expect(sortProposalPanel).toContain('id="prepare-classification"');
 
+    expect(html).toContain('id="source-history-select"');
+    expect(html).toContain('id="clear-source-history"');
+
     const advancedPanel = extractElementBlock(html, '<details id="advanced-panel"', "</details>");
     expect(advancedPanel).not.toContain('id="run-ai-suggestion"');
     expect(advancedPanel).toContain('id="ocr-panel"');
@@ -149,10 +152,16 @@ describe("renderer right panel layout", () => {
 
   it("loads the custom source directory picker before document flow scripts", async () => {
     const html = await readRendererHtml();
+    const sourcePicker = await readFile(path.join(process.cwd(), "src", "renderer", "sourceDirectoryPicker.ts"), "utf8");
 
     expect(indexOf(html, "sourceDirectoryPicker.js")).toBeLessThan(
       indexOf(html, "rendererDocumentFlow.js")
     );
+    expect(sourcePicker).toContain("source-picker-drives");
+    expect(sourcePicker).toContain("Lecteurs");
+    expect(sourcePicker).toContain("Précédent");
+    expect(sourcePicker).toContain("Dossier parent");
+    expect(sourcePicker).toContain("Sources récentes");
   });
 
   it("keeps UX-1A critical right-panel IDs and design-system CSS available", async () => {
@@ -272,6 +281,7 @@ describe("renderer right panel layout", () => {
     expect(indexOf(html, "rendererFolderLearningFlow.js")).toBeLessThan(
       indexOf(html, "rendererNamingDestinationFlow.js")
     );
+    expect(indexOf(html, "rendererKnownTargetsFlow.js")).toBeLessThan(indexOf(html, "renderer.js"));
   });
 
   it("renders the six IA refinement fields and folder candidate area", async () => {
@@ -311,6 +321,9 @@ describe("renderer right panel layout", () => {
     expect(aiFieldRows).toContain('button.textContent = `${candidate.value} ${candidate.score}%`;');
     expect(aiFieldRows).toContain("emptyValueLabel(key)");
     expect(aiFieldRows).toContain("badge.hidden = !isManual");
+    expect(aiPanel).toContain("knownTargets: options.getKnownTargetsState()");
+    expect(aiFieldRows).toContain("createKnownTargetPicker");
+    expect(aiFieldRows).toContain("Choisir une cible connue");
     expect(aiFieldRows).not.toContain('"[x] "');
     expect(aiPanel).toContain("aiFolderCandidates.createFolderCandidateContent");
     expect(aiFolderCandidates).toContain("Analyse IA requise pour proposer un dossier.");
@@ -377,6 +390,9 @@ describe("renderer right panel layout", () => {
     expect(css).toContain(".folder-candidate-badge");
     expect(css).toContain(".folder-manual-edit");
     expect(css).toContain(".folder-manual-input");
+    expect(css).toContain(".known-target-picker");
+    expect(css).toContain(".known-target-choice");
+    expect(css).toContain(".known-target-form");
     expect(css).toContain("grid-template-columns: 64px minmax(0, 1fr)");
     expect(css).toContain(".ai-control-panel .ai-simple-status");
     expect(css).toContain(".target-folder-controls[hidden]");

@@ -17,7 +17,10 @@ interface PdfJsModule {
   GlobalWorkerOptions: {
     workerSrc: string;
   };
-  getDocument: (options: { data: Uint8Array }) => PdfDocumentLoadingTask;
+  VerbosityLevel: {
+    ERRORS: number;
+  };
+  getDocument: (options: { data: Uint8Array; verbosity?: number }) => PdfDocumentLoadingTask;
 }
 
 interface PdfDocumentLoadingTask {
@@ -62,7 +65,10 @@ interface PdfViewport {
 
     const pdfJs = await loadPdfJs();
     const bytes = new Uint8Array(data.bytes.slice(0));
-    loadingTask = pdfJs.getDocument({ data: bytes });
+    loadingTask = pdfJs.getDocument({
+      data: bytes,
+      verbosity: pdfJs.VerbosityLevel.ERRORS
+    });
     documentProxy = await loadingTask.promise;
 
     const firstPage = await documentProxy.getPage(1);

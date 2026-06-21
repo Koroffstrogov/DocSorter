@@ -392,6 +392,13 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     textContext = getActiveAiTextContext(activeDocument);
   }
 
+  if (activeDocument.extension === ".pdf") {
+    textContext = await ensurePdfOcrTextContextForAi(activeDocument, requestId, textContext);
+    if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+      return;
+    }
+  }
+
   if (!textContext) {
     const message = activeDocument.extension === ".pdf"
       ? "OCR nécessaire ou texte PDF inexploitable."
@@ -1356,14 +1363,66 @@ function getActiveAiTextContext(
 
   const extraction = getTextExtractionState(documentItem.filePath).result;
   const excerpt = (extraction?.text ?? extraction?.excerpt ?? "").trim().slice(0, 6_000);
-  if (!extraction || !excerpt || extraction.status !== "text-found") {
+  if (!extraction || !excerpt) {
     return null;
   }
 
   return {
-    source: extraction.source ?? (documentItem.extension === ".pdf" ? "pdf-native" : "tesseract-cli"),
+    source: normalizeAiTextContextSource(
+      extraction.finalTextSource ?? extraction.source,
+      documentItem.extension
+    ),
     excerpt
   };
+}
+
+function normalizeAiTextContextSource(
+  source: PdfTextExtractionSource | "tesseract-cli" | undefined,
+  extension: SupportedDocumentExtension
+): RendererAiDocumentTextContext["source"] {
+  if (
+    source === "pdf-native" ||
+    source === "pdf-ocr" ||
+    source === "pdf-hybrid" ||
+    source === "tesseract-cli"
+  ) {
+    return source;
+  }
+
+  return extension === ".pdf" ? "pdf-native" : "tesseract-cli";
+}
+
+async function ensurePdfOcrTextContextForAi(
+  activeDocument: DocumentItem,
+  requestId: number,
+  currentTextContext: RendererAiDocumentTextContext | null
+): Promise<RendererAiDocumentTextContext | null> {
+  if (!shouldRunPdfOcrBeforeAi(activeDocument)) {
+    return currentTextContext;
+  }
+
+  updateAiPipelineStage("text-extraction");
+  state.ai = {
+    ...state.ai,
+    message: "OCR PDF avant analyse IA..."
+  };
+  renderAiPanel();
+
+  await runOcrForActivePdfForAiAnalysis();
+  if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+    return null;
+  }
+
+  return getActiveAiTextContext(activeDocument) ?? currentTextContext;
+}
+
+function shouldRunPdfOcrBeforeAi(activeDocument: DocumentItem): boolean {
+  if (!canRunOcrForActivePdf(activeDocument)) {
+    return false;
+  }
+
+  const extraction = getTextExtractionState(activeDocument.filePath).result;
+  return !extraction?.pdfOcr;
 }
 
 interface ActivePdfExtractionMetadata {
@@ -1750,6 +1809,7 @@ function buildAiSelectionFromSuggestion(
   return recalculateAiSelection({
     fields,
     manualFields: {},
+    knownTargetSelections: {},
     editingField: null,
     editingFolder: false,
     selectedFolder,
@@ -1808,6 +1868,7 @@ function aiSelectionMatchesInitial(current: AiSelectionState, initial: AiSelecti
     current.editingField === null &&
     !current.editingFolder &&
     Object.keys(current.manualFields).length === 0 &&
+    Object.keys(current.knownTargetSelections).length === 0 &&
     normalizeAiFolderForComparison(current.selectedFolder) === normalizeAiFolderForComparison(initial.selectedFolder) &&
     current.fields.dateToken === initial.fields.dateToken &&
     current.fields.subject === initial.fields.subject &&
@@ -1828,13 +1889,20 @@ function updateAiSelectionField(
   value: string,
   source: AiSelectionFieldSource,
   extension: SupportedDocumentExtension,
-  targetRootPath: string | null
+  targetRootPath: string | null,
+  knownTarget?: KnownTargetSelection
 ): AiSelectionState {
   const nextManualFields: AiSelectionManualFields = { ...selection.manualFields };
-  if (source === "manual") {
+  if (source === "manual" || source === "known-target") {
     nextManualFields[field] = true;
   } else {
     delete nextManualFields[field];
+  }
+  const nextKnownTargetSelections: AiSelectionKnownTargets = { ...selection.knownTargetSelections };
+  if (source === "known-target" && knownTarget) {
+    nextKnownTargetSelections[field] = knownTarget;
+  } else {
+    delete nextKnownTargetSelections[field];
   }
 
   return recalculateAiSelection({
@@ -1843,7 +1911,8 @@ function updateAiSelectionField(
       ...selection.fields,
       [field]: value
     },
-    manualFields: nextManualFields
+    manualFields: nextManualFields,
+    knownTargetSelections: nextKnownTargetSelections
   }, extension, targetRootPath);
 }
 
@@ -1933,6 +2002,7 @@ function getAiNamingPreview(): {
   messages: AiSelectionPreviewMessage[];
   fields: AiSelectionFields;
   manualFields: AiSelectionManualFields;
+  knownTargetSelections: AiSelectionKnownTargets;
 } | null {
   const activeDocument = getActiveDocument();
   if (
@@ -1961,7 +2031,8 @@ function getAiNamingPreview(): {
     destinationFolder: state.ai.selection.previewDestinationFolder,
     messages: state.ai.selection.previewMessages,
     fields: state.ai.selection.fields,
-    manualFields: state.ai.selection.manualFields
+    manualFields: state.ai.selection.manualFields,
+    knownTargetSelections: state.ai.selection.knownTargetSelections
   };
 }
 

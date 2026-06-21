@@ -37,6 +37,10 @@ export const IPC_CHANNELS = {
   aiUnloadModel: "ai:unloadModel",
   aiRunSuggestion: "ai:runSuggestion",
   aiExportDiagnostic: "ai:exportDiagnostic",
+  knownTargetsList: "knownTargets:list",
+  knownTargetsCreate: "knownTargets:create",
+  knownTargetsUpdate: "knownTargets:update",
+  knownTargetsDeactivate: "knownTargets:deactivate",
   historyGetRecent: "history:getRecent"
 } as const;
 

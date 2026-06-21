@@ -95,6 +95,27 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(body.prompt).not.toContain("x".repeat(6_001));
   });
 
+  it("accepts fused PDF OCR text as AI input", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+    const fetchClient = createSuccessfulFetch();
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        source: "pdf-hybrid",
+        excerpt: "Texte PDF natif et OCR fusionne disponible"
+      }),
+      fetchClient
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.textSource).toBe("pdf-hybrid");
+    expect(result.ok && result.value.input.extractedTextExcerpt).toBe("");
+    expect(result.ok && result.value.input.ocrTextExcerpt).toBe(
+      "Texte PDF natif et OCR fusionne disponible"
+    );
+  });
+
   it("accepts a valid Ollama JSON suggestion", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);

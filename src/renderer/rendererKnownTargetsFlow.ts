@@ -1,0 +1,107 @@
+async function refreshKnownTargets(): Promise<void> {
+  state.knownTargets = {
+    ...state.knownTargets,
+    status: "loading",
+    message: "Chargement de la liste locale des cibles...",
+    error: ""
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.listKnownTargets();
+  applyKnownTargetsResult(result, "Liste locale des cibles chargée.");
+}
+
+async function createKnownTargetFromPanel(input: KnownTargetInput): Promise<void> {
+  state.knownTargets = {
+    ...state.knownTargets,
+    status: "saving",
+    message: "Ajout de la cible locale...",
+    error: ""
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.createKnownTarget(input);
+  applyKnownTargetsResult(result, "Cible locale ajoutée.");
+}
+
+async function updateKnownTargetFromPanel(id: string, input: KnownTargetInput): Promise<void> {
+  state.knownTargets = {
+    ...state.knownTargets,
+    status: "saving",
+    message: "Mise à jour de la cible locale...",
+    error: ""
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.updateKnownTarget(id, input);
+  applyKnownTargetsResult(result, "Cible locale mise à jour.");
+}
+
+async function deactivateKnownTargetFromPanel(id: string): Promise<void> {
+  state.knownTargets = {
+    ...state.knownTargets,
+    status: "saving",
+    message: "Désactivation de la cible locale...",
+    error: ""
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.deactivateKnownTarget(id);
+  applyKnownTargetsResult(result, "Cible locale désactivée.");
+}
+
+function selectKnownTargetForAiTarget(target: KnownTarget): void {
+  if (!state.ai.selection || !state.ai.suggestion || !target.isActive) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  state.ai.selection = updateAiSelectionField(
+    state.ai.selection,
+    "target",
+    target.fileAlias,
+    "known-target",
+    activeDocument?.extension ?? ".pdf",
+    state.targetPath,
+    {
+      displayName: target.displayName,
+      fileAlias: target.fileAlias
+    }
+  );
+  state.ai.selection = {
+    ...state.ai.selection,
+    editingField: null
+  };
+  state.ai.message = `Cible locale sélectionnée : ${target.displayName} → ${target.fileAlias}.`;
+  clearFolderLearningAlignedNameOverride();
+  resetClassificationState();
+  resetDestinationCheck();
+  recalculateFolderLearningComparison();
+  render();
+  scheduleDestinationCheck();
+}
+
+function applyKnownTargetsResult(
+  result: KnownTargetsResult<KnownTargetsList>,
+  successMessage: string
+): void {
+  if (!result.ok) {
+    state.knownTargets = {
+      ...state.knownTargets,
+      status: "error",
+      message: result.error.message,
+      error: result.error.message
+    };
+    renderAiPanel();
+    return;
+  }
+
+  state.knownTargets = {
+    status: "ready",
+    targets: result.value.targets,
+    warnings: result.value.warnings,
+    message: result.value.warnings[0] ?? successMessage,
+    error: ""
+  };
+  renderAiPanel();
+}

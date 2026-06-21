@@ -26,6 +26,7 @@ interface SourcePickerListing {
   fileCount: number;
   supportedDocumentCount: number;
   shortcuts: SourcePickerShortcut[];
+  drives: SourcePickerShortcut[];
   truncated: boolean;
   warnings: string[];
 }
@@ -36,6 +37,8 @@ interface SourcePickerDirectorySelection {
 
 interface SourceDirectoryPickerOptions {
   initialPath: string | null;
+  recentDirectories?: string[];
+  onClearRecentDirectories?: () => void;
   listDirectory: (sourcePath?: string | null) => Promise<SourcePickerResult<SourcePickerListing>>;
   selectDirectory: (sourcePath: string) => Promise<SourcePickerResult<SourcePickerDirectorySelection | null>>;
 }
@@ -62,6 +65,8 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
       let loading = false;
       let message = "Chargement du dossier...";
       let closed = false;
+      let previousPaths: string[] = [];
+      let recentDirectories = [...(options.recentDirectories ?? [])];
 
       document.body.append(elements.backdrop);
       document.addEventListener("keydown", handleGlobalKeydown);
@@ -83,6 +88,19 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
         void loadDirectory(elements.pathInput.value);
       });
 
+      elements.previousButton.addEventListener("click", () => {
+        const previousPath = previousPaths.pop();
+        if (previousPath) {
+          void loadDirectory(previousPath, { preserveHistory: true });
+        }
+      });
+
+      elements.parentButton.addEventListener("click", () => {
+        if (listing?.parentPath) {
+          void loadDirectory(listing.parentPath);
+        }
+      });
+
       elements.pathInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
@@ -90,7 +108,17 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
         }
       });
 
-      async function loadDirectory(sourcePath?: string | null): Promise<void> {
+      function clearRecentDirectories(): void {
+        recentDirectories = [];
+        options.onClearRecentDirectories?.();
+        render();
+      }
+
+      async function loadDirectory(
+        sourcePath?: string | null,
+        loadOptions: { preserveHistory?: boolean } = {}
+      ): Promise<void> {
+        const previousPath = listing?.currentPath ?? null;
         loading = true;
         message = "Chargement du dossier...";
         render();
@@ -108,6 +136,16 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
         }
 
         listing = result.value;
+        if (
+          previousPath &&
+          !loadOptions.preserveHistory &&
+          previousPath.toLowerCase() !== listing.currentPath.toLowerCase()
+        ) {
+          previousPaths = [
+            ...previousPaths.filter((historyPath) => historyPath.toLowerCase() !== previousPath.toLowerCase()),
+            previousPath
+          ].slice(-20);
+        }
         elements.pathInput.value = listing.currentPath;
         message = `${listing.supportedDocumentCount} document${
           listing.supportedDocumentCount > 1 ? "s" : ""
@@ -128,9 +166,12 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
       function render(): void {
         elements.chooseButton.disabled = loading || !listing;
         elements.openPathButton.disabled = loading;
+        elements.previousButton.disabled = loading || previousPaths.length === 0;
+        elements.parentButton.disabled = loading || !listing?.parentPath;
         elements.status.textContent = message;
         elements.status.className = listing ? "source-picker-status" : "source-picker-status warning";
-        renderShortcuts(elements.shortcuts, listing, loading, loadDirectory);
+        renderDrives(elements.drives, listing, loading, loadDirectory);
+        renderShortcuts(elements.shortcuts, listing, loading, loadDirectory, recentDirectories, clearRecentDirectories);
         renderEntries(elements.entries, listing, loading, loadDirectory);
         renderSummary(elements.summary, listing);
       }
@@ -166,7 +207,10 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
     const pathLabel = document.createElement("label");
     const pathLabelText = document.createElement("span");
     const pathInput = document.createElement("input");
+    const previousButton = document.createElement("button");
+    const parentButton = document.createElement("button");
     const openPathButton = document.createElement("button");
+    const drives = document.createElement("div");
     const content = document.createElement("div");
     const shortcuts = document.createElement("div");
     const entries = document.createElement("div");
@@ -194,8 +238,20 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
     pathInput.type = "text";
     pathInput.autocomplete = "off";
     pathInput.placeholder = "Chemin du dossier source";
+    previousButton.type = "button";
+    previousButton.className = "source-picker-nav-button";
+    previousButton.textContent = "Précédent";
+    previousButton.title = "Revenir au dossier ouvert précédemment";
+    previousButton.disabled = true;
+    parentButton.type = "button";
+    parentButton.className = "source-picker-nav-button";
+    parentButton.textContent = "Dossier parent";
+    parentButton.title = "Ouvrir le dossier parent";
+    parentButton.disabled = true;
     openPathButton.type = "button";
     openPathButton.textContent = "Ouvrir";
+    drives.className = "source-picker-drives";
+    drives.setAttribute("aria-label", "Lecteurs actifs");
     content.className = "source-picker-content";
     shortcuts.className = "source-picker-shortcuts";
     shortcuts.setAttribute("aria-label", "Raccourcis");
@@ -212,14 +268,15 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
     titleBlock.append(title, description);
     header.append(titleBlock, cancelButton);
     pathLabel.append(pathLabelText, pathInput);
-    pathRow.append(pathLabel, openPathButton);
+    pathRow.append(previousButton, parentButton, pathLabel, openPathButton);
     content.append(shortcuts, entries);
     footer.append(status, summary, chooseButton);
-    dialog.append(header, pathRow, content, footer);
+    dialog.append(header, pathRow, drives, content, footer);
     backdrop.append(dialog);
 
     return {
       backdrop,
+      drives,
       shortcuts,
       entries,
       status,
@@ -227,6 +284,8 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
       chooseButton,
       cancelButton,
       pathInput,
+      previousButton,
+      parentButton,
       openPathButton
     };
   }
@@ -235,7 +294,9 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
     container: HTMLElement,
     listing: SourcePickerListing | null,
     loading: boolean,
-    onOpen: (sourcePath: string) => void
+    onOpen: (sourcePath: string) => void,
+    recentDirectories: string[],
+    onClearRecentDirectories: () => void
   ): void {
     const title = document.createElement("strong");
     title.textContent = "Accès rapides";
@@ -257,7 +318,58 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
       return button;
     });
 
-    container.replaceChildren(title, ...buttons);
+    const recentTitle = document.createElement("strong");
+    recentTitle.textContent = "Sources récentes";
+    const recentButtons = recentDirectories.map((sourcePath) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = sourcePath;
+      button.title = sourcePath;
+      button.disabled = loading;
+      button.addEventListener("click", () => {
+        onOpen(sourcePath);
+      });
+      return button;
+    });
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "source-picker-clear-history";
+    clearButton.textContent = "Effacer l'historique";
+    clearButton.disabled = loading || recentDirectories.length === 0;
+    clearButton.addEventListener("click", onClearRecentDirectories);
+
+    container.replaceChildren(title, ...buttons, recentTitle, ...recentButtons, clearButton);
+  }
+
+  function renderDrives(
+    container: HTMLElement,
+    listing: SourcePickerListing | null,
+    loading: boolean,
+    onOpen: (sourcePath: string) => void
+  ): void {
+    const label = document.createElement("strong");
+    label.textContent = "Lecteurs";
+    const drives = listing?.drives ?? [];
+    if (drives.length === 0) {
+      const empty = document.createElement("span");
+      empty.className = "source-picker-drives-empty";
+      empty.textContent = "Aucun lecteur détecté";
+      container.replaceChildren(label, empty);
+      return;
+    }
+
+    const buttons = drives.map((drive) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = drive.label;
+      button.title = drive.path;
+      button.disabled = loading || !drive.available;
+      button.addEventListener("click", () => {
+        onOpen(drive.path);
+      });
+      return button;
+    });
+    container.replaceChildren(label, ...buttons);
   }
 
   function renderEntries(
@@ -274,17 +386,10 @@ var DocSorterSourceDirectoryPicker: SourceDirectoryPickerApi;
       return;
     }
 
-    const rows: HTMLElement[] = [];
-    if (listing.parentPath) {
-      rows.push(createDirectoryRow("..", listing.parentPath, loading, onOpen));
-    }
-
-    rows.push(
-      ...listing.entries.map((entry) =>
-        entry.kind === "directory"
-          ? createDirectoryRow(entry.name, entry.path, loading, onOpen)
-          : createFileRow(entry)
-      )
+    const rows: HTMLElement[] = listing.entries.map((entry) =>
+      entry.kind === "directory"
+        ? createDirectoryRow(entry.name, entry.path, loading, onOpen)
+        : createFileRow(entry)
     );
 
     if (rows.length === 0) {

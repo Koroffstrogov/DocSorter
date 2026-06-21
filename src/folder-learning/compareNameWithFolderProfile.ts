@@ -159,24 +159,6 @@ export function compareNameWithFolderProfile(
 
   const schema = analyzeFolderSchema(profile, resolved.input);
 
-  if (profile.status === "weak") {
-    const notableDivergence = detectNotableDivergence(resolved.input, profile);
-    const comparison: FolderProfileNameComparison = {
-      aiName: resolved.aiName,
-      recommendation: notableDivergence ? "manual-review" : "keep-ai",
-      confidence: notableDivergence ? 35 : 45,
-      appliedChanges: [],
-      reasons: notableDivergence
-        ? ["Profil faible et écart notable avec le nom IA : validation manuelle préférable."]
-        : ["Profil faible : le nom IA est conservé."],
-      warnings: notableDivergence
-        ? [...warnings, "Profil trop faible pour proposer un alignement automatique."]
-        : warnings
-    };
-    comparison.pipeline = createPipeline(profile, resolved, schema, comparison);
-    return comparison;
-  }
-
   if (profile.dominantDatePrecision === "mixed") {
     const comparison: FolderProfileNameComparison = {
       aiName: resolved.aiName,
@@ -233,11 +215,13 @@ export function compareNameWithFolderProfile(
       aiName: resolved.aiName,
       detectedPattern: schema.pattern,
       recommendation: needsManualReview ? "manual-review" : "keep-ai",
-      confidence: needsManualReview ? 50 : profile.status === "strong" ? 85 : 65,
+      confidence: needsManualReview ? 50 : profile.status === "strong" ? 85 : profile.status === "medium" ? 65 : 45,
       appliedChanges: [],
       reasons: [
         needsManualReview
           ? "Le profil contient une dominante hétérogène : validation manuelle recommandée."
+          : profile.status === "weak"
+          ? "Le nom IA est déjà compatible avec le profil faible du dossier."
           : "Le nom IA est déjà compatible avec le profil du dossier.",
         ...reasons
       ],
@@ -268,12 +252,14 @@ export function compareNameWithFolderProfile(
     alignedName: generated.filename,
     detectedPattern: schema.pattern,
     recommendation: profile.status === "strong" ? "prefer-folder-profile" : "manual-review",
-    confidence: profile.status === "strong" ? 85 : 65,
+    confidence: profile.status === "strong" ? 85 : profile.status === "medium" ? 65 : 45,
     appliedChanges: alignment.appliedChanges,
     reasons: [
       profile.status === "strong"
         ? "Profil fort : la convention du dossier est recommandée."
-        : "Profil moyen : un nom aligné est proposé pour validation.",
+        : profile.status === "medium"
+        ? "Profil moyen : un nom aligné est proposé pour validation."
+        : "Profil faible : un nom aligné est proposé pour validation manuelle.",
       ...reasons
     ],
     warnings
@@ -421,32 +407,6 @@ function namingInputFromParsedName(parsed: ParsedFolderFileName, extensionOverri
     ...(parsed.detail ? { detail: parsed.detail } : {}),
     extension: extensionOverride ?? parsed.extension
   };
-}
-
-function detectNotableDivergence(input: NamingInputV2, profile: FolderNamingProfile): boolean {
-  if (profile.dominantDatePrecision === "mixed") {
-    return true;
-  }
-
-  if (
-    profile.dominantDocumentType &&
-    normalizeNameBlock(profile.dominantDocumentType) !== normalizeNameBlock(input.documentType)
-  ) {
-    return true;
-  }
-
-  if (profile.dominantTarget && normalizeNameBlock(profile.dominantTarget) !== normalizeNameBlock(input.target)) {
-    return true;
-  }
-
-  if (
-    profile.dominantIssuer &&
-    normalizeNameBlock(profile.dominantIssuer) !== normalizeNameBlock(input.issuer)
-  ) {
-    return true;
-  }
-
-  return profile.detailUsage === "never" && Boolean(normalizeNameBlock(input.detail));
 }
 
 function checkDocumentTypeCompatibility(

@@ -13,6 +13,10 @@ interface AiPanelOptions {
   onFieldManualEditStart: (field: AiSelectionFieldKey) => void;
   onFieldManualValueChange: (field: AiSelectionFieldKey, value: string) => void;
   onFieldManualEditFinish: () => void;
+  onKnownTargetSelect: (target: KnownTarget) => void;
+  onKnownTargetCreate: (input: KnownTargetInput) => void;
+  onKnownTargetUpdate: (id: string, input: KnownTargetInput) => void;
+  onKnownTargetDeactivate: (id: string) => void;
   onFolderCandidateSelect: (relativePath: string) => void;
   onFolderManualEditStart: () => void;
   onFolderManualValueChange: (relativePath: string) => void;
@@ -26,6 +30,7 @@ interface AiPanelOptions {
   canUnloadModel: () => boolean;
   canApplySuggestionToEmptyFields: () => boolean;
   canExportDiagnostic: () => boolean;
+  getKnownTargetsState: () => KnownTargetsState;
   formatDate: (isoDate: string) => string;
 }
 
@@ -217,7 +222,12 @@ var DocSorterAiPanel: AiPanelFactoryApi;
           onFieldCandidateSelect: options.onFieldCandidateSelect,
           onFieldManualEditStart: options.onFieldManualEditStart,
           onFieldManualValueChange: options.onFieldManualValueChange,
-          onFieldManualEditFinish: options.onFieldManualEditFinish
+          onFieldManualEditFinish: options.onFieldManualEditFinish,
+          knownTargets: options.getKnownTargetsState(),
+          onKnownTargetSelect: options.onKnownTargetSelect,
+          onKnownTargetCreate: options.onKnownTargetCreate,
+          onKnownTargetUpdate: options.onKnownTargetUpdate,
+          onKnownTargetDeactivate: options.onKnownTargetDeactivate
         }));
       }
 

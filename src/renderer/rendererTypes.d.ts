@@ -754,11 +754,63 @@ interface RendererAiDocumentTextContext {
 
 type AiSelectionFieldKey = "dateToken" | "subject" | "target" | "documentType" | "issuer" | "detail";
 
-type AiSelectionFieldSource = "candidate" | "manual";
+type AiSelectionFieldSource = "candidate" | "manual" | "known-target";
 
 type AiSelectionFields = Record<AiSelectionFieldKey, string>;
 
 type AiSelectionManualFields = Partial<Record<AiSelectionFieldKey, true>>;
+
+type KnownTargetKind = "person" | "household" | "vehicle" | "property" | "other";
+
+interface KnownTarget {
+  id: string;
+  kind: KnownTargetKind;
+  displayName: string;
+  fileAlias: string;
+  aliases: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface KnownTargetInput {
+  id?: string;
+  kind?: KnownTargetKind;
+  displayName?: string;
+  fileAlias?: string;
+  aliases?: string[];
+  isActive?: boolean;
+}
+
+interface KnownTargetsList {
+  targets: KnownTarget[];
+  warnings: string[];
+}
+
+interface KnownTargetsError {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+type KnownTargetsResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: KnownTargetsError };
+
+interface KnownTargetSelection {
+  displayName: string;
+  fileAlias: string;
+}
+
+interface KnownTargetsState {
+  status: "idle" | "loading" | "ready" | "saving" | "error";
+  targets: KnownTarget[];
+  warnings: string[];
+  message: string;
+  error: string;
+}
+
+type AiSelectionKnownTargets = Partial<Record<AiSelectionFieldKey, KnownTargetSelection>>;
 
 interface AiSelectionPreviewMessage {
   level: "error" | "warning" | "info";
@@ -768,6 +820,7 @@ interface AiSelectionPreviewMessage {
 interface AiSelectionState {
   fields: AiSelectionFields;
   manualFields: AiSelectionManualFields;
+  knownTargetSelections: AiSelectionKnownTargets;
   editingField: AiSelectionFieldKey | null;
   editingFolder: boolean;
   selectedFolder: string;
@@ -864,6 +917,7 @@ interface AppState {
   textExtraction: TextExtractionState;
   ocr: OcrState;
   ai: AiState;
+  knownTargets: KnownTargetsState;
   shortcutsHelpVisible: boolean;
   uiMode: UiDisplayMode;
 }

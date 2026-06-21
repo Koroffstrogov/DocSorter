@@ -2,6 +2,11 @@ async function selectSourceDirectory(): Promise<void> {
   setControlsDisabled(true);
   const selection = await DocSorterSourceDirectoryPicker.openSourceDirectoryPicker({
     initialPath: state.sourcePath,
+    recentDirectories: readSourceDirectoryHistory(),
+    onClearRecentDirectories: () => {
+      clearSourceDirectoryHistory();
+      render();
+    },
     listDirectory: (sourcePath) => window.docSorter.listSourceDirectory(sourcePath),
     selectDirectory: (sourcePath) => window.docSorter.selectSourceDirectory(sourcePath)
   });
@@ -22,6 +27,7 @@ async function selectSourceDirectory(): Promise<void> {
 
 async function applySelectedSourceDirectory(selection: { path: string }): Promise<void> {
   clearPreviewResources();
+  rememberSourceDirectory(selection.path);
   state.sourcePath = selection.path;
   state.documents = [];
   state.activeDocumentPath = null;

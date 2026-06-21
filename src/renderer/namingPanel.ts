@@ -14,6 +14,7 @@ interface NamingPanelState {
     messages: AiSelectionPreviewMessage[];
     fields: AiSelectionFields;
     manualFields: AiSelectionManualFields;
+    knownTargetSelections: AiSelectionKnownTargets;
   } | null;
   canResetChoices: boolean;
 }
@@ -562,6 +563,7 @@ var DocSorterNamingPanel: NamingPanelFactoryApi;
       extension: state.activeDocument?.extension ?? "",
       fields: aiPreview?.fields ?? null,
       manualFields: aiPreview?.manualFields ?? null,
+      knownTargetSelections: aiPreview?.knownTargetSelections ?? null,
       destinationFolder: aiPreview?.destinationFolder ?? state.targetFolder.selectedFolder,
       folderOrigin: state.targetFolder.origin,
       folderLearning: state.folderLearning,
