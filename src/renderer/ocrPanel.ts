@@ -28,7 +28,6 @@ interface OcrPanelElements {
   saveButton: HTMLButtonElement | null;
   testButton: HTMLButtonElement | null;
   refreshButton: HTMLButtonElement | null;
-  futureButton: HTMLButtonElement | null;
 }
 
 interface OcrPanelFactoryApi {
@@ -113,9 +112,6 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
         elements.refreshButton.disabled = disabled;
       }
 
-      if (elements.futureButton) {
-        elements.futureButton.disabled = true;
-      }
     }
 
     return {
@@ -136,8 +132,7 @@ var DocSorterOcrPanel: OcrPanelFactoryApi;
       chooseTessdataButton: root.querySelector<HTMLButtonElement>("#choose-tessdata"),
       saveButton: root.querySelector<HTMLButtonElement>("#save-ocr-settings"),
       testButton: root.querySelector<HTMLButtonElement>("#test-ocr-engine"),
-      refreshButton: root.querySelector<HTMLButtonElement>("#refresh-ocr-status"),
-      futureButton: root.querySelector<HTMLButtonElement>("#future-document-ocr")
+      refreshButton: root.querySelector<HTMLButtonElement>("#refresh-ocr-status")
     };
   }
 

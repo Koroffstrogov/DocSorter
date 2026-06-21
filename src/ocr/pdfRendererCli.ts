@@ -133,11 +133,11 @@ function parsePdftoppmVersion(value: string): string | null {
 }
 
 async function findPdftoppmExecutable(options: PdfRendererConfigurationOptions): Promise<string | null> {
-  const embedded = await checkExecutable(
-    path.join(getResourcesPath(options), "poppler", executableName("pdftoppm", options.platform))
-  );
-  if (embedded) {
-    return embedded;
+  for (const candidatePath of getEmbeddedRendererCandidates(options)) {
+    const embedded = await checkExecutable(candidatePath);
+    if (embedded) {
+      return embedded;
+    }
   }
 
   const envPath = options.envPath ?? process.env.PATH ?? "";
@@ -153,6 +153,31 @@ async function findPdftoppmExecutable(options: PdfRendererConfigurationOptions):
   }
 
   return null;
+}
+
+function getEmbeddedRendererCandidates(options: PdfRendererConfigurationOptions): string[] {
+  const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
+  const basePaths = [
+    options.resourcesPath,
+    processWithResources.resourcesPath,
+    path.join(process.cwd(), "resources"),
+    process.cwd()
+  ].filter((value): value is string => Boolean(value));
+  const executable = executableName("pdftoppm", options.platform);
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  for (const basePath of basePaths) {
+    const candidatePath = path.join(basePath, "poppler", executable);
+    const key = path.resolve(candidatePath).toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    candidates.push(candidatePath);
+  }
+
+  return candidates;
 }
 
 async function checkExecutable(executablePath: string): Promise<string | null> {
@@ -182,9 +207,4 @@ function executableNames(baseName: string, platform = process.platform): string[
 
 function executableName(baseName: string, platform = process.platform): string {
   return executableNames(baseName, platform)[0];
-}
-
-function getResourcesPath(options: PdfRendererConfigurationOptions): string {
-  const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
-  return options.resourcesPath ?? processWithResources.resourcesPath ?? process.cwd();
 }

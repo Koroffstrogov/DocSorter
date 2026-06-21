@@ -2370,6 +2370,17 @@ details.detail-section[open] > summary {
   line-height: 1.35;
 }
 
+.ocr-note {
+  margin: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 9px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .ocr-inline-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 82px minmax(150px, 1fr);

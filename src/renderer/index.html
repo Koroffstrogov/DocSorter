@@ -370,7 +370,7 @@
                   <label>
                     <span class="field-label">
                       PSM
-                      <span class="field-help" tabindex="0" title="Mode de segmentation Tesseract préparé pour les lots futurs. Par défaut : 3. Aucun OCR n'est lancé dans ce lot.">i</span>
+                      <span class="field-help" tabindex="0" title="Mode de segmentation Tesseract utilisé pendant l'OCR local. Par défaut : 3.">i</span>
                     </span>
                     <input id="ocr-psm" name="psm" type="number" min="0" max="13" step="1" value="3" />
                   </label>
@@ -390,7 +390,7 @@
                   <button id="save-ocr-settings" type="button" disabled>Sauvegarder</button>
                   <button id="test-ocr-engine" type="button" disabled>Tester Tesseract</button>
                 </div>
-                <button id="future-document-ocr" type="button" disabled>OCR document prévu au lot suivant</button>
+                <p class="ocr-note">L'OCR PDF se lance depuis le panneau Texte extrait quand le document actif nécessite une reconnaissance OCR.</p>
               </form>
             </section>
 

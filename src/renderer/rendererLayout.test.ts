@@ -134,6 +134,9 @@ describe("renderer right panel layout", () => {
     expect(advancedPanel).toContain('id="ocr-panel"');
     expect(advancedPanel).toContain('id="ocr-pdf-quality"');
     expect(advancedPanel).toContain("Standard (300 DPI)");
+    expect(advancedPanel).toContain("L'OCR PDF se lance depuis le panneau Texte extrait");
+    expect(advancedPanel).not.toContain('id="future-document-ocr"');
+    expect(advancedPanel).not.toContain("OCR document prévu au lot suivant");
     expect(advancedPanel).toContain('id="ai-panel"');
     expect(advancedPanel).toContain('id="ai-technical-status"');
     expect(advancedPanel).toContain('id="ai-profile"');
