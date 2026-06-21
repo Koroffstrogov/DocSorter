@@ -397,6 +397,11 @@ async function runAiSuggestionForActiveDocument(): Promise<void> {
     if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
       return;
     }
+  } else {
+    textContext = await ensureImageOcrTextContextForAi(activeDocument, requestId, textContext);
+    if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+      return;
+    }
   }
 
   if (!textContext) {
@@ -1430,6 +1435,30 @@ function normalizeAiTextContextSource(
   }
 
   return extension === ".pdf" ? "pdf-native" : "tesseract-cli";
+}
+
+async function ensureImageOcrTextContextForAi(
+  activeDocument: DocumentItem,
+  requestId: number,
+  currentTextContext: RendererAiDocumentTextContext | null
+): Promise<RendererAiDocumentTextContext | null> {
+  if (currentTextContext || !canRunOcrForActiveImage(activeDocument)) {
+    return currentTextContext;
+  }
+
+  updateAiPipelineStage("text-extraction");
+  state.ai = {
+    ...state.ai,
+    message: "OCR image avant analyse IA..."
+  };
+  renderAiPanel();
+
+  await runOcrForActiveImageForAiAnalysis();
+  if (requestId !== aiSuggestionRequestId || state.activeDocumentPath !== activeDocument.filePath) {
+    return null;
+  }
+
+  return getActiveAiTextContext(activeDocument);
 }
 
 async function ensurePdfOcrTextContextForAi(

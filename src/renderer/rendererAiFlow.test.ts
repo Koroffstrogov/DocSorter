@@ -861,11 +861,12 @@ describe("rendererAiFlow V2 application helpers", () => {
     expect(state.ai?.panelStatus).toBe("suggestion-ready");
   });
 
-  it("does not launch OCR automatically when image text is missing", async () => {
+  it("runs image OCR automatically before AI when image text is missing", async () => {
     const context = await loadAiFlow();
     const calls: string[] = [];
     const state = context.state as TestState;
     const run = context.runAiSuggestionForActiveDocument as () => Promise<void>;
+    let capturedTextContext: RendererAiDocumentTextContext | null = null;
     context.getActiveDocument = () => ({
       name: "image.png",
       filePath: "Z:\\source\\image.png",
@@ -873,6 +874,22 @@ describe("rendererAiFlow V2 application helpers", () => {
       status: "pending"
     });
     state.activeDocumentPath = "Z:\\source\\image.png";
+    context.canRunOcrForActiveImage = () => true;
+    context.runOcrForActiveImageForAiAnalysis = async () => {
+      calls.push("ocr-image");
+      state.textExtraction.byDocumentPath["Z:\\source\\image.png"] = {
+        status: "text-found",
+        result: {
+          status: "text-found",
+          source: "tesseract-cli",
+          text: "Texte reconnu par OCR image",
+          excerpt: "Texte reconnu par OCR image",
+          characterCount: 28,
+          excerptCharacterCount: 28
+        },
+        error: null
+      };
+    };
     (context.window as { docSorter: Record<string, unknown> }).docSorter = {
       testAiConnection: async () => {
         calls.push("test");
@@ -882,15 +899,21 @@ describe("rendererAiFlow V2 application helpers", () => {
         calls.push("preload");
         return { ok: true, value: createReadyModelStatus() };
       },
-      runOcrForActiveImage: async () => {
-        calls.push("ocr");
+      runAiSuggestionForActiveDocument: async (_documentPath: string, textContext: RendererAiDocumentTextContext) => {
+        calls.push("analyze");
+        capturedTextContext = textContext;
+        return { ok: true, value: createAiSuggestion() };
       }
     };
 
     await run();
 
-    expect(calls).toEqual(["test", "preload"]);
-    expect(state.ai?.error).toMatchObject({ code: "AI_TEXT_NOT_AVAILABLE" });
+    expect(calls).toEqual(["test", "preload", "ocr-image", "analyze"]);
+    expect(capturedTextContext).toEqual({
+      source: "tesseract-cli",
+      excerpt: "Texte reconnu par OCR image"
+    });
+    expect(state.ai?.panelStatus).toBe("suggestion-ready");
   });
 
   it("maps model profiles to top-level think settings", async () => {
