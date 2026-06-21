@@ -116,6 +116,66 @@ describe("runOllamaSuggestionForDocument", () => {
     );
   });
 
+  it("sends only proved known target hints and accepts the proved target", async () => {
+    const workspace = await createWorkspace();
+    await enableAi(workspace.userData);
+    const fetchClient = createSuccessfulFetch({
+      response: createAiResponse({
+        dateToken: "2026-06-16",
+        target: "paul",
+        targetKind: "person",
+        documentType: "carte-identite",
+        confidence: 82,
+        source: "ollama"
+      })
+    });
+
+    const result = await runOllamaSuggestionForDocument({
+      ...createOptions(workspace, {
+        excerpt: "Carte d'identité de Paul Martin."
+      }),
+      knownTargets: [
+        {
+          id: "paul",
+          kind: "person",
+          displayName: "paul",
+          fileAlias: "paul",
+          aliases: ["Paul Martin"],
+          isActive: true,
+          createdAt: "2026-06-21T08:00:00.000Z",
+          updatedAt: "2026-06-21T08:00:00.000Z"
+        },
+        {
+          id: "captur",
+          kind: "vehicle",
+          displayName: "captur",
+          fileAlias: "captur",
+          aliases: ["Renault Captur"],
+          isActive: true,
+          createdAt: "2026-06-21T08:00:00.000Z",
+          updatedAt: "2026-06-21T08:00:00.000Z"
+        }
+      ],
+      fetchClient
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.input.knownTargetHints).toEqual([
+      {
+        fileAlias: "paul",
+        displayName: "paul",
+        kind: "person",
+        matchedAliases: ["Paul Martin"],
+        evidenceSources: ["known-target-alias", "text"]
+      }
+    ]);
+    expect(result.ok && result.value.suggestion.target).toBe("paul");
+    const body = readGenerateBody(fetchClient) as { prompt?: string };
+    expect(body.prompt).toContain("knownTargetHints");
+    expect(body.prompt).toContain("Paul Martin");
+    expect(body.prompt).not.toContain("Renault Captur");
+  });
+
   it("accepts a valid Ollama JSON suggestion", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);

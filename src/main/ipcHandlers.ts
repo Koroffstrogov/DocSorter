@@ -88,6 +88,7 @@ import {
   deleteKnownTarget as deleteKnownTargetService,
   listKnownTargets as listKnownTargetsService,
   updateKnownTarget as updateKnownTargetService,
+  type KnownTarget,
   type KnownTargetInput,
   type KnownTargetsList,
   type KnownTargetsResult
@@ -304,6 +305,8 @@ export interface IpcHandlerServices {
     userDataPath: string;
     targetRootPath: string | null | undefined;
     knownRelativeFolders: string[];
+    knownTargets?: KnownTarget[];
+    selectedTargetFolder?: string;
     competingRelativePaths?: string[];
   }) => Promise<AiSettingsResult<AiDocumentSuggestion>>;
   writeAiDiagnostic: (options: {
@@ -991,6 +994,8 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
         userDataPath: options.app.getPath("userData"),
         targetRootPath: state.selectedTargetPath,
         knownRelativeFolders: await getKnownTargetFoldersForAi(state, services),
+        knownTargets: await getKnownTargetsForAi(options.app.getPath("userData"), services),
+        selectedTargetFolder: state.selectedTargetFolder,
         competingRelativePaths: getSelectedTargetFolderCandidates(state)
       })
   );
@@ -1224,6 +1229,18 @@ async function getKnownTargetFoldersForAi(
   return Array.from(folders).sort((left, right) =>
     left.localeCompare(right, "fr", { sensitivity: "base" })
   );
+}
+
+async function getKnownTargetsForAi(
+  userDataPath: string,
+  services: IpcHandlerServices
+): Promise<KnownTarget[]> {
+  const result = await services.listKnownTargets(userDataPath);
+  if (!result.ok) {
+    return [];
+  }
+
+  return result.value.targets.filter((target) => target.isActive);
 }
 
 function getQueuedDocumentName(state: MainProcessAppState, documentPath: string): string {

@@ -316,7 +316,9 @@ var DocSorterNameExplanation: NameExplanationApi;
     knownTargetSelections?: AiSelectionKnownTargets | null
   ): string {
     if (field === "target" && knownTargetSelections?.target) {
-      return "Liste locale des cibles";
+      return knownTargetSelections.target.source === "ai"
+        ? "IA locale + liste locale des cibles"
+        : "Liste locale des cibles";
     }
     return manualFields?.[field] ? "Correction manuelle" : "IA locale";
   }

@@ -1,3 +1,5 @@
+import type { KnownTargetHint } from "../known-targets/buildKnownTargetHints";
+
 export type AiClassificationSource = "simulated-ai" | "ollama";
 
 export interface AiClassificationInput {
@@ -7,6 +9,7 @@ export interface AiClassificationInput {
   ocrTextExcerpt?: string;
   availableRootFolders?: string[];
   knownRelativeFolders?: string[];
+  knownTargetHints?: KnownTargetHint[];
   namingConvention?: string;
   detectedDate?: string;
   detectedYear?: string;
@@ -17,6 +20,7 @@ export interface BoundedAiClassificationInput extends AiClassificationInput {
   ocrTextExcerpt: string;
   availableRootFolders: string[];
   knownRelativeFolders: string[];
+  knownTargetHints: KnownTargetHint[];
   namingConvention: string;
   detectedDate: string;
   detectedYear: string;
@@ -60,7 +64,15 @@ export interface AiClassificationValidationIssue {
   field?: string;
   rawValue?: string;
   normalizedValue?: string;
-  evidence?: "text" | "filename" | "selected-folder" | "folder-profile" | "document-policy" | "none";
+  evidence?:
+    | "ocr"
+    | "text"
+    | "filename"
+    | "selected-folder"
+    | "folder-profile"
+    | "known-target-alias"
+    | "document-policy"
+    | "none";
   reason: string;
 }
 
@@ -95,7 +107,10 @@ export const AI_CLASSIFICATION_LIMITS = {
   filenameChars: 180,
   namingConventionChars: 500,
   folderCount: 50,
+  knownTargetHintCount: 20,
+  knownTargetHintAliases: 5,
   listItemChars: 120,
+  knownTargetHintChars: 80,
   keywords: 5,
   reasons: 8,
   warnings: 8

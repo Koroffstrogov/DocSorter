@@ -312,6 +312,93 @@ describe("validateAiMultiCandidateResponse", () => {
     expect(result.status).toBe("valid");
     expect(result.status === "valid" && result.response.fields.issuer.selected).toBe("bnp-paribas");
   });
+
+  it("accepts a known target only when a matching hint proves it", () => {
+    const response = createResponse();
+    response.fields.target = field("Paul");
+
+    const result = validateAiMultiCandidateResponse(response, {
+      filename: "carte-identite.pdf",
+      text: "Carte d'identité de Paul Martin.",
+      knownTargets: [knownTarget("paul", ["Paul Martin"])],
+      knownTargetHints: [
+        {
+          fileAlias: "paul",
+          displayName: "paul",
+          kind: "person",
+          matchedAliases: ["Paul Martin"],
+          evidenceSources: ["text", "known-target-alias"]
+        }
+      ]
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBe("paul");
+    expect(result.status === "valid" && result.response.rejectedCandidates).toEqual([]);
+  });
+
+  it("drops a known target candidate when no hint proves it", () => {
+    const response = createResponse();
+    response.fields.target = field("captur");
+    response.fields.documentType = field("releve-bancaire");
+
+    const result = validateAiMultiCandidateResponse(response, {
+      filename: "releve-bancaire.pdf",
+      text: "Relevé bancaire du compte joint.",
+      knownTargets: [knownTarget("captur", ["Renault Captur"])],
+      knownTargetHints: []
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.rejectedCandidates[0]).toMatchObject({
+      rawValue: "captur",
+      normalizedValue: "captur",
+      evidence: "none",
+      reason: "Cible connue ignorée faute de preuve."
+    });
+  });
+
+  it("drops ambiguous known targets that share the same proof", () => {
+    const response = createResponse();
+    response.fields.target = {
+      selected: "paul",
+      candidates: [
+        { value: "paul", score: 80, reason: "alias détecté" },
+        { value: "paul-martin", score: 79, reason: "alias détecté" }
+      ]
+    };
+
+    const result = validateAiMultiCandidateResponse(response, {
+      text: "Document pour Paul.",
+      knownTargets: [
+        knownTarget("paul", ["Paul"]),
+        knownTarget("paul-martin", ["Paul"])
+      ],
+      knownTargetHints: [
+        {
+          fileAlias: "paul",
+          displayName: "paul",
+          kind: "person",
+          matchedAliases: ["Paul"],
+          evidenceSources: ["text", "known-target-alias"]
+        },
+        {
+          fileAlias: "paul-martin",
+          displayName: "paul-martin",
+          kind: "person",
+          matchedAliases: ["Paul"],
+          evidenceSources: ["text", "known-target-alias"]
+        }
+      ]
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" && result.response.fields.target.selected).toBeUndefined();
+    expect(result.status === "valid" && result.response.warnings).toContain(
+      "Cible connue ambiguë : plusieurs cibles locales correspondent à la même preuve."
+    );
+  });
 });
 
 function createResponse() {
@@ -342,5 +429,18 @@ function field(value: string) {
   return {
     selected: value,
     candidates: value ? [{ value, score: 80, reason: "Sélectionné.", role: "selected" }] : []
+  };
+}
+
+function knownTarget(fileAlias: string, aliases: string[]) {
+  return {
+    id: fileAlias,
+    kind: "person" as const,
+    displayName: fileAlias,
+    fileAlias,
+    aliases,
+    isActive: true,
+    createdAt: "2026-06-21T08:00:00.000Z",
+    updatedAt: "2026-06-21T08:00:00.000Z"
   };
 }

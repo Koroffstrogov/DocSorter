@@ -185,6 +185,15 @@ describe("boundAiClassificationInput", () => {
       ocrTextExcerpt: "b".repeat(6_000),
       knownRelativeFolders: ["Maison/Assurance", "C:\\Secret", "A/B/C/D", "Vehicules/../X"],
       availableRootFolders: ["Maison", "Vehicules/Renault", "C:\\Secret"],
+      knownTargetHints: [
+        {
+          fileAlias: "paul",
+          displayName: "C:\\Users\\Seb\\Paul",
+          kind: "person",
+          matchedAliases: Array.from({ length: 6 }, (_, index) => `Alias ${index}`),
+          evidenceSources: ["text", "unknown" as never]
+        }
+      ],
       namingConvention: "n".repeat(600)
     });
 
@@ -194,6 +203,15 @@ describe("boundAiClassificationInput", () => {
     expect(bounded.ocrTextExcerpt).toHaveLength(6_000);
     expect(bounded.knownRelativeFolders).toEqual(["Maison/Assurance"]);
     expect(bounded.availableRootFolders).toEqual(["Maison"]);
+    expect(bounded.knownTargetHints).toEqual([
+      {
+        fileAlias: "paul",
+        displayName: "[chemin-local]",
+        kind: "person",
+        matchedAliases: ["Alias 0", "Alias 1", "Alias 2", "Alias 3", "Alias 4"],
+        evidenceSources: ["text"]
+      }
+    ]);
     expect(bounded.namingConvention).toHaveLength(500);
   });
 });

@@ -219,12 +219,12 @@ function redactPipelineRecord(value: unknown): Record<string, unknown> {
 
   const output: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
-    output[key] = redactPipelineOutput(entry);
+    output[key] = redactPipelineOutput(entry, key);
   }
   return output;
 }
 
-function redactPipelineOutput(value: unknown): unknown {
+function redactPipelineOutput(value: unknown, key = ""): unknown {
   if (typeof value === "string") {
     return value ? "[valeur-expurgée]" : "";
   }
@@ -232,12 +232,15 @@ function redactPipelineOutput(value: unknown): unknown {
     return value;
   }
   if (Array.isArray(value)) {
+    if (key === "kinds" || key === "evidenceSources") {
+      return value.filter((entry) => typeof entry === "string");
+    }
     return { itemCount: value.length };
   }
   if (value && typeof value === "object") {
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      output[key] = redactPipelineOutput(entry);
+      output[key] = redactPipelineOutput(entry, key);
     }
     return output;
   }

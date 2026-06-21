@@ -192,6 +192,7 @@ type FolderLearningPipelineStepId =
 
 type AiDiagnosticPipelineStepId =
   | "content-ai-analysis"
+  | "known-target-context"
   | "candidate-validation"
   | "folder-candidate"
   | "folder-name-scan"
@@ -736,6 +737,21 @@ interface RendererAiDocumentSuggestion {
     think: boolean;
   };
   responseJson: unknown;
+  input?: {
+    knownTargetHints?: Array<{
+      fileAlias: string;
+      displayName: string;
+      kind: KnownTargetKind;
+      matchedAliases: string[];
+      evidenceSources: string[];
+    }>;
+  };
+  knownTargetContext?: {
+    activeTargetCount: number;
+    hintCount: number;
+    kinds: KnownTargetKind[];
+    evidenceSources: string[];
+  };
   folderLearningPipeline?: FolderLearningPipelineStep[];
   diagnosticPipeline?: AiDiagnosticPipelineStep[];
   pdfTextQuality?: PdfTextQuality;
@@ -801,6 +817,7 @@ interface KnownTargetSelection {
   id?: string;
   displayName: string;
   fileAlias: string;
+  source?: "manual" | "ai";
 }
 
 interface KnownTargetsState {

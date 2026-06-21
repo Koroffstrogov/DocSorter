@@ -9,6 +9,15 @@ describe("buildOllamaClassificationPrompt", () => {
       extension: ".pdf",
       extractedTextExcerpt: "Document bancaire mensuel du 05/03/2024",
       knownRelativeFolders: ["Finances/Releves"],
+      knownTargetHints: [
+        {
+          fileAlias: "compte-joint",
+          displayName: "compte-joint",
+          kind: "household",
+          matchedAliases: ["Compte joint"],
+          evidenceSources: ["text", "known-target-alias"]
+        }
+      ],
       namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext"
     });
 
@@ -37,6 +46,9 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain("targetKind décrit seulement la nature optionnelle");
     expect(result.prompt).toContain("person, household, vehicle, property ou other");
     expect(result.prompt).toContain("knownRelativeFolders");
+    expect(result.prompt).toContain("knownTargetHints");
+    expect(result.prompt).toContain("cibles locales actives et prouvées");
+    expect(result.prompt).toContain("Ne propose jamais une cible connue uniquement parce qu'elle apparaît");
     expect(result.prompt).toContain("subject ne doit pas répéter le type documentaire");
     expect(result.prompt).toContain("n'utilise jamais DocSorter");
     expect(result.prompt).toContain("date d'effet est prioritaire");
@@ -61,6 +73,7 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).not.toContain("currentSuggestionV2");
     expect(result.prompt).not.toContain('"keywords"');
     expect(result.input.extractedTextExcerpt).toBe("Document bancaire mensuel du 05/03/2024");
+    expect(result.input.knownTargetHints).toHaveLength(1);
   });
 
   it("bounds document text at 6000 characters before prompt construction", () => {

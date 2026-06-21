@@ -996,6 +996,7 @@ describe("rendererAiFlow V2 application helpers", () => {
     ]);
     expect(aiResult.value.diagnosticPipeline.map((step: AiDiagnosticPipelineStep) => step.id)).toEqual([
       "content-ai-analysis",
+      "known-target-context",
       "candidate-validation",
       "folder-candidate",
       "folder-name-scan",
@@ -1025,6 +1026,10 @@ describe("rendererAiFlow V2 application helpers", () => {
       }
     });
     expect(aiResult.value.diagnosticPipeline[1]).toMatchObject({
+      id: "known-target-context",
+      status: "skipped"
+    });
+    expect(aiResult.value.diagnosticPipeline[2]).toMatchObject({
       id: "candidate-validation",
       status: "ok"
     });

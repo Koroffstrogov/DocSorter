@@ -85,7 +85,8 @@ function selectKnownTargetForAiTarget(target: KnownTarget): void {
     {
       id: target.id,
       displayName: target.displayName,
-      fileAlias: target.fileAlias
+      fileAlias: target.fileAlias,
+      source: "manual"
     }
   );
   state.ai.selection = {
@@ -149,7 +150,8 @@ function syncUpdatedKnownTargetSelection(id: string, targets: KnownTarget[]): vo
     {
       id: updatedTarget.id,
       displayName: updatedTarget.displayName,
-      fileAlias: updatedTarget.fileAlias
+      fileAlias: updatedTarget.fileAlias,
+      source: "manual"
     }
   );
   state.ai.message = `Cible locale mise à jour : ${formatKnownTargetMessageValue(updatedTarget)}.`;

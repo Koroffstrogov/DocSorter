@@ -34,6 +34,11 @@ import {
   generateDocumentNameV2,
   normalizeNameBlock
 } from "../naming/documentNameV2";
+import {
+  buildKnownTargetHints,
+  type KnownTargetHint
+} from "../known-targets/buildKnownTargetHints";
+import type { KnownTarget } from "../known-targets/knownTargets";
 import { isFilenameLikeTarget } from "./aiSuggestionSafety";
 
 export type AiDocumentTextSource = "pdf-native" | "pdf-ocr" | "pdf-hybrid" | "tesseract-cli";
@@ -59,6 +64,7 @@ export interface AiDocumentSuggestion {
   input: BoundedAiClassificationInput;
   profile: Pick<AiModelProfile, "id" | "label" | "model" | "think">;
   responseJson: AiMultiCandidateResponse;
+  knownTargetContext?: AiKnownTargetContext;
   thinking: string | null;
   suggestion: AiClassificationSuggestion;
   promptCharacterCount: number;
@@ -73,11 +79,20 @@ export interface RunOllamaSuggestionForDocumentOptions {
   userDataPath: string;
   targetRootPath?: string | null;
   knownRelativeFolders?: string[];
+  knownTargets?: KnownTarget[];
+  selectedTargetFolder?: string;
   competingRelativePaths?: string[];
   fetchClient?: OllamaHttpClient;
   modelManager?: OllamaModelManagerLike;
   statFile?: (filePath: string) => Promise<Pick<Stats, "isFile">>;
   now?: () => Date;
+}
+
+export interface AiKnownTargetContext {
+  activeTargetCount: number;
+  hintCount: number;
+  kinds: KnownTarget["kind"][];
+  evidenceSources: KnownTargetHint["evidenceSources"];
 }
 
 const FULL_DATE_TOKEN_PATTERN = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
@@ -176,7 +191,9 @@ export async function runOllamaSuggestionForDocument(
     documentName: activeDocument.value.name,
     extension: path.extname(activeDocument.value.name),
     textContext,
-    knownRelativeFolders: options.knownRelativeFolders ?? []
+    knownRelativeFolders: options.knownRelativeFolders ?? [],
+    knownTargets: options.knownTargets ?? [],
+    selectedTargetFolder: options.selectedTargetFolder ?? options.competingRelativePaths?.[0] ?? ""
   });
   const prompt = buildOllamaClassificationPrompt(aiInput);
   const generation = await generateOllamaCompletion(settings, prompt.prompt, {
@@ -196,10 +213,11 @@ export async function runOllamaSuggestionForDocument(
 
   const multiCandidateValidation = validateAiMultiCandidateResponse(parsed.value, {
     filename: prompt.input.filename,
-    text: [
-      prompt.input.extractedTextExcerpt,
-      prompt.input.ocrTextExcerpt
-    ].filter(Boolean).join("\n")
+    text: prompt.input.extractedTextExcerpt,
+    ocrText: prompt.input.ocrTextExcerpt,
+    selectedFolder: options.selectedTargetFolder ?? options.competingRelativePaths?.[0] ?? "",
+    knownTargetHints: prompt.input.knownTargetHints,
+    knownTargets: options.knownTargets
   });
   if (multiCandidateValidation.status === "invalid") {
     return aiOutputValidationFailure(multiCandidateValidation.error);
@@ -226,6 +244,7 @@ export async function runOllamaSuggestionForDocument(
       textSource: textContext.source,
       modelStatus: modelReady.value,
       input: prompt.input,
+      knownTargetContext: createKnownTargetContext(options.knownTargets ?? [], prompt.input.knownTargetHints),
       profile: {
         id: profile.id,
         label: profile.label,
@@ -767,23 +786,47 @@ function buildAiInput(options: {
   extension: string;
   textContext: AiDocumentTextContext;
   knownRelativeFolders: string[];
+  knownTargets: KnownTarget[];
+  selectedTargetFolder: string;
 }): AiClassificationInput {
+  const extractedTextExcerpt =
+    options.textContext.source === "pdf-native" ? options.textContext.excerpt : "";
+  const ocrTextExcerpt =
+    options.textContext.source === "pdf-ocr" ||
+    options.textContext.source === "pdf-hybrid" ||
+    options.textContext.source === "tesseract-cli"
+      ? options.textContext.excerpt
+      : "";
   return {
     filename: path.basename(options.documentName),
     extension: options.extension,
-    extractedTextExcerpt:
-      options.textContext.source === "pdf-native" ? options.textContext.excerpt : "",
-    ocrTextExcerpt:
-      options.textContext.source === "pdf-ocr" ||
-      options.textContext.source === "pdf-hybrid" ||
-      options.textContext.source === "tesseract-cli"
-        ? options.textContext.excerpt
-        : "",
+    extractedTextExcerpt,
+    ocrTextExcerpt,
     knownRelativeFolders: options.knownRelativeFolders,
+    knownTargetHints: buildKnownTargetHints({
+      targets: options.knownTargets,
+      filename: path.basename(options.documentName),
+      extractedText: extractedTextExcerpt,
+      ocrText: ocrTextExcerpt,
+      selectedFolder: options.selectedTargetFolder
+    }),
     availableRootFolders: rootFoldersFromRelativeFolders(options.knownRelativeFolders),
     namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
     detectedDate: "",
     detectedYear: ""
+  };
+}
+
+function createKnownTargetContext(
+  targets: KnownTarget[],
+  hints: KnownTargetHint[]
+): AiKnownTargetContext {
+  const activeTargets = targets.filter((target) => target.isActive);
+  return {
+    activeTargetCount: activeTargets.length,
+    hintCount: hints.length,
+    kinds: uniqueStrings(hints.map((hint) => hint.kind)) as KnownTarget["kind"][],
+    evidenceSources: uniqueStrings(hints.flatMap((hint) => hint.evidenceSources)) as KnownTargetHint["evidenceSources"]
   };
 }
 

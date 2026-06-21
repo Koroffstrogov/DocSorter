@@ -283,6 +283,34 @@ describe("registerIpcHandlers", () => {
 
   it("runs IA suggestions with queue, userData and target folders from main state", async () => {
     const harness = createHarness();
+    vi.mocked(harness.services.listKnownTargets).mockResolvedValueOnce({
+      ok: true,
+      value: {
+        targets: [
+          {
+            id: "paul",
+            kind: "person",
+            displayName: "paul",
+            fileAlias: "paul",
+            aliases: ["Paul Martin"],
+            isActive: true,
+            createdAt: "2026-06-21T08:00:00.000Z",
+            updatedAt: "2026-06-21T08:00:00.000Z"
+          },
+          {
+            id: "captur",
+            kind: "vehicle",
+            displayName: "captur",
+            fileAlias: "captur",
+            aliases: ["Renault Captur"],
+            isActive: false,
+            createdAt: "2026-06-21T08:00:00.000Z",
+            updatedAt: "2026-06-21T08:00:00.000Z"
+          }
+        ],
+        warnings: []
+      }
+    });
 
     await harness.invoke(IPC_CHANNELS.aiRunSuggestion, DOCUMENT_PATH, {
       source: "pdf-native",
@@ -300,8 +328,16 @@ describe("registerIpcHandlers", () => {
       userDataPath: USER_DATA_PATH,
       targetRootPath: TARGET_PATH,
       knownRelativeFolders: ["Scolarite", "Vehicules", "Vehicules/Captur"],
+      knownTargets: [
+        expect.objectContaining({
+          fileAlias: "paul",
+          isActive: true
+        })
+      ],
+      selectedTargetFolder: "Vehicules",
       competingRelativePaths: ["Vehicules"]
     });
+    expect(harness.services.listKnownTargets).toHaveBeenCalledWith(USER_DATA_PATH);
   });
 
   it("lists target folder names only from main-state target and selected folder", async () => {

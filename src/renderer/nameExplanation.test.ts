@@ -105,6 +105,35 @@ describe("name explanation renderer model", () => {
     });
   });
 
+  it("explains a target proved by AI and the local known-target list", () => {
+    const model = explanation.buildNameExplanation({
+      filename: "2026_paul_carte-identite.pdf",
+      filenameValid: true,
+      filenameSource: "ai",
+      extension: ".pdf",
+      fields: {
+        dateToken: "2026",
+        target: "paul",
+        documentType: "carte-identite"
+      },
+      knownTargetSelections: {
+        target: {
+          displayName: "Paul Martin",
+          fileAlias: "paul",
+          source: "ai"
+        }
+      },
+      destinationFolder: "Identite-famille/Paul",
+      messages: []
+    });
+
+    expect(line(model, "Cible")).toMatchObject({
+      value: "Paul Martin → paul",
+      status: "used",
+      source: "IA locale + liste locale des cibles"
+    });
+  });
+
   it("explains incomplete names and missing required fields", () => {
     const model = explanation.buildNameExplanation({
       filename: "",

@@ -40,6 +40,7 @@ export function boundAiClassificationInput(
     ),
     availableRootFolders: boundFolderList(input.availableRootFolders ?? [], true),
     knownRelativeFolders: boundFolderList(input.knownRelativeFolders ?? [], false),
+    knownTargetHints: boundKnownTargetHints(input.knownTargetHints ?? []),
     namingConvention: limitString(
       input.namingConvention ?? "",
       AI_CLASSIFICATION_LIMITS.namingConventionChars
@@ -49,6 +50,51 @@ export function boundAiClassificationInput(
       ? input.detectedYear?.trim() ?? ""
       : ""
   };
+}
+
+function boundKnownTargetHints(
+  value: BoundedAiClassificationInput["knownTargetHints"]
+): BoundedAiClassificationInput["knownTargetHints"] {
+  return value
+    .filter((hint) =>
+      hint &&
+      typeof hint.fileAlias === "string" &&
+      typeof hint.displayName === "string" &&
+      typeof hint.kind === "string" &&
+      Array.isArray(hint.matchedAliases) &&
+      Array.isArray(hint.evidenceSources)
+    )
+    .slice(0, AI_CLASSIFICATION_LIMITS.knownTargetHintCount)
+    .map((hint) => ({
+      fileAlias: limitString(redactPathLikeText(hint.fileAlias), AI_CLASSIFICATION_LIMITS.knownTargetHintChars),
+      displayName: limitString(redactPathLikeText(hint.displayName), AI_CLASSIFICATION_LIMITS.knownTargetHintChars),
+      kind: hint.kind,
+      matchedAliases: hint.matchedAliases
+        .map((alias) => limitString(redactPathLikeText(alias), AI_CLASSIFICATION_LIMITS.knownTargetHintChars))
+        .filter(Boolean)
+        .slice(0, AI_CLASSIFICATION_LIMITS.knownTargetHintAliases),
+      evidenceSources: hint.evidenceSources.filter((source) =>
+        source === "text" ||
+        source === "ocr" ||
+        source === "filename" ||
+        source === "selected-folder" ||
+        source === "folder-profile" ||
+        source === "known-target-alias"
+      )
+    }))
+    .filter((hint) =>
+      hint.fileAlias &&
+      hint.displayName &&
+      hint.matchedAliases.length > 0 &&
+      hint.evidenceSources.length > 0
+    );
+}
+
+function redactPathLikeText(value: string): string {
+  return value
+    .replace(/[a-zA-Z]:\\[^\s"',;]+/g, "[chemin-local]")
+    .replace(/\\\\[^\s"',;]+/g, "[chemin-local]")
+    .replace(/file:\/\/[^\s"',;]+/gi, "[chemin-local]");
 }
 
 export function validateAiClassificationSuggestion(

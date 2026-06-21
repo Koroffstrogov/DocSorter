@@ -248,6 +248,71 @@ describe("AI diagnostics", () => {
     expect(JSON.stringify(log.ia.value.diagnosticPipeline)).not.toContain("bnp-paribas");
   });
 
+  it("redacts known target context values but keeps safe counts and tags", async () => {
+    const writes: Array<{ filePath: string; content: string }> = [];
+    const suggestion = {
+      ...createAiDiagnosticSuggestion(),
+      diagnosticPipeline: [
+        {
+          id: "known-target-context",
+          status: "ok",
+          inputs: {
+            activeTargetCount: 3,
+            hintCount: 1
+          },
+          variables: {
+            kinds: ["person"],
+            evidenceSources: ["text", "known-target-alias"]
+          },
+          output: {
+            hints: [
+              {
+                displayName: "Paul Martin",
+                fileAlias: "paul",
+                matchedAliases: ["Paul Martin"]
+              }
+            ]
+          },
+          warnings: []
+        }
+      ]
+    };
+
+    const result = await writeAiDiagnostic({
+      userDataPath: "C:\\tmp\\docsorter-user-data",
+      documentName: "carte-identite-paul.pdf",
+      extension: ".pdf",
+      textContext: null,
+      aiResult: {
+        ok: true,
+        value: suggestion
+      },
+      now: () => new Date("2026-06-19T15:05:04.635Z"),
+      makeDirectory: async () => undefined,
+      writeTextFile: async (filePath, content) => {
+        writes.push({ filePath, content });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const log = JSON.parse(writes[0].content);
+    expect(log.ia.value.diagnosticPipeline[0]).toMatchObject({
+      id: "known-target-context",
+      inputs: {
+        activeTargetCount: 3,
+        hintCount: 1
+      },
+      variables: {
+        kinds: ["person"],
+        evidenceSources: ["text", "known-target-alias"]
+      },
+      output: {
+        hints: { itemCount: 1 }
+      }
+    });
+    expect(JSON.stringify(log)).not.toContain("Paul Martin");
+  });
+
   it("keeps PDF text quality metrics in complete diagnostics", async () => {
     const writes: Array<{ filePath: string; content: string }> = [];
     const suggestion = {

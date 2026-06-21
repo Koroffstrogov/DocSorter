@@ -7,6 +7,8 @@ import {
   type AiClassificationValidationError,
   type AiClassificationValidationResult
 } from "./aiClassificationTypes";
+import type { KnownTargetHint } from "../known-targets/buildKnownTargetHints";
+import type { KnownTarget } from "../known-targets/knownTargets";
 import { validateAiClassificationSuggestion } from "./aiClassificationValidator";
 
 export type AiCandidateFieldKey =
@@ -37,18 +39,23 @@ export interface AiRejectedCandidate {
 }
 
 export type AiCandidateEvidence =
+  | "ocr"
   | "text"
   | "filename"
   | "selected-folder"
   | "folder-profile"
+  | "known-target-alias"
   | "document-policy"
   | "none";
 
 export interface AiCandidateEvidenceContext {
   filename?: string;
   text?: string;
+  ocrText?: string;
   selectedFolder?: string;
   folderProfileTerms?: string[];
+  knownTargetHints?: KnownTargetHint[];
+  knownTargets?: KnownTarget[];
 }
 
 export interface AiFieldCandidates {
@@ -173,6 +180,10 @@ export function validateAiMultiCandidateResponse(
   }
 
   const fieldConsistency = normalizeSelectedFields(fields.value);
+  const knownTargetFiltering = rejectKnownTargetsWithoutEvidence(
+    fields.value,
+    evidenceContext
+  );
   const evidenceFiltering = filterLowConfidenceCandidatesWithoutEvidence(
     fields.value,
     evidenceContext
@@ -197,6 +208,7 @@ export function validateAiMultiCandidateResponse(
   const rejectedCandidates = [
     ...fields.rejectedCandidates,
     ...fieldConsistency.rejectedCandidates,
+    ...knownTargetFiltering.rejectedCandidates,
     ...evidenceFiltering.rejectedCandidates,
     ...folderCandidates.rejectedCandidates,
     ...fileNameCandidates.rejectedCandidates
@@ -204,6 +216,7 @@ export function validateAiMultiCandidateResponse(
   const warnings = [
     ...normalizeWarnings(record.warnings),
     ...fieldConsistency.warnings,
+    ...knownTargetFiltering.warnings,
     ...evidenceFiltering.warnings,
     ...(rejectedCandidates.length > 0 ? ["Certains candidats IA ont été ignorés. Analyse conservée."] : [])
   ];
@@ -499,6 +512,118 @@ function normalizeSelectedFields(
   return { rejectedCandidates, warnings };
 }
 
+function rejectKnownTargetsWithoutEvidence(
+  fields: Record<AiCandidateFieldKey, AiFieldCandidates>,
+  context: AiCandidateEvidenceContext | undefined
+): { rejectedCandidates: AiRejectedCandidate[]; warnings: string[] } {
+  const knownTargets = (context?.knownTargets ?? []).filter((target) => target.isActive);
+  if (knownTargets.length === 0) {
+    return { rejectedCandidates: [], warnings: [] };
+  }
+
+  const provedAliases = new Set(
+    (context?.knownTargetHints ?? [])
+      .map((hint) => normalizeNameBlock(hint.fileAlias))
+      .filter(Boolean)
+  );
+  const ambiguousAliases = findAmbiguousKnownTargetHintAliases(context?.knownTargetHints ?? []);
+  const rejectedCandidates: AiRejectedCandidate[] = [];
+  const before = fields.target.candidates;
+  fields.target.candidates = before.filter((candidate, index) => {
+    const normalized = normalizeNameBlock(candidate.value);
+    if (!normalized || !matchesKnownTarget(normalized, knownTargets)) {
+      return true;
+    }
+
+    if (ambiguousAliases.has(normalized)) {
+      rejectedCandidates.push(createRejectedCandidate(
+        "fields.target.candidates",
+        index,
+        candidate.value,
+        normalized,
+        "Cible connue ambiguë : plusieurs cibles locales correspondent à la même preuve.",
+        "known-target-alias"
+      ));
+      return false;
+    }
+
+    if (provedAliases.has(normalized)) {
+      return true;
+    }
+
+    rejectedCandidates.push(createRejectedCandidate(
+      "fields.target.candidates",
+      index,
+      candidate.value,
+      normalized,
+      "Cible connue ignorée faute de preuve.",
+      "none"
+    ));
+    return false;
+  });
+
+  const selected = fields.target.selected;
+  const selectedNormalized = normalizeNameBlock(selected);
+  const selectedAmbiguous = ambiguousAliases.has(selectedNormalized);
+  if (
+    selectedNormalized &&
+    matchesKnownTarget(selectedNormalized, knownTargets) &&
+    (selectedAmbiguous || !provedAliases.has(selectedNormalized))
+  ) {
+    rejectedCandidates.push(createRejectedCandidate(
+      "fields.target.selected",
+      -1,
+      selected ?? "",
+      selectedNormalized,
+      selectedAmbiguous
+        ? "Cible connue ambiguë : plusieurs cibles locales correspondent à la même preuve."
+        : "Cible connue ignorée faute de preuve.",
+      selectedAmbiguous ? "known-target-alias" : "none"
+    ));
+    fields.target.selected = selectBestCandidate(fields.target.candidates)?.value;
+  } else if (selected && !fields.target.candidates.some((candidate) => candidate.value === selected)) {
+    fields.target.selected = selectBestCandidate(fields.target.candidates)?.value;
+  }
+
+  return {
+    rejectedCandidates,
+    warnings: uniqueStrings(rejectedCandidates.map((candidate) => candidate.reason))
+  };
+}
+
+function matchesKnownTarget(normalizedValue: string, targets: KnownTarget[]): boolean {
+  return targets.some((target) =>
+    normalizeNameBlock(target.fileAlias) === normalizedValue ||
+    normalizeNameBlock(target.displayName) === normalizedValue ||
+    target.aliases.some((alias) => normalizeNameBlock(alias) === normalizedValue)
+  );
+}
+
+function findAmbiguousKnownTargetHintAliases(hints: KnownTargetHint[]): Set<string> {
+  const aliasToFileAliases = new Map<string, Set<string>>();
+  for (const hint of hints) {
+    for (const alias of hint.matchedAliases) {
+      const normalizedAlias = normalizeNameBlock(alias);
+      const normalizedFileAlias = normalizeNameBlock(hint.fileAlias);
+      if (!normalizedAlias || !normalizedFileAlias) {
+        continue;
+      }
+      const fileAliases = aliasToFileAliases.get(normalizedAlias) ?? new Set<string>();
+      fileAliases.add(normalizedFileAlias);
+      aliasToFileAliases.set(normalizedAlias, fileAliases);
+    }
+  }
+
+  const ambiguousFileAliases = new Set<string>();
+  for (const fileAliases of aliasToFileAliases.values()) {
+    if (fileAliases.size <= 1) {
+      continue;
+    }
+    fileAliases.forEach((fileAlias) => ambiguousFileAliases.add(fileAlias));
+  }
+  return ambiguousFileAliases;
+}
+
 function filterLowConfidenceCandidatesWithoutEvidence(
   fields: Record<AiCandidateFieldKey, AiFieldCandidates>,
   context: AiCandidateEvidenceContext | undefined
@@ -562,6 +687,10 @@ function findCandidateEvidence(
     return "text";
   }
 
+  if (containsNormalizedValue(context.ocrText ?? "", normalized)) {
+    return "ocr";
+  }
+
   if (containsNormalizedValue(context.filename ?? "", normalized)) {
     return "filename";
   }
@@ -572,6 +701,13 @@ function findCandidateEvidence(
 
   if ((context.folderProfileTerms ?? []).some((term) => normalizeNameBlock(term) === normalized)) {
     return "folder-profile";
+  }
+
+  if ((context.knownTargetHints ?? []).some((hint) =>
+    normalizeNameBlock(hint.fileAlias) === normalized ||
+    hint.matchedAliases.some((alias) => normalizeNameBlock(alias) === normalized)
+  )) {
+    return "known-target-alias";
   }
 
   if (isAllowedByDocumentPolicy(field, normalized, fields)) {

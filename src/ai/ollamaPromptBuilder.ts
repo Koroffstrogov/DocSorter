@@ -26,6 +26,7 @@ export function buildOllamaClassificationPrompt(
     ocrTextExcerpt: boundedInput.ocrTextExcerpt,
     availableRootFolders: boundedInput.availableRootFolders,
     knownRelativeFolders: boundedInput.knownRelativeFolders,
+    knownTargetHints: boundedInput.knownTargetHints,
     namingConvention: boundedInput.namingConvention,
     detectedDate: boundedInput.detectedDate,
     detectedYear: boundedInput.detectedYear
@@ -95,6 +96,10 @@ export function buildOllamaClassificationPrompt(
       "- Chaque champ de fields doit contenir selected et candidates ; retourne jusqu'à 3 candidats par champ.",
       "- Chaque candidate de champ contient value, score, reason, role optionnel ; le meilleur candidat doit être dans selected.",
       "- Chaque candidat de folderCandidates et fileNameCandidates contient value, score, reason, exists optionnel, requiresCreation optionnel.",
+      "- knownTargetHints contient uniquement des cibles locales actives et prouvées par le document, le nom source, le dossier sélectionné ou le profil du dossier.",
+      "- Tu peux utiliser une cible de knownTargetHints seulement si ses evidenceSources prouvent explicitement la cible pour ce document.",
+      "- Ne propose jamais une cible connue uniquement parce qu'elle apparaît dans knownTargetHints.",
+      "- Si aucune cible connue n'est prouvée, infère target depuis le document courant ou laisse target vide avec warning.",
       "- fields.subject.selected est optionnel : c'est un libellé de lecture pour l'utilisateur, pas une cible de nommage.",
       "- Laisse fields.subject.selected vide si aucun sujet utile et distinct n'est identifiable.",
       "- fields.subject, fields.target, fields.documentType, fields.issuer et fields.detail doivent être des blocs courts compatibles nom de fichier.",

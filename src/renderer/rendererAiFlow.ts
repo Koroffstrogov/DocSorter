@@ -549,6 +549,7 @@ function buildAiDiagnosticPipeline(
 ): AiDiagnosticPipelineStep[] {
   return [
     buildContentAiAnalysisStep(aiResult),
+    buildKnownTargetContextStep(aiResult),
     buildCandidateValidationStep(aiResult),
     buildFolderCandidateStep(aiResult),
     buildFolderNameScanStep(),
@@ -557,6 +558,45 @@ function buildAiDiagnosticPipeline(
     buildUserNameChoiceStep(),
     buildClassificationReadinessStep()
   ];
+}
+
+function buildKnownTargetContextStep(
+  aiResult: { ok: true; value: RendererAiDocumentSuggestion } | { ok: false; error: RendererAiError }
+): AiDiagnosticPipelineStep {
+  if (!aiResult.ok) {
+    return createSkippedPipelineStep("known-target-context", "Analyse IA indisponible.");
+  }
+
+  const hints = aiResult.value.input?.knownTargetHints ?? [];
+  const context = aiResult.value.knownTargetContext;
+  const activeTargetCount = context?.activeTargetCount ?? 0;
+  const evidenceSources = uniqueAiStrings([
+    ...(context?.evidenceSources ?? []),
+    ...hints.flatMap((hint) => hint.evidenceSources)
+  ]);
+  const kinds = uniqueAiStrings([
+    ...(context?.kinds ?? []),
+    ...hints.map((hint) => hint.kind)
+  ]);
+
+  return {
+    id: "known-target-context",
+    status: hints.length > 0 ? "ok" : activeTargetCount > 0 ? "skipped" : "skipped",
+    inputs: {
+      activeTargetCount,
+      hintCount: hints.length
+    },
+    variables: {
+      kinds,
+      evidenceSources
+    },
+    output: hints.length
+      ? { hints }
+      : "Aucune cible connue prouvée transmise au prompt IA.",
+    warnings: hints.length === 0 && activeTargetCount > 0
+      ? ["Liste locale ignorée pour ce document : aucune preuve trouvée."]
+      : []
+  };
 }
 
 function buildContentAiAnalysisStep(
@@ -1809,7 +1849,7 @@ function buildAiSelectionFromSuggestion(
   return recalculateAiSelection({
     fields,
     manualFields: {},
-    knownTargetSelections: {},
+    knownTargetSelections: buildKnownTargetSelectionsFromAiHints(fields, suggestion),
     editingField: null,
     editingFolder: false,
     selectedFolder,
@@ -1818,6 +1858,27 @@ function buildAiSelectionFromSuggestion(
     previewMessages: [],
     previewDestinationFolder: ""
   }, extension, targetRootPath);
+}
+
+function buildKnownTargetSelectionsFromAiHints(
+  fields: AiSelectionFields,
+  suggestion: RendererAiDocumentSuggestion
+): AiSelectionKnownTargets {
+  const target = normalizeAiBlock(fields.target);
+  const hint = suggestion.input?.knownTargetHints?.find((candidate) =>
+    normalizeAiBlock(candidate.fileAlias) === target
+  );
+  if (!target || !hint) {
+    return {};
+  }
+
+  return {
+    target: {
+      displayName: hint.displayName,
+      fileAlias: hint.fileAlias,
+      source: "ai"
+    }
+  };
 }
 
 function canResetAiSelectionChoices(): boolean {
