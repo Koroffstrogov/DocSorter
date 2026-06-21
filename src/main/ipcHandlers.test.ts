@@ -58,6 +58,16 @@ describe("sensitive IPC handler contract", () => {
     });
   });
 
+  it("documents the read-only source directory browser channel", () => {
+    expect(contractFor(IPC_CHANNELS.sourceListDirectory)).toMatchObject({
+      acceptsRendererPath: true,
+      usesMainSource: true,
+      usesMainTarget: false,
+      usesUserDataPath: false,
+      serviceName: "listSourceDirectory"
+    });
+  });
+
   it("documents the bounded document discard channel", () => {
     expect(contractFor(IPC_CHANNELS.documentsDiscard)).toMatchObject({
       acceptsRendererPath: true,
@@ -87,6 +97,74 @@ describe("sensitive IPC handler contract", () => {
 });
 
 describe("registerIpcHandlers", () => {
+  it("sets the source from a directory selected in the custom source picker", async () => {
+    const harness = createHarness();
+    const selectedDirectoryPath = path.join(SOURCE_PATH, "incoming");
+    vi.mocked(harness.services.listSourceDirectory).mockResolvedValueOnce({
+      ok: true,
+      value: createSourceListing(selectedDirectoryPath)
+    });
+
+    const result = await harness.invoke(IPC_CHANNELS.directorySelectSource, selectedDirectoryPath);
+
+    expect(harness.dialog.showOpenDialog).not.toHaveBeenCalled();
+    expect(harness.services.listSourceDirectory).toHaveBeenCalledWith(selectedDirectoryPath);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        path: selectedDirectoryPath
+      }
+    });
+    expect(harness.state.selectedSourcePath).toBe(selectedDirectoryPath);
+    expect(harness.state.queuedDocumentPaths.size).toBe(0);
+    expect(harness.state.queuedDocuments).toEqual([]);
+  });
+
+  it("keeps the native source fallback in directory mode", async () => {
+    const harness = createHarness();
+    vi.mocked(harness.dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: [SOURCE_PATH]
+    });
+
+    await harness.invoke(IPC_CHANNELS.directorySelectSource);
+
+    expect(harness.dialog.showOpenDialog).toHaveBeenCalledWith({
+      title: "Choisir le dossier source",
+      properties: ["openDirectory"]
+    });
+  });
+
+  it("lists source directory contents for the custom picker", async () => {
+    const harness = createHarness();
+
+    const result = await harness.invoke(IPC_CHANNELS.sourceListDirectory, SOURCE_PATH);
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        currentPath: SOURCE_PATH
+      }
+    });
+    expect(harness.services.listSourceDirectory).toHaveBeenCalledWith(SOURCE_PATH);
+  });
+
+  it("keeps the target picker in directory mode", async () => {
+    const harness = createHarness();
+    vi.mocked(harness.dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: [TARGET_PATH]
+    });
+
+    await harness.invoke(IPC_CHANNELS.directorySelectTarget);
+
+    expect(harness.dialog.showOpenDialog).toHaveBeenCalledWith({
+      title: "Choisir le dossier cible",
+      properties: ["openDirectory"]
+    });
+    expect(harness.state.selectedTargetPath).toBe(TARGET_PATH);
+  });
+
   it("passes extraction only the active document, main-state queue and userData", async () => {
     const harness = createHarness();
 
@@ -383,6 +461,7 @@ function createHarness(overrides: Partial<IpcHandlerServices> = {}): {
   ) => Promise<unknown>;
   services: IpcHandlerServices;
   state: MainProcessAppState;
+  dialog: DialogLike;
 } {
   const handlers = new Map<IpcChannel, IpcHandlerListener>();
   const ipcMain: IpcMainLike = {
@@ -401,10 +480,11 @@ function createHarness(overrides: Partial<IpcHandlerServices> = {}): {
     ...createServices(),
     ...overrides
   };
+  const dialog = createDialog();
 
   registerIpcHandlers({
     ipcMain,
-    dialog: createDialog(),
+    dialog,
     app: createApp(),
     appState: state,
     services
@@ -413,6 +493,7 @@ function createHarness(overrides: Partial<IpcHandlerServices> = {}): {
   return {
     services,
     state,
+    dialog,
     invoke: async (channel, ...args) => {
       const listener = handlers.get(channel);
       if (!listener) {
@@ -446,6 +527,10 @@ function createServices(): IpcHandlerServices {
         skippedEntries: [],
         scannedAt: "2026-06-18T10:00:00.000Z"
       }
+    })),
+    listSourceDirectory: vi.fn(async (sourcePath?: string | null) => ({
+      ok: true,
+      value: createSourceListing(sourcePath || SOURCE_PATH)
     })),
     discardDocuments: vi.fn(async () => ({
       ok: true,
@@ -733,6 +818,32 @@ function createDialog(): DialogLike {
       canceled: true,
       filePaths: []
     }))
+  };
+}
+
+function createSourceListing(currentPath: string) {
+  return {
+    currentPath,
+    parentPath: path.dirname(currentPath),
+    rootPath: path.parse(currentPath).root,
+    entries: [
+      {
+        name: "document.pdf",
+        path: path.join(currentPath, "document.pdf"),
+        kind: "file" as const,
+        extension: ".pdf",
+        supportedDocument: true,
+        sizeLabel: "12 KB",
+        modifiedAt: "2026-06-18T10:00:00.000Z"
+      }
+    ],
+    directoryCount: 0,
+    fileCount: 1,
+    supportedDocumentCount: 1,
+    shortcuts: [],
+    truncated: false,
+    entryLimit: 500,
+    warnings: []
   };
 }
 

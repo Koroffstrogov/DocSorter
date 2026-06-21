@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { access, rename, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, copyFile, rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -108,6 +109,9 @@ export interface ExecuteClassificationOptions {
   now?: () => Date;
   createId?: () => string;
   renameFile?: (oldPath: string, newPath: string) => Promise<void>;
+  copyFile?: (sourcePath: string, destinationPath: string, mode?: number) => Promise<void>;
+  unlinkFile?: (filePath: string) => Promise<void>;
+  createTemporaryPath?: (destinationPath: string, actionId: string) => string;
   appendJournalEntry?: JournalEntryWriter;
   checkTargetDirectoryWritable?: TargetDirectoryWritableChecker;
 }
@@ -118,6 +122,9 @@ export interface UndoClassificationOptions {
   now?: () => Date;
   createId?: () => string;
   renameFile?: (oldPath: string, newPath: string) => Promise<void>;
+  copyFile?: (sourcePath: string, destinationPath: string, mode?: number) => Promise<void>;
+  unlinkFile?: (filePath: string) => Promise<void>;
+  createTemporaryPath?: (destinationPath: string, actionId: string) => string;
   appendJournalEntry?: JournalEntryWriter;
 }
 
@@ -132,6 +139,9 @@ export async function executeClassification(
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? randomUUID;
   const renameFile = options.renameFile ?? rename;
+  const copyFileOperation = options.copyFile ?? copyFile;
+  const unlinkFile = options.unlinkFile ?? unlink;
+  const createTemporaryPath = options.createTemporaryPath ?? createDefaultTemporaryPath;
   const appendJournalEntry = options.appendJournalEntry ?? appendActionJournalEntry;
   const checkTargetDirectoryWritable =
     options.checkTargetDirectoryWritable ?? defaultCheckTargetDirectoryWritable;
@@ -260,10 +270,26 @@ export async function executeClassification(
     };
   }
 
-  try {
-    await renameFile(plan.sourcePath, plan.destinationPath);
-  } catch (error) {
-    const operationError = moveErrorFromFsError(error);
+  const moveResult = await safeMoveFile({
+    sourcePath: plan.sourcePath,
+    destinationPath: plan.destinationPath,
+    expectedHashSha256: hashResult.value,
+    actionId,
+    renameFile,
+    copyFile: copyFileOperation,
+    unlinkFile,
+    createTemporaryPath,
+    operationError: {
+      code: "MOVE_FAILED" as const,
+      message: "Classement impossible."
+    },
+    incompleteError: {
+      code: "MOVE_FAILED" as const,
+      message: "Classement impossible après déplacement incomplet."
+    }
+  });
+  if (!moveResult.ok) {
+    const operationError = moveResult.error;
     await writeClassifyFailure(appendJournalEntry, options.journalFilePath, {
       id: actionId,
       timestamp: now().toISOString(),
@@ -357,6 +383,9 @@ export async function undoLastClassification(
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? randomUUID;
   const renameFile = options.renameFile ?? rename;
+  const copyFileOperation = options.copyFile ?? copyFile;
+  const unlinkFile = options.unlinkFile ?? unlink;
+  const createTemporaryPath = options.createTemporaryPath ?? createDefaultTemporaryPath;
   const appendJournalEntry = options.appendJournalEntry ?? appendActionJournalEntry;
   const undoId = createId();
   const timestamp = now().toISOString();
@@ -391,31 +420,29 @@ export async function undoLastClassification(
     };
   }
 
-  if (action.value.sourceHashSha256) {
-    const classifiedHash = await calculateSha256(action.value.classifiedPath);
-    if (!classifiedHash.ok) {
-      const error = {
-        code: "UNDO_MOVE_FAILED" as const,
-        message: "Annulation impossible."
-      };
-      await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
-      return {
-        ok: false,
-        error
-      };
-    }
+  const classifiedHash = await calculateSha256(action.value.classifiedPath);
+  if (!classifiedHash.ok) {
+    const error = {
+      code: "UNDO_MOVE_FAILED" as const,
+      message: "Annulation impossible."
+    };
+    await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
+    return {
+      ok: false,
+      error
+    };
+  }
 
-    if (classifiedHash.value !== action.value.sourceHashSha256) {
-      const error = {
-        code: "UNDO_HASH_MISMATCH" as const,
-        message: "Annulation refusée car le fichier classé semble avoir changé."
-      };
-      await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
-      return {
-        ok: false,
-        error
-      };
-    }
+  if (action.value.sourceHashSha256 && classifiedHash.value !== action.value.sourceHashSha256) {
+    const error = {
+      code: "UNDO_HASH_MISMATCH" as const,
+      message: "Annulation refusée car le fichier classé semble avoir changé."
+    };
+    await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, timestamp, action.value, error);
+    return {
+      ok: false,
+      error
+    };
   }
 
   if (await pathExists(action.value.originalPath)) {
@@ -430,13 +457,26 @@ export async function undoLastClassification(
     };
   }
 
-  try {
-    await renameFile(action.value.classifiedPath, action.value.originalPath);
-  } catch {
-    const error = {
+  const moveResult = await safeMoveFile({
+    sourcePath: action.value.classifiedPath,
+    destinationPath: action.value.originalPath,
+    expectedHashSha256: action.value.sourceHashSha256 ?? classifiedHash.value,
+    actionId: undoId,
+    renameFile,
+    copyFile: copyFileOperation,
+    unlinkFile,
+    createTemporaryPath,
+    operationError: {
       code: "UNDO_MOVE_FAILED" as const,
       message: "Annulation impossible."
-    };
+    },
+    incompleteError: {
+      code: "UNDO_MOVE_FAILED" as const,
+      message: "Annulation impossible après déplacement incomplet."
+    }
+  });
+  if (!moveResult.ok) {
+    const error = moveResult.error;
     await writeUndoFailure(appendJournalEntry, options.journalFilePath, undoId, now().toISOString(), action.value, error);
     return {
       ok: false,
@@ -585,18 +625,121 @@ async function writeUndoFailure(
   });
 }
 
-function moveErrorFromFsError(error: unknown): ClassificationOperationError {
-  if (isNodeError(error) && error.code === "EXDEV") {
+type SafeMoveErrorCode = ExecuteClassificationErrorCode | UndoClassificationErrorCode;
+
+interface SafeMoveError<TCode extends SafeMoveErrorCode> {
+  code: TCode;
+  message: string;
+}
+
+interface SafeMoveFileOptions<TCode extends SafeMoveErrorCode> {
+  sourcePath: string;
+  destinationPath: string;
+  expectedHashSha256: string;
+  actionId: string;
+  renameFile: (oldPath: string, newPath: string) => Promise<void>;
+  copyFile: (sourcePath: string, destinationPath: string, mode?: number) => Promise<void>;
+  unlinkFile: (filePath: string) => Promise<void>;
+  createTemporaryPath: (destinationPath: string, actionId: string) => string;
+  operationError: SafeMoveError<TCode>;
+  incompleteError: SafeMoveError<TCode>;
+}
+
+async function safeMoveFile<TCode extends SafeMoveErrorCode>(
+  options: SafeMoveFileOptions<TCode>
+): Promise<{ ok: true } | { ok: false; error: SafeMoveError<TCode> }> {
+  try {
+    await options.renameFile(options.sourcePath, options.destinationPath);
+    return { ok: true };
+  } catch (error) {
+    if (!isCrossDeviceMoveError(error)) {
+      return { ok: false, error: options.operationError };
+    }
+  }
+
+  const temporaryPath = options.createTemporaryPath(options.destinationPath, options.actionId);
+  if (temporaryPath === options.sourcePath || temporaryPath === options.destinationPath) {
+    return { ok: false, error: options.operationError };
+  }
+
+  try {
+    await options.copyFile(options.sourcePath, temporaryPath, constants.COPYFILE_EXCL);
+  } catch {
+    await tryUnlink(options.unlinkFile, temporaryPath);
+    return { ok: false, error: options.operationError };
+  }
+
+  const temporaryHashOk = await hashMatches(temporaryPath, options.expectedHashSha256);
+  if (!temporaryHashOk) {
+    await tryUnlink(options.unlinkFile, temporaryPath);
+    return { ok: false, error: options.operationError };
+  }
+
+  if (await pathExists(options.destinationPath)) {
+    await tryUnlink(options.unlinkFile, temporaryPath);
+    return { ok: false, error: options.operationError };
+  }
+
+  try {
+    await options.copyFile(temporaryPath, options.destinationPath, constants.COPYFILE_EXCL);
+  } catch {
+    await tryUnlink(options.unlinkFile, temporaryPath);
+    return { ok: false, error: options.operationError };
+  }
+
+  const destinationHashOk = await hashMatches(options.destinationPath, options.expectedHashSha256);
+  if (!destinationHashOk) {
+    await tryUnlink(options.unlinkFile, options.destinationPath);
+    await tryUnlink(options.unlinkFile, temporaryPath);
+    return { ok: false, error: options.operationError };
+  }
+
+  const temporaryRemoved = await tryUnlink(options.unlinkFile, temporaryPath);
+  if (!temporaryRemoved) {
+    await tryUnlink(options.unlinkFile, options.destinationPath);
+    return { ok: false, error: options.operationError };
+  }
+
+  try {
+    await options.unlinkFile(options.sourcePath);
+  } catch {
+    const rollbackOk = await tryUnlink(options.unlinkFile, options.destinationPath);
     return {
-      code: "MOVE_ACROSS_DEVICES_UNSUPPORTED",
-      message: "Déplacement entre volumes non supporté dans ce lot."
+      ok: false,
+      error: rollbackOk ? options.operationError : options.incompleteError
     };
   }
 
-  return {
-    code: "MOVE_FAILED",
-    message: "Classement impossible."
-  };
+  return { ok: true };
+}
+
+function createDefaultTemporaryPath(destinationPath: string, actionId: string): string {
+  const safeActionId = actionId.replace(/[^a-zA-Z0-9._-]/g, "_") || "move";
+  return path.join(
+    path.dirname(destinationPath),
+    `.${path.basename(destinationPath)}.docsorter-${safeActionId}.tmp`
+  );
+}
+
+async function hashMatches(filePath: string, expectedHashSha256: string): Promise<boolean> {
+  const hash = await calculateSha256(filePath);
+  return hash.ok && hash.value === expectedHashSha256;
+}
+
+async function tryUnlink(
+  unlinkFile: (filePath: string) => Promise<void>,
+  filePath: string
+): Promise<boolean> {
+  try {
+    await unlinkFile(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isCrossDeviceMoveError(error: unknown): boolean {
+  return isNodeError(error) && error.code === "EXDEV";
 }
 
 async function isFile(filePath: string): Promise<boolean> {

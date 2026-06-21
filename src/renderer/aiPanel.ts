@@ -2,6 +2,7 @@ interface AiPanelOptions {
   root?: ParentNode;
   getState: () => AiState;
   onDraftChange: (draft: AiSettingsDraft) => void;
+  onQuickProfileChange: (draft: AiSettingsDraft) => void;
   onSaveSettings: () => void;
   onTestConnection: () => void;
   onRefreshStatus: () => void;
@@ -85,7 +86,7 @@ var DocSorterAiPanel: AiPanelFactoryApi;
     });
 
     elements.quickProfileInput?.addEventListener("change", () => {
-      options.onDraftChange(readDraft(elements));
+      options.onQuickProfileChange(readDraft(elements));
     });
 
     textInputs.forEach((input) => {

@@ -57,6 +57,7 @@ describe("renderer right panel layout", () => {
     const namingPanel = await readFile(path.join(process.cwd(), "src", "renderer", "namingPanel.ts"), "utf8");
 
     expect(html).toContain('class="simple-mode-toolbar"');
+    expect(html).toContain('title="Choisir un dossier source avec aperçu des fichiers"');
     expect(html).toContain('id="simple-mode-button"');
     expect(html).toContain('aria-pressed="true">Simple</button>');
     expect(html).toContain('id="advanced-mode-button"');
@@ -141,6 +142,14 @@ describe("renderer right panel layout", () => {
     expect(advancedPanel).toContain('value="gemma4-12b-thinking"');
     expect(advancedPanel).toContain("Tester Ollama");
     expect(advancedPanel).toContain("Libérer le modèle IA");
+  });
+
+  it("loads the custom source directory picker before document flow scripts", async () => {
+    const html = await readRendererHtml();
+
+    expect(indexOf(html, "sourceDirectoryPicker.js")).toBeLessThan(
+      indexOf(html, "rendererDocumentFlow.js")
+    );
   });
 
   it("keeps UX-1A critical right-panel IDs and design-system CSS available", async () => {

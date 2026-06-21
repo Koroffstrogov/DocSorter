@@ -749,6 +749,46 @@ describe("rendererAiFlow V2 application helpers", () => {
     })).toMatchObject({ think: false });
   });
 
+  it("auto-saves the quick AI model profile selection", async () => {
+    const context = await loadAiFlow();
+    const state = context.state as TestState;
+    const saveQuickProfile = context.saveAiSettingsFromQuickProfile as (
+      draft: Record<string, unknown>
+    ) => Promise<void>;
+    const savedSettings: Record<string, unknown>[] = [];
+    (context.window as { docSorter: Record<string, unknown> }).docSorter = {
+      saveAiSettings: async (settings: Record<string, unknown>) => {
+        savedSettings.push(settings);
+        return {
+          ok: true,
+          value: {
+            ...(state.ai.status as Record<string, unknown>),
+            settings
+          }
+        };
+      },
+      getAiModelStatus: async () => ({ ok: true, value: createReadyModelStatus() })
+    };
+
+    await saveQuickProfile({
+      ...(state.ai.draft as Record<string, unknown>),
+      profileId: "gemma4-12b-thinking",
+      model: "gemma4:12b"
+    });
+
+    expect(savedSettings).toHaveLength(1);
+    expect(savedSettings[0]).toMatchObject({
+      profileId: "gemma4-12b-thinking",
+      model: "gemma4:12b",
+      think: true
+    });
+    expect(state.ai.dirty).toBe(false);
+    expect(state.ai.draft).toMatchObject({
+      profileId: "gemma4-12b-thinking",
+      model: "gemma4:12b"
+    });
+  });
+
   it("adds the folder-learning pipeline to the exported AI diagnostic", async () => {
     const context = await loadAiFlow();
     const state = context.state as TestState;

@@ -49,6 +49,7 @@ describe("preload API surface", () => {
 
     await api.getVersion();
     await api.selectSourceDirectory();
+    await api.listSourceDirectory("C:\\source");
     await api.selectTargetDirectory();
     await api.listTargetFolders();
     await api.setTargetFolder("Vehicules/Renault-Captur");
@@ -128,6 +129,7 @@ describe("preload API surface", () => {
     expect(recorder.calls.map((call) => call.channel)).toEqual([
       IPC_CHANNELS.appGetVersion,
       IPC_CHANNELS.directorySelectSource,
+      IPC_CHANNELS.sourceListDirectory,
       IPC_CHANNELS.directorySelectTarget,
       IPC_CHANNELS.targetListFolders,
       IPC_CHANNELS.targetSetFolder,

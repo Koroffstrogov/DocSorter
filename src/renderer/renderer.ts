@@ -238,6 +238,9 @@ const ocrPanel = DocSorterOcrPanel.createOcrPanel({
 const aiPanel = DocSorterAiPanel.createAiPanel({
   getState: () => state.ai,
   onDraftChange: updateAiDraft,
+  onQuickProfileChange: (draft) => {
+    void saveAiSettingsFromQuickProfile(draft);
+  },
   onSaveSettings: () => {
     void saveAiSettingsFromPanel();
   },

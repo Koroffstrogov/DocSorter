@@ -1,6 +1,10 @@
 async function selectSourceDirectory(): Promise<void> {
   setControlsDisabled(true);
-  const selection = await window.docSorter.selectSourceDirectory();
+  const selection = await DocSorterSourceDirectoryPicker.openSourceDirectoryPicker({
+    initialPath: state.sourcePath,
+    listDirectory: (sourcePath) => window.docSorter.listSourceDirectory(sourcePath),
+    selectDirectory: (sourcePath) => window.docSorter.selectSourceDirectory(sourcePath)
+  });
   setControlsDisabled(false);
 
   if (!selection.ok) {
@@ -13,8 +17,12 @@ async function selectSourceDirectory(): Promise<void> {
     return;
   }
 
+  await applySelectedSourceDirectory(selection.value);
+}
+
+async function applySelectedSourceDirectory(selection: { path: string }): Promise<void> {
   clearPreviewResources();
-  state.sourcePath = selection.value.path;
+  state.sourcePath = selection.path;
   state.documents = [];
   state.activeDocumentPath = null;
   state.queueView = createIdleQueueViewState();

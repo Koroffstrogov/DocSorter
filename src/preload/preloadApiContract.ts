@@ -42,6 +42,7 @@ import type {
   OcrStatus
 } from "../ocr/ocrTypes";
 import type { PreviewData } from "../preview/previewTypes";
+import type { SourceDirectoryListing } from "../source-browser/sourceDirectoryBrowser";
 import type {
   TargetFolderCreation,
   TargetFolderList,
@@ -63,6 +64,7 @@ export interface IpcInvoker {
 export const ALLOWED_PRELOAD_API_METHODS = [
   "getVersion",
   "selectSourceDirectory",
+  "listSourceDirectory",
   "selectTargetDirectory",
   "listTargetFolders",
   "setTargetFolder",
@@ -107,8 +109,16 @@ export function createPreloadApi(ipc: IpcInvoker) {
   return {
     getVersion: (): Promise<string> =>
       ipc.invoke(IPC_CHANNELS.appGetVersion) as Promise<string>,
-    selectSourceDirectory: (): Promise<Result<DirectorySelection | null>> =>
-      ipc.invoke(IPC_CHANNELS.directorySelectSource) as Promise<Result<DirectorySelection | null>>,
+    selectSourceDirectory: (sourcePath?: string): Promise<Result<DirectorySelection | null>> =>
+      ipc.invoke(
+        IPC_CHANNELS.directorySelectSource,
+        sourcePath
+      ) as Promise<Result<DirectorySelection | null>>,
+    listSourceDirectory: (sourcePath?: string | null): Promise<Result<SourceDirectoryListing>> =>
+      ipc.invoke(
+        IPC_CHANNELS.sourceListDirectory,
+        sourcePath
+      ) as Promise<Result<SourceDirectoryListing>>,
     selectTargetDirectory: (): Promise<Result<DirectorySelection | null>> =>
       ipc.invoke(IPC_CHANNELS.directorySelectTarget) as Promise<Result<DirectorySelection | null>>,
     listTargetFolders: (): Promise<TargetFolderResult<TargetFolderList>> =>

@@ -37,6 +37,10 @@ import {
   type Result
 } from "../documents/documentDiscovery";
 import {
+  listSourceDirectory as listSourceDirectoryService,
+  type SourceDirectoryListing
+} from "../source-browser/sourceDirectoryBrowser";
+import {
   analyzeExactDuplicates as analyzeExactDuplicatesService,
   type DuplicateSourceDocument,
   type ExactDuplicateAnalysisResult
@@ -168,6 +172,9 @@ export interface IpcHandlerServices {
   discoverDocuments: (
     sourcePath: string | undefined
   ) => Promise<Result<DocumentDiscoveryResult>>;
+  listSourceDirectory: (
+    sourcePath?: string | null
+  ) => Promise<Result<SourceDirectoryListing>>;
   discardDocuments: (options: {
     documentPaths: string[];
     mode: DocumentDiscardMode;
@@ -319,11 +326,19 @@ export interface SensitiveIpcHandlerContract {
 export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
   {
     channel: IPC_CHANNELS.directorySelectSource,
-    acceptsRendererPath: false,
+    acceptsRendererPath: true,
     usesMainSource: false,
     usesMainTarget: false,
     usesUserDataPath: false,
-    serviceName: "dialog.showOpenDialog"
+    serviceName: "dialog.showOpenDialog + listSourceDirectory"
+  },
+  {
+    channel: IPC_CHANNELS.sourceListDirectory,
+    acceptsRendererPath: true,
+    usesMainSource: true,
+    usesMainTarget: false,
+    usesUserDataPath: false,
+    serviceName: "listSourceDirectory"
   },
   {
     channel: IPC_CHANNELS.directorySelectTarget,
@@ -593,6 +608,7 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
 
 export const defaultIpcHandlerServices: IpcHandlerServices = {
   discoverDocuments: discoverDocumentsService,
+  listSourceDirectory: listSourceDirectoryService,
   discardDocuments: discardDocumentsService,
   createInitialNamingDraft: createInitialNamingDraftService,
   isNamingDraft: isNamingDraftService,
@@ -649,8 +665,11 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
 
   options.ipcMain.handle(IPC_CHANNELS.appGetVersion, () => options.app.getVersion());
 
-  options.ipcMain.handle(IPC_CHANNELS.directorySelectSource, () =>
-    selectSourceDirectory(options.dialog, state)
+  options.ipcMain.handle(IPC_CHANNELS.directorySelectSource, (_event, requestedPath: unknown) =>
+    selectSourceDirectory(options.dialog, state, services, requestedPath)
+  );
+  options.ipcMain.handle(IPC_CHANNELS.sourceListDirectory, (_event, requestedPath: unknown) =>
+    listSourceDirectoryForPicker(state, services, requestedPath)
   );
   options.ipcMain.handle(IPC_CHANNELS.directorySelectTarget, () =>
     selectTargetDirectory(options.dialog, state)
@@ -951,9 +970,14 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
 
 async function selectSourceDirectory(
   dialog: DialogLike,
-  state: MainProcessAppState
+  state: MainProcessAppState,
+  services: IpcHandlerServices,
+  requestedPath: unknown
 ): Promise<Result<DirectorySelection | null>> {
-  const selection = await selectDirectory(dialog, "Choisir le dossier source");
+  const selection =
+    typeof requestedPath === "string" && requestedPath.trim()
+      ? await selectProvidedSourceDirectory(services, requestedPath)
+      : await selectDirectory(dialog, "Choisir le dossier source");
   if (selection.ok && selection.value) {
     state.selectedSourcePath = selection.value.path;
     state.queuedDocumentPaths = new Set();
@@ -961,6 +985,23 @@ async function selectSourceDirectory(
   }
 
   return selection;
+}
+
+async function selectProvidedSourceDirectory(
+  services: IpcHandlerServices,
+  requestedPath: string
+): Promise<Result<DirectorySelection | null>> {
+  const listing = await services.listSourceDirectory(requestedPath);
+  if (!listing.ok) {
+    return listing;
+  }
+
+  return {
+    ok: true,
+    value: {
+      path: listing.value.currentPath
+    }
+  };
 }
 
 async function selectTargetDirectory(
@@ -1240,6 +1281,17 @@ function readAiDiagnosticResult(value: unknown): AiSettingsResult<AiDocumentSugg
   }
 
   return null;
+}
+
+function listSourceDirectoryForPicker(
+  state: MainProcessAppState,
+  services: IpcHandlerServices,
+  requestedPath: unknown
+): Promise<Result<SourceDirectoryListing>> {
+  const sourcePath = typeof requestedPath === "string" && requestedPath.trim()
+    ? requestedPath
+    : state.selectedSourcePath;
+  return services.listSourceDirectory(sourcePath);
 }
 
 async function selectDirectory(

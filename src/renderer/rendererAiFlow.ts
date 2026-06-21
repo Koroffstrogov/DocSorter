@@ -29,11 +29,19 @@ async function refreshAiStatus(): Promise<void> {
 let aiPipelineTimer: number | null = null;
 
 async function saveAiSettingsFromPanel(): Promise<void> {
+  await saveAiSettingsDraft(state.ai.draft, "Sauvegarde de la configuration IA locale...");
+}
+
+async function saveAiSettingsFromQuickProfile(draft: AiSettingsDraft): Promise<void> {
+  await saveAiSettingsDraft(draft, "Sauvegarde du modèle IA local...");
+}
+
+async function saveAiSettingsDraft(draft: AiSettingsDraft, message: string): Promise<void> {
   if (isAiBusy()) {
     return;
   }
 
-  const settings = aiDraftToSettings(state.ai.draft);
+  const settings = aiDraftToSettings(draft);
   if (!settings) {
     applyAiError({
       code: "AI_CONFIG_INVALID",
@@ -45,8 +53,9 @@ async function saveAiSettingsFromPanel(): Promise<void> {
   const requestId = ++aiRequestId;
   state.ai = {
     ...state.ai,
+    draft,
     panelStatus: "saving",
-    message: "Sauvegarde de la configuration IA locale...",
+    message,
     error: null,
     modelStatus: null,
     suggestion: null,

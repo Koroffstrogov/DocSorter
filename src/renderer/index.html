@@ -17,7 +17,13 @@
         <h1>Tri des documents</h1>
       </div>
       <div class="directory-controls" aria-label="Dossiers de travail">
-        <button id="select-source" type="button">Choisir source</button>
+        <button
+          id="select-source"
+          type="button"
+          title="Choisir un dossier source avec aperçu des fichiers"
+        >
+          Choisir source
+        </button>
         <button id="refresh-source" type="button" disabled>Rafraîchir (R)</button>
         <button id="select-target" type="button">Choisir cible</button>
       </div>
@@ -470,6 +476,7 @@
     <script src="./aiFolderCandidates.js"></script>
     <script src="./aiPanel.js"></script>
     <script src="./rendererState.js"></script>
+    <script src="./sourceDirectoryPicker.js"></script>
     <script src="./keyboardShortcuts.js"></script>
     <script src="./rendererResetFlow.js"></script>
     <script src="./rendererDocumentFlow.js"></script>

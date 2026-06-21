@@ -4,7 +4,8 @@ import type { DocSorterApi } from "./preloadApiContract";
 
 const api: DocSorterApi = {
   getVersion: () => ipcRenderer.invoke("app:getVersion"),
-  selectSourceDirectory: () => ipcRenderer.invoke("directory:selectSource"),
+  selectSourceDirectory: (sourcePath) => ipcRenderer.invoke("directory:selectSource", sourcePath),
+  listSourceDirectory: (sourcePath) => ipcRenderer.invoke("source:listDirectory", sourcePath),
   selectTargetDirectory: () => ipcRenderer.invoke("directory:selectTarget"),
   listTargetFolders: () => ipcRenderer.invoke("target:listFolders"),
   setTargetFolder: (targetFolder) => ipcRenderer.invoke("target:setFolder", targetFolder),

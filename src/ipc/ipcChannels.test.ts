@@ -5,6 +5,7 @@ import { ALLOWED_IPC_CHANNELS, IPC_CHANNELS } from "./ipcChannels";
 const REVIEWED_IPC_CHANNELS = [
   "app:getVersion",
   "directory:selectSource",
+  "source:listDirectory",
   "directory:selectTarget",
   "target:listFolders",
   "target:setFolder",

@@ -43,6 +43,24 @@ describe("executeClassification", () => {
     });
   });
 
+  it("uses direct rename without copy fallback on the same volume", async () => {
+    const fixture = await createFixture();
+    let copyCalled = false;
+
+    const result = await executeClassification(
+      createExecuteOptions(fixture, {
+        copyFile: async () => {
+          copyCalled = true;
+        }
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(copyCalled).toBe(false);
+    await expect(stat(fixture.sourceFile)).rejects.toThrow();
+    await expect(readFile(fixture.destinationFile, "utf8")).resolves.toBe("source");
+  });
+
   it("does not move the file when the started journal entry cannot be written", async () => {
     const fixture = await createFixture();
     let renameCalled = false;
@@ -207,8 +225,9 @@ describe("executeClassification", () => {
     await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
   });
 
-  it("does not copy-delete when rename reports EXDEV", async () => {
+  it("classifies across devices when rename reports EXDEV", async () => {
     const fixture = await createFixture();
+    const temporaryFile = path.join(fixture.targetDir, "cross-device.tmp");
 
     const result = await executeClassification(
       createExecuteOptions(fixture, {
@@ -216,22 +235,80 @@ describe("executeClassification", () => {
           const error = new Error("Cross-device link") as NodeJS.ErrnoException;
           error.code = "EXDEV";
           throw error;
-        }
+        },
+        createTemporaryPath: () => temporaryFile
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    await expect(stat(fixture.sourceFile)).rejects.toThrow();
+    await expect(readFile(fixture.destinationFile, "utf8")).resolves.toBe("source");
+    await expect(stat(temporaryFile)).rejects.toThrow();
+
+    const journal = await readJournal(fixture.journalFile);
+    expect(journal.map((entry) => entry.status)).toEqual(["started", "completed"]);
+    expect(journal.at(-1)).toMatchObject({
+      action: "classify",
+      status: "completed",
+      oldPath: fixture.sourceFile,
+      newPath: fixture.destinationFile
+    });
+  });
+
+  it("keeps the source when the cross-device copy hash does not match", async () => {
+    const fixture = await createFixture();
+    const temporaryFile = path.join(fixture.targetDir, "bad-copy.tmp");
+
+    const result = await executeClassification(
+      createExecuteOptions(fixture, {
+        renameFile: throwCrossDeviceRename,
+        copyFile: async (_sourcePath, destinationPath) => {
+          await writeFile(destinationPath, "changed");
+        },
+        createTemporaryPath: () => temporaryFile
       })
     );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.code).toBe("MOVE_ACROSS_DEVICES_UNSUPPORTED");
+      expect(result.error.code).toBe("MOVE_FAILED");
     }
     await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
     await expect(stat(fixture.destinationFile)).rejects.toThrow();
+    await expect(stat(temporaryFile)).rejects.toThrow();
 
     const journal = await readJournal(fixture.journalFile);
     expect(journal.map((entry) => entry.status)).toEqual(["started", "failed"]);
     expect(journal.at(-1)).toMatchObject({
-      errorCode: "MOVE_ACROSS_DEVICES_UNSUPPORTED"
+      errorCode: "MOVE_FAILED"
     });
+  });
+
+  it("rolls back the copied destination when deleting the source fails", async () => {
+    const fixture = await createFixture();
+    const temporaryFile = path.join(fixture.targetDir, "delete-source-fails.tmp");
+
+    const result = await executeClassification(
+      createExecuteOptions(fixture, {
+        renameFile: throwCrossDeviceRename,
+        unlinkFile: async (filePath) => {
+          if (filePath === fixture.sourceFile) {
+            throw new Error("source locked");
+          }
+
+          await rm(filePath);
+        },
+        createTemporaryPath: () => temporaryFile
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("MOVE_FAILED");
+    }
+    await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
+    await expect(stat(fixture.destinationFile)).rejects.toThrow();
+    await expect(stat(temporaryFile)).rejects.toThrow();
   });
 });
 
@@ -260,6 +337,38 @@ describe("undoLastClassification", () => {
       action: "undo-classify",
       status: "completed",
       originalActionId: "classify-1",
+      restoredPath: fixture.sourceFile,
+      classifiedPath: fixture.destinationFile
+    });
+  });
+
+  it("restores across devices when undo rename reports EXDEV", async () => {
+    const fixture = await createFixture();
+    const executeResult = await executeClassification(createExecuteOptions(fixture));
+    if (!executeResult.ok) {
+      throw new Error("Expected successful classification");
+    }
+    const temporaryFile = path.join(fixture.sourceDir, "undo-cross-device.tmp");
+
+    const result = await undoLastClassification({
+      undoableAction: executeResult.value.undoableAction,
+      journalFilePath: fixture.journalFile,
+      now: fixedNow,
+      createId: () => "undo-cross-device",
+      renameFile: throwCrossDeviceRename,
+      createTemporaryPath: () => temporaryFile
+    });
+
+    expect(result.ok).toBe(true);
+    await expect(readFile(fixture.sourceFile, "utf8")).resolves.toBe("source");
+    await expect(stat(fixture.destinationFile)).rejects.toThrow();
+    await expect(stat(temporaryFile)).rejects.toThrow();
+
+    const journal = await readJournal(fixture.journalFile);
+    expect(journal.at(-1)).toMatchObject({
+      id: "undo-cross-device",
+      action: "undo-classify",
+      status: "completed",
       restoredPath: fixture.sourceFile,
       classifiedPath: fixture.destinationFile
     });
@@ -497,6 +606,12 @@ function failMatchingJournalEntry(
 
     return appendActionJournalEntry(journalFilePath, entry);
   };
+}
+
+async function throwCrossDeviceRename(): Promise<void> {
+  const error = new Error("Cross-device link") as NodeJS.ErrnoException;
+  error.code = "EXDEV";
+  throw error;
 }
 
 function journalWriteFailure(): ActionJournalResult {

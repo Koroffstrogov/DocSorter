@@ -1,6 +1,7 @@
 export const IPC_CHANNELS = {
   appGetVersion: "app:getVersion",
   directorySelectSource: "directory:selectSource",
+  sourceListDirectory: "source:listDirectory",
   directorySelectTarget: "directory:selectTarget",
   targetListFolders: "target:listFolders",
   targetSetFolder: "target:setFolder",
