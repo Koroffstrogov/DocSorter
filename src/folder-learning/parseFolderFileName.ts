@@ -1,4 +1,4 @@
-export type FolderLearningDatePrecision = "day" | "month" | "year";
+export type FolderLearningDatePrecision = "day" | "month" | "year" | "school-year";
 
 export interface FolderLearningFileEntry {
   name: string;
@@ -12,6 +12,7 @@ export interface ParsedFolderFileName {
   blocks: string[];
   target: string;
   documentType: string;
+  subject?: string;
   issuer?: string;
   detail?: string;
   extension: ".pdf" | ".jpg" | ".jpeg" | ".png";
@@ -24,6 +25,9 @@ export type FolderNamingPattern =
   | "DATE_DOCUMENT_CIBLE"
   | "DATE_DOCUMENT_CIBLE_EMETTEUR"
   | "DATE_CIBLE_DOCUMENT"
+  | "DATE_CIBLE_DOCUMENT_SUBJECT"
+  | "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR"
+  | "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR_DETAIL"
   | "DATE_CIBLE_DOCUMENT_EMETTEUR"
   | "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL"
   | "DATE_DOCUMENT_CIBLE_EMETTEUR_DETAIL";
@@ -48,7 +52,7 @@ export function parseFolderFileName(input: string | FolderLearningFileEntry): Pa
 
   const baseName = fileName.slice(0, -extension.length);
   const parts = baseName.split("_");
-  if (parts.length < 2 || parts.length > 5 || parts.some((part) => !isNormalizedNameBlock(part))) {
+  if (parts.length < 2 || parts.length > 6 || parts.some((part) => !isNormalizedNameBlock(part))) {
     return null;
   }
 
@@ -66,6 +70,7 @@ export function parseFolderFileName(input: string | FolderLearningFileEntry): Pa
     blocks,
     target: semantic.target,
     documentType: semantic.documentType,
+    ...(semantic.subject ? { subject: semantic.subject } : {}),
     ...(semantic.issuer ? { issuer: semantic.issuer } : {}),
     ...(semantic.detail ? { detail: semantic.detail } : {}),
     extension,
@@ -96,6 +101,10 @@ function detectDatePrecision(value: string): FolderLearningDatePrecision | null 
     return "year";
   }
 
+  if (isSchoolYearToken(value)) {
+    return "school-year";
+  }
+
   return null;
 }
 
@@ -112,6 +121,7 @@ function defaultSemanticFromBlocks(blocks: string[]): {
   target: string;
   documentType: string;
   issuer?: string;
+  subject?: string;
   detail?: string;
 } {
   if (blocks.length === 1) {
@@ -121,12 +131,22 @@ function defaultSemanticFromBlocks(blocks: string[]): {
     };
   }
 
-  const [target, documentType, issuer, detail] = blocks;
+  const [target, documentType, third, fourth, fifth] = blocks;
+  if (blocks.length === 5) {
+    return {
+      target: target ?? "",
+      documentType: documentType ?? "",
+      subject: third,
+      issuer: fourth,
+      detail: fifth
+    };
+  }
+
   return {
     target: target ?? "",
     documentType: documentType ?? "",
-    ...(issuer ? { issuer } : {}),
-    ...(detail ? { detail } : {})
+    ...(third ? { issuer: third } : {}),
+    ...(fourth ? { detail: fourth } : {})
   };
 }
 
@@ -139,9 +159,18 @@ function patternForPartCount(partCount: number): FolderNamingPattern {
     return "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL";
   }
 
+  if (partCount === 6) {
+    return "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR_DETAIL";
+  }
+
   if (partCount === 4) {
     return "DATE_CIBLE_DOCUMENT_EMETTEUR";
   }
 
   return "DATE_CIBLE_DOCUMENT";
+}
+
+function isSchoolYearToken(value: string): boolean {
+  const match = value.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
 }

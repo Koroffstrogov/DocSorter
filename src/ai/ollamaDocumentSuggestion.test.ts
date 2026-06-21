@@ -319,9 +319,8 @@ describe("runOllamaSuggestionForDocument", () => {
       documentType: "facture-entretien",
       source: "ollama"
     });
-    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
-    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
-    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA absente ou invalide");
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2026-05");
+    expect(result.ok && result.value.suggestion.proposedName).toBe("2026-05_captur_facture-entretien.pdf");
   });
 
   it("builds a clean monthly bank statement name and removes period detail", async () => {
@@ -355,11 +354,11 @@ describe("runOllamaSuggestionForDocument", () => {
       documentType: "releve-bancaire",
       issuer: "bnp-paribas"
     });
-    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
-    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2026-05");
+    expect(result.ok && result.value.suggestion.proposedName).toBe("2026-05_foyer_releve-bancaire_bnp-paribas.pdf");
     expect(result.ok && result.value.suggestion.subject).toBeUndefined();
-    expect(result.ok && result.value.suggestion.detail).toBe("mai-2026");
-    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA absente ou invalide");
+    expect(result.ok && result.value.suggestion.detail).toBeUndefined();
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Détail IA ignoré");
   });
 
   it("keeps a monthly bank statement first-day date as a complete date", async () => {
@@ -432,7 +431,7 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.suggestion.detail).toBeUndefined();
   });
 
-  it("uses the AI subject for proposed name generation when no target is provided", async () => {
+  it("keeps AI subject informational when no target is provided", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -457,7 +456,7 @@ describe("runOllamaSuggestionForDocument", () => {
       documentType: "carnet-vaccination",
       source: "ollama"
     });
-    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2026");
     expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
   });
 
@@ -502,7 +501,7 @@ describe("runOllamaSuggestionForDocument", () => {
       target: "vehicules",
       documentType: "facture",
       targetFolder: "Véhicules",
-      proposedName: "2024-03-15_renault-captur_facture.pdf",
+      proposedName: "2024-03-15_vehicules_facture_renault-captur.pdf",
       source: "ollama"
     });
     expect(result.value.suggestion.issuer).toBeUndefined();
@@ -582,8 +581,8 @@ describe("runOllamaSuggestionForDocument", () => {
       target: "foyer",
       documentType: "avis-imposition"
     });
-    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
-    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2025");
+    expect(result.ok && result.value.suggestion.proposedName).toBe("2025_foyer_avis-imposition.pdf");
     expect(result.ok && result.value.suggestion.subject).toBeUndefined();
   });
 
@@ -683,7 +682,7 @@ describe("runOllamaSuggestionForDocument", () => {
     });
   });
 
-  it("keeps T02 school-year date as the starting year", async () => {
+  it("keeps T02 school-year date as a school-year token", async () => {
     const workspace = await createWorkspace();
     await enableAi(workspace.userData);
 
@@ -693,7 +692,7 @@ describe("runOllamaSuggestionForDocument", () => {
       }),
       fetchClient: createSuccessfulFetch({
         response: createAiResponse({
-          dateToken: "2026",
+          dateToken: "2026/2027",
           subject: "lea",
           target: "lea",
           targetKind: "person",
@@ -708,8 +707,8 @@ describe("runOllamaSuggestionForDocument", () => {
       target: "lea",
       documentType: "certificat-scolarite"
     });
-    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
-    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2026-2027");
+    expect(result.ok && result.value.suggestion.proposedName).toBe("2026-2027_lea_certificat-scolarite.pdf");
     expect(result.ok && result.value.suggestion.subject).toBeUndefined();
     expect(result.ok && result.value.responseJson.fields.targetKind.selected).toBe("person");
   });
@@ -833,7 +832,7 @@ describe("runOllamaSuggestionForDocument", () => {
     expect(result.ok && result.value.responseJson.fields.subject.selected).toBe("compte-joint");
     expect(result.ok && result.value.responseJson.fields.issuer.selected).toBe("bnp-paribas");
     expect(result.ok && result.value.suggestion.target).toBe("compte-joint");
-    expect(result.ok && result.value.suggestion.proposedName).toBeUndefined();
+    expect(result.ok && result.value.suggestion.proposedName).toBe("2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf");
   });
 
   it("drops weak Captur subject candidates from bank statements when the document has no evidence", async () => {
@@ -849,7 +848,7 @@ describe("runOllamaSuggestionForDocument", () => {
         response: JSON.stringify({
           fields: {
             dateToken: createField("2026-05"),
-            subject: createScoredField("captur", 40),
+            subject: createScoredField("captur", 20),
             target: createField("foyer"),
             targetKind: createField("household"),
             documentType: createField("releve-bancaire"),
@@ -1023,8 +1022,8 @@ describe("runOllamaSuggestionForDocument", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.ok && result.value.suggestion.dateToken).toBeUndefined();
-    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA absente ou invalide");
+    expect(result.ok && result.value.suggestion.dateToken).toBe("2023");
+    expect(result.ok && result.value.suggestion.warnings.join(" ")).toContain("Date IA à préciser");
   });
 
   it("refuses invalid JSON without crashing", async () => {

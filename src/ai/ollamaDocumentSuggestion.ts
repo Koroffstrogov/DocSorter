@@ -96,6 +96,7 @@ export interface AiKnownTargetContext {
 }
 
 const FULL_DATE_TOKEN_PATTERN = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+const SCHOOL_YEAR_TOKEN_PATTERN = /^((?:19|20)\d{2})-((?:19|20)\d{2})$/;
 const MONTH_TOKEN_PATTERN = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/;
 const MONTHLY_PERIOD_DOCUMENT_TYPES = new Set([
   "releve-bancaire",
@@ -345,7 +346,11 @@ function textContainsJointAccount(input: BoundedAiClassificationInput): boolean 
 }
 
 function addDatePrecisionWarning(suggestion: AiClassificationSuggestion): void {
-  if (!suggestion.dateToken || FULL_DATE_TOKEN_PATTERN.test(suggestion.dateToken)) {
+  if (
+    !suggestion.dateToken ||
+    FULL_DATE_TOKEN_PATTERN.test(suggestion.dateToken) ||
+    isSchoolYearToken(suggestion.dateToken)
+  ) {
     return;
   }
 
@@ -430,6 +435,16 @@ function buildDateRedundantTokens(dateToken: string): Set<string> {
   const yearMatch = dateToken.match(/^((?:19|20)\d{2})$/);
   if (yearMatch) {
     tokens.add(yearMatch[1]);
+    return tokens;
+  }
+
+  const schoolYearMatch = dateToken.match(SCHOOL_YEAR_TOKEN_PATTERN);
+  if (schoolYearMatch) {
+    tokens.add(schoolYearMatch[1]);
+    tokens.add(schoolYearMatch[2]);
+    tokens.add(`${schoolYearMatch[1]}-${schoolYearMatch[2]}`);
+    tokens.add("annee");
+    tokens.add("scolaire");
     return tokens;
   }
 
@@ -690,6 +705,7 @@ function applyGeneratedProposedName(
     dateToken: suggestion.dateToken,
     target: namingTarget,
     documentType: suggestion.documentType,
+    ...(suggestion.subject ? { subject: suggestion.subject } : {}),
     ...(suggestion.issuer ? { issuer: suggestion.issuer } : {}),
     ...(suggestion.detail ? { detail: suggestion.detail } : {}),
     extension
@@ -709,7 +725,12 @@ function selectNamingTarget(suggestion: AiClassificationSuggestion): string {
     return target;
   }
 
-  return suggestion.subject?.trim() || target;
+  return target;
+}
+
+function isSchoolYearToken(value: string): boolean {
+  const match = value.match(SCHOOL_YEAR_TOKEN_PATTERN);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
 }
 
 function findQueuedDocument(
@@ -811,7 +832,7 @@ function buildAiInput(options: {
       selectedFolder: options.selectedTargetFolder
     }),
     availableRootFolders: rootFoldersFromRelativeFolders(options.knownRelativeFolders),
-    namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext",
+    namingConvention: "DATE_CIBLE_DOCUMENT[_SUJET][_EMETTEUR][_DETAIL].ext",
     detectedDate: "",
     detectedYear: ""
   };

@@ -80,7 +80,8 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain('createAiFieldRow("Type"');
     expect(source).toContain('createAiFieldRow("Émetteur"');
     expect(source).toContain('createAiFieldRow("Détail"');
-    expect(source).toContain(".slice(0, 3)");
+    expect(source).toContain("visibleCandidateLimit");
+    expect(source).toContain(".slice(0, visibleCandidateLimit)");
     expect(source).toContain('editButton.textContent = "✎"');
     expect(source).toContain('editButton.setAttribute("aria-label"');
     expect(source).toContain('badge.textContent = "manuel"');
@@ -88,7 +89,7 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain('button.textContent = `${candidate.value} ${candidate.score}%`;');
     expect(source).toContain("emptyValueLabel(key)");
     expect(source).toContain('key === "subject"');
-    expect(source).toContain('"non utilisé"');
+    expect(source).toContain('"aucun"');
     expect(source).toContain("isOptionalField(key)");
     expect(source).toContain("createEmptyCandidateButton");
     expect(source).toContain("createKnownTargetPicker");

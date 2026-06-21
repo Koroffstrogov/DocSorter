@@ -40,6 +40,42 @@ describe("compareNameWithFolderProfile", () => {
     expect(comparison.reasons.join(" ")).toContain("Profil faible");
   });
 
+  it("recognizes a one-file DocSorter subject schema and proposes an aligned name", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026",
+        target: "lea",
+        documentType: "certificat-scolarite",
+        subject: "assr",
+        issuer: "college-monet"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile([
+        "2025_lea_certificat-scolarite_assr_college-monet.pdf"
+      ])
+    });
+
+    expect(comparison.recommendation).toBe("manual-review");
+    expect(comparison.alignedName).toBe("2026_lea_certificat-scolarite_assr_college-monet.pdf");
+    expect(comparison.detectedPattern).toBe("DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR");
+  });
+
+  it("keeps school-year date precision in aligned names", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-2027",
+        target: "lea",
+        documentType: "certificat-scolarite"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile([
+        "2025-2026_lea_certificat-scolarite.pdf"
+      ])
+    });
+
+    expect(comparison.alignedName).toBe("2026-2027_lea_certificat-scolarite.pdf");
+  });
+
   it("proposes an aligned name for a medium bank statement profile", () => {
     const comparison = compareNameWithFolderProfile({
       aiFields: {

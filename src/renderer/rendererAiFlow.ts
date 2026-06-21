@@ -1653,7 +1653,7 @@ function buildNamingDraftFromAiSuggestion(
   const nextOrigins: NamingDraftOrigins = { ...origins };
   const appliedFields: Array<keyof NamingDraft> = [];
   const dateToken = normalizeAiDateForCurrentDraft(suggestion.dateToken);
-  const subject = suggestion.subject?.trim() || suggestion.target?.trim() || "";
+  const subject = suggestion.subject?.trim() ?? "";
   const keywords = buildAiKeywords(suggestion);
 
   applyAiField("documentDate", dateToken);
@@ -1704,7 +1704,7 @@ function hasApplicableAiSuggestionField(
   suggestion: RendererAiClassificationSuggestion
 ): boolean {
   const dateToken = normalizeAiDateForCurrentDraft(suggestion.dateToken);
-  const subject = suggestion.subject?.trim() || suggestion.target?.trim() || "";
+  const subject = suggestion.subject?.trim() ?? "";
   const keywords = buildAiKeywords(suggestion);
   return (
     shouldApplyAiValue(draft.documentDate, origins.documentDate, dateToken, suggestion.confidence) ||
@@ -1795,8 +1795,9 @@ function normalizeFolderForComparison(value: string): string {
 }
 
 function normalizeAiDateForCurrentDraft(dateToken: string | undefined): string {
-  const trimmed = dateToken?.trim() ?? "";
+  const trimmed = normalizeAiPreviewSchoolYear(dateToken?.trim() ?? "");
   return /^(19|20)\d{2}$/.test(trimmed) ||
+    isAiPreviewSchoolYear(trimmed) ||
     /^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)
     ? trimmed
     : "";
@@ -2029,6 +2030,7 @@ function buildAiSelectionPreview(
   const dateResult = normalizeAiPreviewDate(fields.dateToken);
   const target = normalizeAiPreviewBlock(fields.target);
   const documentType = normalizeAiPreviewBlock(fields.documentType);
+  const subject = normalizeOptionalAiPreviewBlock(fields.subject);
   const issuer = normalizeOptionalAiPreviewBlock(fields.issuer);
   const detail = normalizeOptionalAiPreviewBlock(fields.detail);
 
@@ -2036,7 +2038,7 @@ function buildAiSelectionPreview(
     messages.push({ level: "warning", message: dateResult.warning });
   }
   if (!dateResult.value) {
-    messages.push({ level: "error", message: "Date IA obligatoire : AAAA, AAAA-MM ou AAAA-MM-JJ." });
+    messages.push({ level: "error", message: "Date IA obligatoire : AAAA, AAAA-AAAA, AAAA-MM ou AAAA-MM-JJ." });
   }
   if (!target) {
     messages.push({ level: "error", message: "Cible IA obligatoire pour générer le nom." });
@@ -2049,9 +2051,13 @@ function buildAiSelectionPreview(
     dateToken: dateResult.value,
     target,
     documentType,
+    subject,
     issuer,
     detail
   });
+  if (subject && !optionalParts.subject) {
+    messages.push({ level: "info", message: "Sujet redondant ignoré dans le nom IA." });
+  }
   if (issuer && !optionalParts.issuer) {
     messages.push({ level: "info", message: "Émetteur redondant ignoré dans le nom IA." });
   }
@@ -2072,6 +2078,7 @@ function buildAiSelectionPreview(
     dateResult.value,
     target,
     documentType,
+    optionalParts.subject,
     optionalParts.issuer,
     optionalParts.detail
   ].filter(Boolean);
@@ -2131,7 +2138,15 @@ function readAiSelectedField(
   suggestion: RendererAiDocumentSuggestion,
   field: AiSelectionFieldKey
 ): string {
-  void response;
+  if (field === "subject" || field === "detail") {
+    return "";
+  }
+
+  const selected = response?.fields?.[field]?.selected;
+  if (typeof selected === "string" && selected.trim()) {
+    return selected.trim();
+  }
+
   const value = suggestion.suggestion[field];
   return typeof value === "string" ? value.trim() : "";
 }
@@ -2152,8 +2167,11 @@ function selectBestAiCandidate(candidates: AiCandidateView[]): AiCandidateView |
 }
 
 function normalizeAiPreviewDate(value: string): { value: string; warning: string } {
-  const trimmed = value.trim();
+  const trimmed = normalizeAiPreviewSchoolYear(value.trim());
   if (/^(19|20)\d{2}$/.test(trimmed)) {
+    return { value: trimmed, warning: "" };
+  }
+  if (isAiPreviewSchoolYear(trimmed)) {
     return { value: trimmed, warning: "" };
   }
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(trimmed)) {
@@ -2164,6 +2182,16 @@ function normalizeAiPreviewDate(value: string): { value: string; warning: string
   }
 
   return { value: "", warning: "" };
+}
+
+function normalizeAiPreviewSchoolYear(value: string): string {
+  const match = value.match(/^((?:19|20)\d{2})[/-]((?:19|20)\d{2})$/);
+  return match ? `${match[1]}-${match[2]}` : value;
+}
+
+function isAiPreviewSchoolYear(value: string): boolean {
+  const match = value.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
 }
 
 function normalizeAiPreviewBlock(value: string): string {
@@ -2192,16 +2220,22 @@ function removeRedundantAiNameParts(input: {
   dateToken: string;
   target: string;
   documentType: string;
+  subject: string;
   issuer: string;
   detail: string;
-}): { issuer: string; detail: string } {
+}): { subject: string; issuer: string; detail: string } {
   const blocked = new Set([input.target, input.documentType].filter(Boolean));
+  const subject = blocked.has(input.subject) ? "" : input.subject;
+  if (subject) {
+    blocked.add(subject);
+  }
   const issuer = blocked.has(input.issuer) ? "" : input.issuer;
   if (issuer) {
     blocked.add(issuer);
   }
 
   return {
+    subject,
     issuer,
     detail: blocked.has(input.detail) || isAiDetailRedundantWithDate(input.detail, input.dateToken)
       ? ""
@@ -2224,6 +2258,16 @@ function buildAiDateRedundantTokens(dateToken: string): Set<string> {
   const yearMatch = dateToken.match(/^((?:19|20)\d{2})$/);
   if (yearMatch) {
     tokens.add(yearMatch[1]);
+    return tokens;
+  }
+
+  const schoolYearMatch = dateToken.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+  if (schoolYearMatch) {
+    tokens.add(schoolYearMatch[1]);
+    tokens.add(schoolYearMatch[2]);
+    tokens.add(`${schoolYearMatch[1]}-${schoolYearMatch[2]}`);
+    tokens.add("annee");
+    tokens.add("scolaire");
     return tokens;
   }
 

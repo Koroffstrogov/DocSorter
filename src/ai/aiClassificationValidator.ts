@@ -131,7 +131,7 @@ export function validateAiClassificationSuggestion(
   if (!dateToken.ok) {
     return invalid(
       "AI_DATE_INVALID",
-      "Date IA invalide. Utiliser AAAA-MM-JJ, AAAA-MM ou AAAA.",
+      "Date IA invalide. Utiliser AAAA-MM-JJ, AAAA-MM, AAAA-AAAA ou AAAA.",
       "dateToken"
     );
   }
@@ -197,7 +197,7 @@ export function validateAiClassificationSuggestion(
 }
 
 function normalizeAiDateToken(value: string): { ok: true; value: string } | { ok: false } {
-  const trimmed = value.trim();
+  const trimmed = normalizeSchoolYearSeparator(value.trim());
   if (!trimmed) {
     return { ok: true, value: "" };
   }
@@ -211,11 +211,25 @@ function normalizeAiDateToken(value: string): { ok: true; value: string } | { ok
     return { ok: true, value: `${monthMatch[1]}-${monthMatch[2]}` };
   }
 
+  if (isSchoolYearToken(trimmed)) {
+    return { ok: true, value: trimmed };
+  }
+
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(trimmed)) {
     return validateLegacyDate(trimmed) ? { ok: true, value: trimmed } : { ok: false };
   }
 
   return { ok: false };
+}
+
+function normalizeSchoolYearSeparator(value: string): string {
+  const match = value.match(/^((?:19|20)\d{2})[/-]((?:19|20)\d{2})$/);
+  return match ? `${match[1]}-${match[2]}` : value;
+}
+
+function isSchoolYearToken(value: string): boolean {
+  const match = value.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
 }
 
 export function validateLegacyDate(value: string): boolean {

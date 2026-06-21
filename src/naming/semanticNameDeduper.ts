@@ -17,6 +17,7 @@ export function dedupeNamingInputV2Semantic(
     dateToken: input.dateToken.trim().toLowerCase(),
     target: normalizeNameBlock(input.target),
     documentType: normalizeNameBlock(input.documentType),
+    subject: normalizeNameBlock(input.subject),
     issuer: normalizeNameBlock(input.issuer),
     detail: normalizeNameBlock(input.detail),
     extension: input.extension
@@ -24,21 +25,27 @@ export function dedupeNamingInputV2Semantic(
   const removedTerms: string[] = [];
   const targetTerms = tokenSet(normalized.target);
   const documentTypeTerms = tokenSet(normalized.documentType);
+  const subjectBefore = normalized.subject ?? "";
+  const subject = removeTerms(subjectBefore, new Set([...targetTerms, ...documentTypeTerms]), removedTerms);
+  const subjectTerms = tokenSet(subjectBefore);
   const issuerBefore = normalized.issuer ?? "";
-  const issuer = removeTerms(issuerBefore, targetTerms, removedTerms);
+  const issuer = removeTerms(issuerBefore, new Set([...targetTerms, ...subjectTerms]), removedTerms);
   const issuerTerms = tokenSet(issuerBefore);
   const detailForbiddenTerms = new Set([
     ...targetTerms,
     ...documentTypeTerms,
+    ...subjectTerms,
     ...issuerTerms
   ]);
   const detail = removeTerms(normalized.detail ?? "", detailForbiddenTerms, removedTerms);
   const deduped: NamingInputV2 = {
     ...normalized,
+    ...(subject ? { subject } : { subject: undefined }),
     ...(issuer ? { issuer } : { issuer: undefined }),
     ...(detail ? { detail } : { detail: undefined })
   };
-  const changed = normalizeNameBlock(input.issuer) !== (deduped.issuer ?? "") ||
+  const changed = normalizeNameBlock(input.subject) !== (deduped.subject ?? "") ||
+    normalizeNameBlock(input.issuer) !== (deduped.issuer ?? "") ||
     normalizeNameBlock(input.detail) !== (deduped.detail ?? "");
 
   return {

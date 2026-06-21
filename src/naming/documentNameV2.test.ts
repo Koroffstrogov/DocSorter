@@ -50,6 +50,31 @@ describe("generateDocumentNameV2", () => {
     expect(result.filename).toBe("2026_lea_certificat-scolarite_college-monet.pdf");
   });
 
+  it("places the optional subject after the document type", () => {
+    const result = generateDocumentNameV2({
+      dateToken: "2026",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      subject: "assr",
+      extension: ".pdf"
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.filename).toBe("2026_lea_certificat-scolarite_assr.pdf");
+  });
+
+  it("accepts school-year date tokens", () => {
+    const result = generateDocumentNameV2({
+      dateToken: "2026/2027",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      extension: ".pdf"
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.filename).toBe("2026-2027_lea_certificat-scolarite.pdf");
+  });
+
   it("normalizes uppercase extensions", () => {
     const result = generateDocumentNameV2({
       dateToken: "2026-06-16",
@@ -212,6 +237,7 @@ describe("validateDateToken", () => {
   it("accepts controlled date tokens", () => {
     expect(validateDateToken("2024-03-05")).toBeNull();
     expect(validateDateToken("2024-03")).toBeNull();
+    expect(validateDateToken("2024-2025")).toBeNull();
     expect(validateDateToken("2024")).toBeNull();
     expect(validateDateToken("2024-env")).toBeNull();
     expect(validateDateToken("date-inconnue")).toBeNull();

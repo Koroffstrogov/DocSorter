@@ -116,7 +116,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     const isManual = Boolean(selection?.manualFields[key]);
     const isEditing = selection?.editingField === key;
 
-    row.className = `ai-field-row ${key === "subject" ? "secondary" : ""} ${isManual ? "manual" : ""}`;
+    row.className = `ai-field-row ${isManual ? "manual" : ""}`;
     title.className = "ai-field-title";
     labelElement.textContent = label;
     badge.className = "ai-field-badge manual";
@@ -128,11 +128,12 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     selected.title = selectedValue?.trim() || "";
     selected.className = selectedValue?.trim() ? "ai-field-selected" : "ai-field-selected empty";
     candidateLine.className = "ai-field-candidates";
+    const visibleCandidateLimit = isOptionalField(key) ? 2 : 3;
     candidateLine.replaceChildren(
       selected,
       ...fieldCandidates
         .filter((candidate) => !isSelectedCandidate(candidate.value, selectedValue))
-        .slice(0, 3)
+        .slice(0, visibleCandidateLimit)
         .map((candidate) =>
           createCandidateButton(candidate, selectedValue, () => {
             options.onFieldCandidateSelect(key, candidate.value);
@@ -539,7 +540,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
 
   function emptyValueLabel(key: AiCandidateFieldKey): string {
     if (key === "subject") {
-      return "non utilisé";
+      return "aucun";
     }
 
     return isOptionalField(key) ? "aucun" : "à compléter";

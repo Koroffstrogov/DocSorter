@@ -19,9 +19,9 @@ interface Window {
 var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
 
 (() => {
-  type ParsedDatePrecision = "day" | "month" | "year";
+  type ParsedDatePrecision = "day" | "month" | "year" | "school-year";
   type SchemaStatus = "ready" | "ambiguous" | "blocked";
-  type SchemaField = "target" | "documentType" | "issuer" | "detail";
+  type SchemaField = "target" | "documentType" | "subject" | "issuer" | "detail";
 
   interface ParsedName {
     originalName: string;
@@ -30,6 +30,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     blocks: string[];
     target: string;
     documentType: string;
+    subject?: string;
     issuer?: string;
     detail?: string;
     pattern: string;
@@ -55,6 +56,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     dateToken: string;
     target: string;
     documentType: string;
+    subject: string;
     issuer: string;
     detail: string;
   }
@@ -68,9 +70,12 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     { pattern: "DATE_DOCUMENT_EMETTEUR", fields: ["documentType", "issuer"] },
     { pattern: "DATE_CIBLE_DOCUMENT", fields: ["target", "documentType"] },
     { pattern: "DATE_DOCUMENT_CIBLE", fields: ["documentType", "target"] },
+    { pattern: "DATE_CIBLE_DOCUMENT_SUBJECT", fields: ["target", "documentType", "subject"] },
     { pattern: "DATE_CIBLE_DOCUMENT_EMETTEUR", fields: ["target", "documentType", "issuer"] },
     { pattern: "DATE_DOCUMENT_CIBLE_EMETTEUR", fields: ["documentType", "target", "issuer"] },
+    { pattern: "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR", fields: ["target", "documentType", "subject", "issuer"] },
     { pattern: "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL", fields: ["target", "documentType", "issuer", "detail"] },
+    { pattern: "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR_DETAIL", fields: ["target", "documentType", "subject", "issuer", "detail"] },
     { pattern: "DATE_DOCUMENT_CIBLE_EMETTEUR_DETAIL", fields: ["documentType", "target", "issuer", "detail"] }
   ];
 
@@ -265,6 +270,17 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       warnings.push("Cible dominante hétérogène : alignement non appliqué.");
     }
 
+    const schemaSubject = schemaValue(profile, schema, "subject");
+    if (!schema.fieldOrder.includes("subject") && normalizeBlock(aiInput.subject)) {
+      aligned.subject = "";
+      appliedChanges.push("subject");
+      reasons.push("Sujet supprimé car absent du schéma local.");
+    } else if (schemaSubject && normalizeBlock(schemaSubject) !== normalizeBlock(aiInput.subject)) {
+      aligned.subject = normalizeBlock(schemaSubject);
+      appliedChanges.push("subject");
+      reasons.push("Sujet aligné sur le dossier.");
+    }
+
     const schemaIssuer = schemaValue(profile, schema, "issuer");
     if (!schema.fieldOrder.includes("issuer") && normalizeBlock(aiInput.issuer)) {
       aligned.issuer = "";
@@ -287,10 +303,12 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     }
 
     if (appliedChanges.length === 0) {
+      const alignedName = buildName(aligned, schema, input.extension);
       return {
         aiName: input.aiName,
+        ...(warnings.length > 0 ? {} : { alignedName }),
         detectedPattern: schema.pattern,
-        recommendation: warnings.length > 0 ? "manual-review" : "keep-ai",
+        recommendation: warnings.length > 0 || profile.status === "weak" ? "manual-review" : "keep-ai",
         confidence: warnings.length > 0 ? 50 : profile.status === "strong" ? 85 : profile.status === "medium" ? 65 : 45,
         appliedChanges,
         reasons: warnings.length > 0
@@ -340,7 +358,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     }
 
     const parts = fileName.slice(0, dotIndex).split("_");
-    if (parts.length < 2 || parts.length > 5 || parts.some((part) => !BLOCK_PATTERN.test(part))) {
+    if (parts.length < 2 || parts.length > 6 || parts.some((part) => !BLOCK_PATTERN.test(part))) {
       return null;
     }
 
@@ -358,6 +376,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       blocks,
       target: semantic.target,
       documentType: semantic.documentType,
+      subject: semantic.subject,
       issuer: semantic.issuer,
       detail: semantic.detail,
       pattern: defaultPatternForBlockCount(blocks.length)
@@ -378,6 +397,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         dateToken,
         target,
         documentType,
+        subject: normalizeOptionalBlock(fields.subject),
         issuer: normalizeOptionalBlock(fields.issuer),
         detail: normalizeOptionalBlock(fields.detail)
       };
@@ -392,6 +412,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       dateToken: parsed.dateToken,
       target: parsed.target,
       documentType: parsed.documentType,
+      subject: parsed.subject ?? "",
       issuer: parsed.issuer ?? "",
       detail: parsed.detail ?? ""
     };
@@ -406,6 +427,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     const values: Record<SchemaField, string> = {
       target: fields.target,
       documentType: fields.documentType,
+      subject: fields.subject,
       issuer: fields.issuer,
       detail: fields.detail
     };
@@ -533,6 +555,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
           dateToken: aiInput.dateToken,
           target: aiInput.target,
           documentType: aiInput.documentType,
+          subject: aiInput.subject,
           issuer: aiInput.issuer,
           detail: aiInput.detail
         }
@@ -611,6 +634,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
   function defaultSemanticFromBlocks(blocks: string[]): {
     target: string;
     documentType: string;
+    subject?: string;
     issuer?: string;
     detail?: string;
   } {
@@ -621,12 +645,22 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       };
     }
 
-    const [target, documentType, issuer, detail] = blocks;
+    const [target, documentType, third, fourth, fifth] = blocks;
+    if (blocks.length === 5) {
+      return {
+        target: target ?? "",
+        documentType: documentType ?? "",
+        subject: third,
+        issuer: fourth,
+        detail: fifth
+      };
+    }
+
     return {
       target: target ?? "",
       documentType: documentType ?? "",
-      issuer,
-      detail
+      issuer: third,
+      detail: fourth
     };
   }
 
@@ -639,6 +673,9 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     }
     if (count === 4) {
       return "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL";
+    }
+    if (count === 5) {
+      return "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR_DETAIL";
     }
     return "DATE_CIBLE_DOCUMENT";
   }
@@ -654,12 +691,25 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     if (/^(19|20)\d{2}$/.test(value)) {
       return "year";
     }
+    if (isSchoolYearDate(value)) {
+      return "school-year";
+    }
     return null;
   }
 
   function normalizeDate(value: string): string {
-    const trimmed = value.trim();
+    const trimmed = normalizeSchoolYearSeparator(value.trim());
     return precisionForDate(trimmed) ? trimmed : "";
+  }
+
+  function normalizeSchoolYearSeparator(value: string): string {
+    const match = value.match(/^((?:19|20)\d{2})[/-]((?:19|20)\d{2})$/);
+    return match ? `${match[1]}-${match[2]}` : value;
+  }
+
+  function isSchoolYearDate(value: string): boolean {
+    const match = value.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+    return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
   }
 
   function normalizeBlock(value: string | undefined): string {

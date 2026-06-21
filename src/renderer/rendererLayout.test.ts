@@ -339,7 +339,7 @@ describe("renderer right panel layout", () => {
     expect(aiFolderCandidates).toContain("Aucun dossier n'est créé automatiquement.");
     expect(aiFolderCandidates).not.toContain("Dossier proposé actuel");
     expect(aiFieldRows).toContain("createCandidateButton");
-    expect(aiFieldRows).toContain(".slice(0, 3)");
+    expect(aiFieldRows).toContain(".slice(0, visibleCandidateLimit)");
     expect(aiFolderCandidates).toContain("onFolderCandidateSelect");
     expect(aiFolderCandidates).toContain("folder-candidate-badge");
     expect(aiFieldRows).toContain("requiresCreation");

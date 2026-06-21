@@ -44,8 +44,8 @@ export function buildOllamaClassificationPrompt(
         {
           fields: {
             dateToken: {
-              selected: "AAAA-MM-JJ optionnel",
-              candidates: [{ value: "2026-05-01", score: 80, reason: "date fiable détectée", role: "selected" }]
+              selected: "AAAA-MM-JJ, AAAA-MM, AAAA ou AAAA-AAAA optionnel",
+              candidates: [{ value: "2026-2027", score: 80, reason: "année scolaire détectée", role: "selected" }]
             },
             subject: {
               selected: "sujet du champ Renommage proposé optionnel",
@@ -93,14 +93,15 @@ export function buildOllamaClassificationPrompt(
       ),
       "Contraintes strictes :",
       "- source doit valoir \"ollama\".",
-      "- Chaque champ de fields doit contenir selected et candidates ; retourne jusqu'à 3 candidats par champ.",
+      "- Chaque champ de fields doit contenir selected et candidates ; retourne 2 à 3 candidats par champ quand plusieurs valeurs plausibles existent, même avec confiance faible.",
       "- Chaque candidate de champ contient value, score, reason, role optionnel ; le meilleur candidat doit être dans selected.",
+      "- N'invente pas une fausse valeur pour atteindre 2 candidats : si un seul candidat plausible existe, retourne uniquement ce candidat.",
       "- Chaque candidat de folderCandidates et fileNameCandidates contient value, score, reason, exists optionnel, requiresCreation optionnel.",
       "- knownTargetHints contient uniquement des cibles locales actives et prouvées par le document, le nom source, le dossier sélectionné ou le profil du dossier.",
       "- Tu peux utiliser une cible de knownTargetHints seulement si ses evidenceSources prouvent explicitement la cible pour ce document.",
       "- Ne propose jamais une cible connue uniquement parce qu'elle apparaît dans knownTargetHints.",
       "- Si aucune cible connue n'est prouvée, infère target depuis le document courant ou laisse target vide avec warning.",
-      "- fields.subject.selected est optionnel : c'est un libellé de lecture pour l'utilisateur, pas une cible de nommage.",
+      "- fields.subject.selected est optionnel : c'est un bloc complémentaire du nom placé après documentType, pas une cible de nommage.",
       "- Laisse fields.subject.selected vide si aucun sujet utile et distinct n'est identifiable.",
       "- fields.subject, fields.target, fields.documentType, fields.issuer et fields.detail doivent être des blocs courts compatibles nom de fichier.",
       "- folderCandidates doit contenir des dossiers relatifs candidats ; chaque dossier doit être relatif, sans chemin absolu, sans lettre de lecteur, sans \"..\".",
@@ -123,23 +124,23 @@ export function buildOllamaClassificationPrompt(
       "- Si un candidat subject, target, issuer ou detail est incertain ou seulement inspiré par un exemple, laisse-le vide.",
       "- n'utilise jamais DocSorter, docsorter-local, document de test ou contenu fictif dans subject, issuer, detail ou proposedName.",
       "- n'utilise jamais de chemin absolu dans target, documentType, issuer, detail ou targetFolder.",
-      "- dateToken doit être au format AAAA-MM-JJ, ou rester absent.",
-      "- N'utilise pas AAAA ni AAAA-MM comme dateToken final.",
+      "- dateToken doit être au format AAAA-MM-JJ, AAAA-MM, AAAA ou AAAA-AAAA, ou rester absent.",
+      "- Pour une année scolaire ou universitaire, utilise AAAA-AAAA quand cette période est explicite.",
       "- N'utilise pas date-inconnue, unknown, inconnue, AAAA-env ni placeholder équivalent dans la sortie JSON.",
       "- detail ne doit pas contenir un mois ou une période déjà représentés par dateToken.",
-      "- Pour relevé bancaire, facture énergie périodique, quittance ou document mensuel, dateToken doit rester absent si seule une période mensuelle est connue.",
+      "- Pour relevé bancaire, facture énergie périodique, quittance ou document mensuel, dateToken peut être AAAA-MM si seule une période mensuelle est connue.",
       "- Pour contrat ou assurance, la date d'effet est prioritaire sur la date de signature.",
       "- Si une date complète d'effet, émission ou délivrance est détectée, dateToken doit être AAAA-MM-JJ, pas seulement AAAA.",
       "- Si une date de prise d'effet est présente, elle doit gagner comme dateToken.",
       "- Pour avis-imposition, target doit être foyer et dateToken doit être l'année fiscale/recherche.",
-      "- Pour scolarité 2026/2027, dateToken doit être 2026.",
+      "- Pour scolarité 2026/2027, dateToken doit être 2026-2027.",
       "- Pour identité, carte-identite ou passeport, la date d'émission/délivrance est prioritaire ; la date de naissance est exclue du dateToken.",
       "- Pour carte-identite, targetFolder doit prioriser un dossier connu pertinent comme CNI ou Identité ; sinon propose Identité avec requiresCreation true.",
       "- N'invente pas une date précise : si seulement l'année est connue, retourne AAAA.",
       "- confidence est un nombre entre 0 et 100.",
       "- n'invente pas une certitude : ajoute un warning si le signal est faible.",
       "- n'inclus jamais de chemin Windows complet.",
-      "- Convention de nommage : DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext.",
+      "- Convention de nommage : DATE_CIBLE_DOCUMENT[_SUJET][_EMETTEUR][_DETAIL].ext.",
       "Données bornées du document actif :",
       JSON.stringify(payload, null, 2)
     ].join("\n")

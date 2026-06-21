@@ -125,13 +125,14 @@ describe("validateAiMultiCandidateResponse", () => {
     });
   });
 
-  it("drops partial and placeholder dates without invalidating the response", () => {
+  it("keeps controlled partial and school-year dates but drops placeholders", () => {
     const response = createResponse();
     response.fields.dateToken = {
-      selected: "2025",
+      selected: "2025/2026",
       candidates: [
         { value: "2025", score: 90, reason: "année seule" },
         { value: "2025-06", score: 80, reason: "mois seul" },
+        { value: "2025/2026", score: 85, reason: "année scolaire" },
         { value: "date-inconnue", score: 70, reason: "placeholder" }
       ]
     };
@@ -139,13 +140,14 @@ describe("validateAiMultiCandidateResponse", () => {
     const result = validateAiMultiCandidateResponse(response);
 
     expect(result.status).toBe("valid");
-    expect(result.status === "valid" && result.response.fields.dateToken.selected).toBeUndefined();
-    expect(result.status === "valid" && result.response.fields.dateToken.candidates).toEqual([]);
-    expect(result.status === "valid" && result.response.rejectedCandidates.map((candidate) => candidate.rawValue)).toEqual([
+    expect(result.status === "valid" && result.response.fields.dateToken.selected).toBe("2025-2026");
+    expect(result.status === "valid" && result.response.fields.dateToken.candidates.map((candidate) => candidate.value)).toEqual([
       "2025",
       "2025-06",
-      "date-inconnue",
-      "2025"
+      "2025-2026"
+    ]);
+    expect(result.status === "valid" && result.response.rejectedCandidates.map((candidate) => candidate.rawValue)).toEqual([
+      "date-inconnue"
     ]);
   });
 
@@ -261,7 +263,7 @@ describe("validateAiMultiCandidateResponse", () => {
     const response = createResponse();
     response.fields.subject = {
       selected: "captur",
-      candidates: [{ value: "captur", score: 40, reason: "candidat faible" }]
+      candidates: [{ value: "captur", score: 20, reason: "candidat très faible" }]
     };
 
     const result = validateAiMultiCandidateResponse(response, {

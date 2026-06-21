@@ -180,7 +180,7 @@ interface TargetFolderState {
 
 type FolderLearningStatus = "idle" | "loading" | "ready" | "error";
 type FolderLearningProfileStatus = "none" | "weak" | "medium" | "strong";
-type FolderLearningDatePrecision = "day" | "month" | "year" | "mixed";
+type FolderLearningDatePrecision = "day" | "month" | "year" | "school-year" | "mixed";
 type FolderLearningDetailUsage = "never" | "sometimes" | "often";
 type FolderLearningRecommendation = "keep-ai" | "prefer-folder-profile" | "manual-review";
 type FolderLearningPipelineStepId =

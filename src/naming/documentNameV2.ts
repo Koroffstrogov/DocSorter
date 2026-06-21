@@ -4,6 +4,7 @@ export interface NamingInputV2 {
   dateToken: string;
   target: string;
   documentType: string;
+  subject?: string;
   issuer?: string;
   detail?: string;
   extension: string;
@@ -84,6 +85,7 @@ export function generateDocumentNameV2(
     dateToken: normalizeDateToken(input.dateToken),
     target: normalizeNameBlock(input.target),
     documentType: normalizeNameBlock(input.documentType),
+    subject: normalizeNameBlock(input.subject),
     issuer: normalizeNameBlock(input.issuer),
     detail: normalizeNameBlock(input.detail),
     extension: normalizeExtension(input.extension)
@@ -105,6 +107,7 @@ export function generateDocumentNameV2(
     normalizedInput.dateToken,
     normalizedInput.target,
     normalizedInput.documentType,
+    normalizedInput.subject,
     normalizedInput.issuer,
     normalizedInput.detail
   ].filter(Boolean);
@@ -191,6 +194,10 @@ export function validateDateToken(value: string): NamingV2Message | null {
     return null;
   }
 
+  if (isSchoolYearToken(token)) {
+    return null;
+  }
+
   if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(token)) {
     return null;
   }
@@ -210,13 +217,13 @@ export function validateDateToken(value: string): NamingV2Message | null {
     level: "error",
     code: "DATE_INVALID",
     field: "dateToken",
-    message: "Date non contrôlée. Utiliser AAAA-MM-JJ, AAAA-MM, AAAA, AAAA-env ou date-inconnue."
+    message: "Date non contrôlée. Utiliser AAAA-MM-JJ, AAAA-MM, AAAA-AAAA, AAAA, AAAA-env ou date-inconnue."
   };
 }
 
 export function detectSensitiveNameParts(input: NamingInputV2): NamingV2Message[] {
   const messages: NamingV2Message[] = [];
-  const fields: Array<keyof NamingInputV2> = ["target", "documentType", "issuer", "detail"];
+  const fields: Array<keyof NamingInputV2> = ["target", "documentType", "subject", "issuer", "detail"];
 
   for (const field of fields) {
     const value = input[field];
@@ -284,7 +291,9 @@ export function generateDocumentNameV2FromLegacyDraft(
 }
 
 function normalizeDateToken(value: string): string {
-  return (value ?? "").trim().toLowerCase();
+  const trimmed = (value ?? "").trim().toLowerCase();
+  const schoolYear = trimmed.match(/^((?:19|20)\d{2})[/-]((?:19|20)\d{2})$/);
+  return schoolYear ? `${schoolYear[1]}-${schoolYear[2]}` : trimmed;
 }
 
 function normalizeExtension(value: string): string {
@@ -340,7 +349,7 @@ function addOptionalReservedBlockMessages(
   input: NamingInputV2,
   messages: NamingV2Message[]
 ): void {
-  const fields: Array<"issuer" | "detail"> = ["issuer", "detail"];
+  const fields: Array<"subject" | "issuer" | "detail"> = ["subject", "issuer", "detail"];
   for (const field of fields) {
     const value = input[field];
     if (value && isReservedWindowsName(value)) {
@@ -363,6 +372,7 @@ function addNormalizationMessage(
     [
       ["target", input.target, normalizedInput.target],
       ["documentType", input.documentType, normalizedInput.documentType],
+      ["subject", input.subject ?? "", normalizedInput.subject ?? ""],
       ["issuer", input.issuer ?? "", normalizedInput.issuer ?? ""],
       ["detail", input.detail ?? "", normalizedInput.detail ?? ""],
       ["extension", input.extension, normalizedInput.extension]
@@ -381,6 +391,11 @@ function addNormalizationMessage(
 function isRealIsoDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function isSchoolYearToken(value: string): boolean {
+  const match = value.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
 }
 
 function containsSensitiveDate(value: string): boolean {

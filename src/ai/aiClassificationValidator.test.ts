@@ -115,6 +115,23 @@ describe("validateAiClassificationSuggestion", () => {
     });
   });
 
+  it("accepts school-year AI date tokens", () => {
+    const result = validateAiClassificationSuggestion({
+      dateToken: "2026/2027",
+      confidence: 50,
+      reasons: [],
+      warnings: [],
+      source: "simulated-ai"
+    });
+
+    expect(result).toMatchObject({
+      status: "valid",
+      suggestion: {
+        dateToken: "2026-2027"
+      }
+    });
+  });
+
   it("rejects legacy V2 fallback date tokens from AI output", () => {
     for (const dateToken of ["date-inconnue", "2026-env"]) {
       const result = validateAiClassificationSuggestion({

@@ -29,6 +29,7 @@ export interface FolderProfileNameFields {
   dateToken: string;
   target: string;
   documentType: string;
+  subject?: string;
   issuer?: string;
   detail?: string;
 }
@@ -89,16 +90,19 @@ interface PreferenceSignal {
   warnings: string[];
 }
 
-type FolderSchemaField = "target" | "documentType" | "issuer" | "detail";
+type FolderSchemaField = "target" | "documentType" | "subject" | "issuer" | "detail";
 
 const SCHEMA_FIELD_ORDERS: Array<{ pattern: FolderNamingPattern; fields: FolderSchemaField[] }> = [
   { pattern: "DATE_DOCUMENT", fields: ["documentType"] },
   { pattern: "DATE_DOCUMENT_EMETTEUR", fields: ["documentType", "issuer"] },
   { pattern: "DATE_CIBLE_DOCUMENT", fields: ["target", "documentType"] },
   { pattern: "DATE_DOCUMENT_CIBLE", fields: ["documentType", "target"] },
+  { pattern: "DATE_CIBLE_DOCUMENT_SUBJECT", fields: ["target", "documentType", "subject"] },
   { pattern: "DATE_CIBLE_DOCUMENT_EMETTEUR", fields: ["target", "documentType", "issuer"] },
   { pattern: "DATE_DOCUMENT_CIBLE_EMETTEUR", fields: ["documentType", "target", "issuer"] },
+  { pattern: "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR", fields: ["target", "documentType", "subject", "issuer"] },
   { pattern: "DATE_CIBLE_DOCUMENT_EMETTEUR_DETAIL", fields: ["target", "documentType", "issuer", "detail"] },
+  { pattern: "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR_DETAIL", fields: ["target", "documentType", "subject", "issuer", "detail"] },
   { pattern: "DATE_DOCUMENT_CIBLE_EMETTEUR_DETAIL", fields: ["documentType", "target", "issuer", "detail"] }
 ];
 
@@ -211,10 +215,13 @@ export function compareNameWithFolderProfile(
 
   if (alignment.appliedChanges.length === 0) {
     const needsManualReview = alignment.warnings.some((warning) => warning.includes("alignement non appliqué"));
+    const generated = generateAlignedName(alignment.input, schema);
+    warnings.push(...generated.warnings);
     const comparison: FolderProfileNameComparison = {
       aiName: resolved.aiName,
+      ...(!needsManualReview && generated.filename ? { alignedName: generated.filename } : {}),
       detectedPattern: schema.pattern,
-      recommendation: needsManualReview ? "manual-review" : "keep-ai",
+      recommendation: needsManualReview || profile.status === "weak" ? "manual-review" : "keep-ai",
       confidence: needsManualReview ? 50 : profile.status === "strong" ? 85 : profile.status === "medium" ? 65 : 45,
       appliedChanges: [],
       reasons: [
@@ -403,6 +410,7 @@ function namingInputFromParsedName(parsed: ParsedFolderFileName, extensionOverri
     dateToken: parsed.dateToken,
     target: parsed.target,
     documentType: parsed.documentType,
+    ...(parsed.subject ? { subject: parsed.subject } : {}),
     ...(parsed.issuer ? { issuer: parsed.issuer } : {}),
     ...(parsed.detail ? { detail: parsed.detail } : {}),
     extension: extensionOverride ?? parsed.extension
@@ -468,6 +476,22 @@ function buildAlignedInput(
     warnings.push("Cible dominante hétérogène : alignement non appliqué.");
   }
 
+  if (!schema.fieldOrder.includes("subject") && normalizeNameBlock(input.subject)) {
+    aligned.subject = undefined;
+    appliedChanges.push("subject");
+    reasons.push("Sujet supprimé car le schéma local n'utilise pas ce bloc.");
+  } else if (
+    schema.fieldOrder.includes("subject") &&
+    valueForSchemaField(profile, schema, "subject")
+  ) {
+    const subject = normalizeNameBlock(valueForSchemaField(profile, schema, "subject"));
+    if (subject && subject !== normalizeNameBlock(input.subject)) {
+      aligned.subject = subject;
+      appliedChanges.push("subject");
+      reasons.push("Sujet aligné sur le sujet dominant du dossier.");
+    }
+  }
+
   if (!schema.fieldOrder.includes("issuer") && normalizeNameBlock(input.issuer)) {
     aligned.issuer = undefined;
     appliedChanges.push("issuer");
@@ -519,6 +543,7 @@ function analyzeFolderSchema(profile: FolderNamingProfile, input: NamingInputV2)
   const fieldValues: Record<FolderSchemaField, string> = {
     target: normalizeNameBlock(input.target),
     documentType: normalizeNameBlock(input.documentType),
+    subject: normalizeNameBlock(input.subject),
     issuer: normalizeNameBlock(input.issuer),
     detail: normalizeNameBlock(input.detail)
   };
@@ -641,6 +666,7 @@ function createPipeline(
         dateToken: resolved.input.dateToken,
         target: resolved.input.target,
         documentType: resolved.input.documentType,
+        subject: resolved.input.subject ?? "",
         issuer: resolved.input.issuer ?? "",
         detail: resolved.input.detail ?? ""
       }

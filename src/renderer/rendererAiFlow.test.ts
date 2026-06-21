@@ -39,13 +39,13 @@ describe("rendererAiFlow V2 application helpers", () => {
 
     expect(result.draft).toEqual({
       documentDate: "2026-06-17",
-      subject: "lea",
+      subject: "captur",
       documentType: "certificat-scolarite",
       keywords: "college-monet inscription"
     });
     expect(result.origins).toEqual({
       documentDate: "ai-v2",
-      subject: "ai-v2",
+      subject: "reference-data",
       documentType: "ai-v2",
       keywords: "ai-v2"
     });
@@ -212,11 +212,11 @@ describe("rendererAiFlow V2 application helpers", () => {
 
     expect(result.draft).toEqual({
       documentDate: "2026",
-      subject: "lea",
+      subject: "",
       documentType: "certificat-scolarite",
       keywords: "college-monet"
     });
-    expect(result.appliedFields).toEqual(["documentDate", "subject", "documentType", "keywords"]);
+    expect(result.appliedFields).toEqual(["documentDate", "documentType", "keywords"]);
   });
 
   it("applies AI folder only with target root and non-manual replaceable folder", async () => {
@@ -261,14 +261,14 @@ describe("rendererAiFlow V2 application helpers", () => {
 
     expect(selection.fields).toMatchObject({
       dateToken: "2024-03-15",
-      subject: "renault-captur",
+      subject: "",
       target: "captur",
       documentType: "facture",
       issuer: "renault",
-      detail: "vidange"
+      detail: ""
     });
     expect(selection.selectedFolder).toBe("Vehicules/Captur");
-    expect(selection.previewFilename).toBe("2024-03-15_captur_facture_renault_vidange.pdf");
+    expect(selection.previewFilename).toBe("2024-03-15_captur_facture_renault.pdf");
     expect(selection.previewDestinationFolder).toBe("Vehicules/Captur");
   });
 
@@ -292,9 +292,32 @@ describe("rendererAiFlow V2 application helpers", () => {
     const withDate = updateField(initial, "dateToken", "2025", "candidate", ".pdf", "Z:\\cible");
     const withTarget = updateField(withDate, "target", "zoe", "candidate", ".pdf", "Z:\\cible");
 
-    expect(withDate.previewFilename).toBe("2025_captur_facture_renault_vidange.pdf");
-    expect(withTarget.previewFilename).toBe("2025_zoe_facture_renault_vidange.pdf");
+    expect(withDate.previewFilename).toBe("2025_captur_facture_renault.pdf");
+    expect(withTarget.previewFilename).toBe("2025_zoe_facture_renault.pdf");
     expect(withTarget.manualFields).not.toHaveProperty("target");
+  });
+
+  it("adds subject to the AI filename only after explicit selection", async () => {
+    const context = await loadAiFlow();
+    const buildSelection = context.buildAiSelectionFromSuggestion as (
+      suggestion: Record<string, unknown>,
+      extension: string,
+      targetRootPath: string | null
+    ) => TestAiSelection;
+    const updateField = context.updateAiSelectionField as (
+      selection: TestAiSelection,
+      field: string,
+      value: string,
+      source: string,
+      extension: string,
+      targetRootPath: string | null
+    ) => TestAiSelection;
+
+    const initial = buildSelection(createAiSuggestion(), ".pdf", "Z:\\cible");
+    const withSubject = updateField(initial, "subject", "assr", "candidate", ".pdf", "Z:\\cible");
+
+    expect(initial.previewFilename).toBe("2024-03-15_captur_facture_renault.pdf");
+    expect(withSubject.previewFilename).toBe("2024-03-15_captur_facture_assr_renault.pdf");
   });
 
   it("recalculates the AI filename from manual field edits without using fileNameCandidates", async () => {
@@ -316,7 +339,7 @@ describe("rendererAiFlow V2 application helpers", () => {
     const initial = buildSelection(createAiSuggestion(), ".pdf", "Z:\\cible");
     const updated = updateField(initial, "documentType", "facture entretien", "manual", ".pdf", "Z:\\cible");
 
-    expect(updated.previewFilename).toBe("2024-03-15_captur_facture-entretien_renault_vidange.pdf");
+    expect(updated.previewFilename).toBe("2024-03-15_captur_facture-entretien_renault.pdf");
     expect(updated.previewFilename).not.toBe("ne-pas-utiliser.pdf");
     expect(updated.manualFields).toMatchObject({ documentType: true });
   });
@@ -330,7 +353,7 @@ describe("rendererAiFlow V2 application helpers", () => {
 
     const none = buildPreview({
       dateToken: "2026-02",
-      subject: "lea",
+      subject: "",
       target: "lea",
       documentType: "carnet-vaccination",
       issuer: "aucun",
@@ -338,7 +361,7 @@ describe("rendererAiFlow V2 application helpers", () => {
     }, ".pdf");
     const monthlyDetail = buildPreview({
       dateToken: "2026-02",
-      subject: "foyer",
+      subject: "",
       target: "foyer",
       documentType: "releve-bancaire",
       issuer: "bnp-paribas",
@@ -383,7 +406,29 @@ describe("rendererAiFlow V2 application helpers", () => {
     });
     expect(preview.messages).toContainEqual({
       level: "error",
-      message: "Date IA obligatoire : AAAA, AAAA-MM ou AAAA-MM-JJ."
+      message: "Date IA obligatoire : AAAA, AAAA-AAAA, AAAA-MM ou AAAA-MM-JJ."
+    });
+  });
+
+  it("accepts school-year date tokens in the AI preview", async () => {
+    const context = await loadAiFlow();
+    const buildPreview = context.buildAiSelectionPreview as (
+      fields: Record<string, string>,
+      extension: string
+    ) => { filename: string; isValid: boolean };
+
+    const preview = buildPreview({
+      dateToken: "2026/2027",
+      subject: "",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      issuer: "",
+      detail: ""
+    }, ".pdf");
+
+    expect(preview).toMatchObject({
+      filename: "2026-2027_lea_certificat-scolarite.pdf",
+      isValid: true
     });
   });
 

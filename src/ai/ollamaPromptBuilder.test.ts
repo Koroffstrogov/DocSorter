@@ -18,7 +18,7 @@ describe("buildOllamaClassificationPrompt", () => {
           evidenceSources: ["text", "known-target-alias"]
         }
       ],
-      namingConvention: "DATE_CIBLE_DOCUMENT[_EMETTEUR][_DETAIL].ext"
+      namingConvention: "DATE_CIBLE_DOCUMENT[_SUJET][_EMETTEUR][_DETAIL].ext"
     });
 
     expect(result.prompt).toContain("Réponds uniquement avec un objet JSON valide");
@@ -34,13 +34,13 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain('"exists"');
     expect(result.prompt).toContain('"requiresCreation"');
     expect(result.prompt).toContain('"source": "ollama"');
-    expect(result.prompt).toContain("jusqu'à 3 candidats par champ");
+    expect(result.prompt).toContain("2 à 3 candidats par champ");
     expect(result.prompt).toContain("folderCandidates doit contenir des dossiers relatifs candidats");
-    expect(result.prompt).toContain("AAAA-MM-JJ optionnel");
-    expect(result.prompt).toContain("N'utilise pas AAAA ni AAAA-MM");
+    expect(result.prompt).toContain("AAAA-MM-JJ, AAAA-MM, AAAA ou AAAA-AAAA");
+    expect(result.prompt).toContain("dateToken peut être AAAA-MM");
     expect(result.prompt).toContain("période mensuelle");
     expect(result.prompt).toContain("date-inconnue");
-    expect(result.prompt).toContain("libellé de lecture pour l'utilisateur");
+    expect(result.prompt).toContain("bloc complémentaire du nom");
     expect(result.prompt).toContain("subject peut rester vide");
     expect(result.prompt).toContain("target est la valeur de nommage");
     expect(result.prompt).toContain("targetKind décrit seulement la nature optionnelle");
@@ -54,7 +54,7 @@ describe("buildOllamaClassificationPrompt", () => {
     expect(result.prompt).toContain("date d'effet est prioritaire");
     expect(result.prompt).toContain("date de prise d'effet");
     expect(result.prompt).toContain("Pour avis-imposition, target doit être foyer");
-    expect(result.prompt).toContain("Pour scolarité 2026/2027, dateToken doit être 2026");
+    expect(result.prompt).toContain("Pour scolarité 2026/2027, dateToken doit être 2026-2027");
     expect(result.prompt).toContain("date d'émission/délivrance est prioritaire");
     expect(result.prompt).toContain("date de naissance est exclue");
     expect(result.prompt).toContain("CNI ou Identité");

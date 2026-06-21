@@ -103,7 +103,7 @@ const TOP_LEVEL_KEYS = new Set([
 ]);
 const CANDIDATE_KEYS = new Set(["value", "score", "reason", "role", "exists", "requiresCreation"]);
 const MAX_CANDIDATES = 3;
-const LOW_CONFIDENCE_EVIDENCE_THRESHOLD = 60;
+const LOW_CONFIDENCE_EVIDENCE_THRESHOLD = 30;
 const TARGET_KIND_VALUES = new Set(["person", "household", "vehicle", "property", "other"]);
 const GENERIC_TARGET_VALUES = new Set([
   "person",
@@ -945,6 +945,13 @@ function normalizeCandidateValue(
     return { ok: true, value: limitString(trimmed, AI_CLASSIFICATION_LIMITS.listItemChars) };
   }
 
+  if (mode.fieldKey === "dateToken") {
+    const normalizedDate = normalizeCandidateDateToken(trimmed);
+    return normalizedDate
+      ? { ok: true, value: normalizedDate }
+      : { ok: false, normalizedValue: trimmed, reason: "Date IA invalide." };
+  }
+
   if (looksLikePath(trimmed) || containsParentTraversal(trimmed) || hasWindowsDriveReference(trimmed)) {
     return {
       ok: false,
@@ -961,19 +968,12 @@ function normalizeCandidateValue(
     };
   }
 
-  if (mode.fieldKey !== "dateToken" && FULL_DATE_PATTERN.test(trimmed)) {
+  if (FULL_DATE_PATTERN.test(trimmed)) {
     return {
       ok: false,
       normalizedValue: normalizeNameBlock(trimmed),
       reason: "Candidat IA rejeté : date brute hors champ date."
     };
-  }
-
-  if (mode.fieldKey === "dateToken") {
-    const normalizedDate = normalizeCandidateDateToken(trimmed);
-    return normalizedDate
-      ? { ok: true, value: normalizedDate }
-      : { ok: false, normalizedValue: trimmed, reason: "Date IA invalide." };
   }
 
   const normalized = normalizeNameBlock(trimmed);
@@ -1001,16 +1001,39 @@ function normalizeCandidateValue(
 }
 
 function normalizeCandidateDateToken(value: string): string {
-  const normalized = normalizeNameBlock(value);
+  const normalizedInput = normalizeSchoolYearSeparator(value.trim());
+  const normalized = normalizeNameBlock(normalizedInput);
   if (!normalized || UNKNOWN_DATE_VALUES.has(normalized) || /^a+$/.test(normalized)) {
     return "";
   }
 
-  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(value)) {
-    return value;
+  if (/^(19|20)\d{2}$/.test(normalizedInput)) {
+    return normalizedInput;
+  }
+
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(normalizedInput)) {
+    return normalizedInput;
+  }
+
+  if (isSchoolYearToken(normalizedInput)) {
+    return normalizedInput;
+  }
+
+  if (/^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(normalizedInput)) {
+    return normalizedInput;
   }
 
   return "";
+}
+
+function normalizeSchoolYearSeparator(value: string): string {
+  const match = value.match(/^((?:19|20)\d{2})[/-]((?:19|20)\d{2})$/);
+  return match ? `${match[1]}-${match[2]}` : value;
+}
+
+function isSchoolYearToken(value: string): boolean {
+  const match = value.match(/^((?:19|20)\d{2})-((?:19|20)\d{2})$/);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
 }
 
 function createGlobalValidationErrors(

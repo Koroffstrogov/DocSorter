@@ -42,11 +42,34 @@ describe("parseFolderFileName", () => {
     });
   });
 
+  it("parses school-year date tokens", () => {
+    expect(parseFolderFileName("2026-2027_lea_certificat-scolarite.pdf")).toMatchObject({
+      dateToken: "2026-2027",
+      datePrecision: "school-year",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      pattern: "DATE_CIBLE_DOCUMENT"
+    });
+  });
+
+  it("parses DocSorter names with subject, issuer and detail blocks", () => {
+    expect(parseFolderFileName("2026_lea_certificat-scolarite_assr_college-monet_t1.pdf")).toMatchObject({
+      dateToken: "2026",
+      target: "lea",
+      documentType: "certificat-scolarite",
+      subject: "assr",
+      issuer: "college-monet",
+      detail: "t1",
+      pattern: "DATE_CIBLE_DOCUMENT_SUBJECT_EMETTEUR_DETAIL"
+    });
+  });
+
   it("ignores directories, unsupported extensions and non-conforming names", () => {
     expect(parseFolderFileName({ name: "2026_paul_carte-identite.pdf", isFile: false })).toBeNull();
     expect(parseFolderFileName("2026_paul_carte-identite.txt")).toBeNull();
     expect(parseFolderFileName("facture-libre.pdf")).toBeNull();
     expect(parseFolderFileName("2026-02-31_paul_attestation.pdf")).toBeNull();
+    expect(parseFolderFileName("2026-2028_paul_attestation.pdf")).toBeNull();
     expect(parseFolderFileName("2026_Paul_attestation.pdf")).toBeNull();
     expect(parseFolderFileName("Sante/2026_paul_attestation.pdf")).toBeNull();
   });
