@@ -71,6 +71,7 @@ const api: DocSorterApi = {
   createKnownTarget: (input) => ipcRenderer.invoke("knownTargets:create", input),
   updateKnownTarget: (id, input) => ipcRenderer.invoke("knownTargets:update", id, input),
   deactivateKnownTarget: (id) => ipcRenderer.invoke("knownTargets:deactivate", id),
+  deleteKnownTarget: (id) => ipcRenderer.invoke("knownTargets:remove", id),
   getRecentHistory: (limit) => ipcRenderer.invoke("history:getRecent", limit),
 };
 

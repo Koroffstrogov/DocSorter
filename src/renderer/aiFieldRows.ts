@@ -29,6 +29,7 @@ interface AiFieldRowsOptions {
   onKnownTargetCreate: (input: KnownTargetInput) => void;
   onKnownTargetUpdate: (id: string, input: KnownTargetInput) => void;
   onKnownTargetDeactivate: (id: string) => void;
+  onKnownTargetDelete: (id: string) => void;
 }
 
 interface AiFieldRowsApi {
@@ -205,10 +206,10 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     const freeInput = document.createElement("input");
     const manager = document.createElement("details");
     const managerSummary = document.createElement("summary");
+    const managerList = document.createElement("div");
     const managerForm = document.createElement("div");
     const displayNameInput = document.createElement("input");
     const kindSelect = document.createElement("select");
-    const fileAliasInput = document.createElement("input");
     const aliasesInput = document.createElement("input");
     const saveButton = document.createElement("button");
     const resetButton = document.createElement("button");
@@ -253,10 +254,9 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
 
     manager.className = "known-target-manager";
     managerSummary.textContent = "Gérer la liste";
+    managerList.className = "known-target-management-list";
     displayNameInput.type = "text";
-    displayNameInput.placeholder = "Nom affiché, ex. Paul Martin";
-    fileAliasInput.type = "text";
-    fileAliasInput.placeholder = "Alias fichier, ex. paul";
+    displayNameInput.placeholder = "Nom affiché / alias, ex. paul";
     aliasesInput.type = "text";
     aliasesInput.placeholder = "Alias de détection, séparés par virgules";
     kindSelect.replaceChildren(
@@ -271,7 +271,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     saveButton.className = "known-target-save";
     saveButton.textContent = "Ajouter";
     saveButton.addEventListener("click", () => {
-      const input = readKnownTargetForm(kindSelect, displayNameInput, fileAliasInput, aliasesInput);
+      const input = readKnownTargetForm(kindSelect, displayNameInput, aliasesInput);
       if (editingTargetId) {
         options.onKnownTargetUpdate(editingTargetId, input);
       } else {
@@ -281,25 +281,19 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     resetButton.type = "button";
     resetButton.textContent = "Nouvelle cible";
     resetButton.addEventListener("click", () => {
-      editingTargetId = "";
-      saveButton.textContent = "Ajouter";
-      displayNameInput.value = "";
-      fileAliasInput.value = "";
-      aliasesInput.value = "";
-      kindSelect.value = "person";
+      resetKnownTargetForm();
       displayNameInput.focus();
     });
 
     managerForm.className = "known-target-form";
     managerForm.append(
-      createKnownTargetFormLabel("Nom affiché", displayNameInput),
+      createKnownTargetFormLabel("Nom affiché / alias", displayNameInput),
       createKnownTargetFormLabel("Type", kindSelect),
-      createKnownTargetFormLabel("Alias nom", fileAliasInput),
       createKnownTargetFormLabel("Alias reconnus", aliasesInput),
       saveButton,
       resetButton
     );
-    manager.append(managerSummary, managerForm);
+    manager.append(managerSummary, managerList, managerForm);
 
     function renderTargetList(): void {
       const query = normalizeTargetSearch(search.value);
@@ -325,13 +319,27 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
         const section = document.createElement("section");
         const groupTitle = document.createElement("strong");
         groupTitle.textContent = knownTargetKindLabel(kind);
-        section.append(groupTitle, ...targets.map((target) => createKnownTargetRow(target)));
+        section.append(groupTitle, ...targets.map((target) => createKnownTargetSelectionRow(target)));
         return [section];
       });
       list.replaceChildren(...groups);
     }
 
-    function createKnownTargetRow(target: KnownTarget): HTMLElement {
+    function renderManagerList(): void {
+      if (options.knownTargets.targets.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "known-target-empty";
+        empty.textContent = "Aucune cible enregistrée.";
+        managerList.replaceChildren(empty);
+        return;
+      }
+
+      managerList.replaceChildren(
+        ...options.knownTargets.targets.map((target) => createKnownTargetManagementRow(target))
+      );
+    }
+
+    function createKnownTargetSelectionRow(target: KnownTarget): HTMLElement {
       const row = document.createElement("div");
       const choose = document.createElement("button");
       const meta = document.createElement("span");
@@ -341,7 +349,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       row.className = "known-target-row";
       choose.type = "button";
       choose.className = "known-target-choice";
-      choose.textContent = `${target.displayName} -> ${target.fileAlias}`;
+      choose.textContent = formatKnownTargetDisplay(target);
       choose.title = `Utiliser ${target.fileAlias} dans le nom final`;
       choose.addEventListener("click", () => {
         options.onKnownTargetSelect(target);
@@ -350,14 +358,7 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       edit.type = "button";
       edit.textContent = "Modifier";
       edit.addEventListener("click", () => {
-        editingTargetId = target.id;
-        manager.open = true;
-        saveButton.textContent = "Mettre à jour";
-        displayNameInput.value = target.displayName;
-        fileAliasInput.value = target.fileAlias;
-        aliasesInput.value = target.aliases.join(", ");
-        kindSelect.value = target.kind;
-        displayNameInput.focus();
+        startEditingKnownTarget(target);
       });
       deactivate.type = "button";
       deactivate.textContent = "Désactiver";
@@ -371,8 +372,79 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       return row;
     }
 
+    function createKnownTargetManagementRow(target: KnownTarget): HTMLElement {
+      const row = document.createElement("div");
+      const identity = document.createElement("span");
+      const stateBadge = document.createElement("span");
+      const edit = document.createElement("button");
+      const toggle = document.createElement("button");
+      const remove = document.createElement("button");
+
+      row.className = `known-target-management-row ${target.isActive ? "active" : "inactive"}`;
+      identity.textContent = formatKnownTargetDisplay(target);
+      identity.title = target.aliases.join(", ");
+      stateBadge.className = "known-target-state";
+      stateBadge.textContent = target.isActive ? "active" : "désactivée";
+      edit.type = "button";
+      edit.textContent = "Modifier";
+      edit.addEventListener("click", () => {
+        startEditingKnownTarget(target);
+      });
+      toggle.type = "button";
+      toggle.textContent = target.isActive ? "Désactiver" : "Réactiver";
+      toggle.addEventListener("click", () => {
+        if (target.isActive) {
+          const confirmed = window.confirm(`Désactiver la cible "${target.displayName}" ?`);
+          if (confirmed) {
+            options.onKnownTargetDeactivate(target.id);
+          }
+          return;
+        }
+
+        options.onKnownTargetUpdate(target.id, {
+          kind: target.kind,
+          displayName: target.displayName,
+          fileAlias: target.fileAlias,
+          aliases: target.aliases,
+          isActive: true
+        });
+      });
+      remove.type = "button";
+      remove.className = "known-target-delete";
+      remove.textContent = "🗑";
+      remove.title = "Supprimer cette cible locale";
+      remove.setAttribute("aria-label", `Supprimer ${target.fileAlias}`);
+      remove.addEventListener("click", () => {
+        const confirmed = window.confirm(`Supprimer définitivement la cible locale "${target.fileAlias}" ?`);
+        if (confirmed) {
+          options.onKnownTargetDelete(target.id);
+        }
+      });
+      row.append(identity, stateBadge, edit, toggle, remove);
+      return row;
+    }
+
+    function startEditingKnownTarget(target: KnownTarget): void {
+      editingTargetId = target.id;
+      manager.open = true;
+      saveButton.textContent = "Mettre à jour";
+      displayNameInput.value = target.fileAlias;
+      aliasesInput.value = target.aliases.join(", ");
+      kindSelect.value = target.kind;
+      displayNameInput.focus();
+    }
+
+    function resetKnownTargetForm(): void {
+      editingTargetId = "";
+      saveButton.textContent = "Ajouter";
+      displayNameInput.value = "";
+      aliasesInput.value = "";
+      kindSelect.value = "person";
+    }
+
     search.addEventListener("input", renderTargetList);
     renderTargetList();
+    renderManagerList();
 
     panel.append(heading, search, list, freeBlock, manager);
     window.setTimeout(() => {
@@ -587,16 +659,22 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
     return label;
   }
 
+  function formatKnownTargetDisplay(target: KnownTarget): string {
+    return target.displayName.trim().toLowerCase() === target.fileAlias.trim().toLowerCase()
+      ? target.fileAlias
+      : `${target.displayName} → ${target.fileAlias}`;
+  }
+
   function readKnownTargetForm(
     kindSelect: HTMLSelectElement,
     displayNameInput: HTMLInputElement,
-    fileAliasInput: HTMLInputElement,
     aliasesInput: HTMLInputElement
   ): KnownTargetInput {
+    const alias = displayNameInput.value;
     return {
       kind: readKnownTargetKind(kindSelect.value),
-      displayName: displayNameInput.value,
-      fileAlias: fileAliasInput.value,
+      displayName: alias,
+      fileAlias: alias,
       aliases: splitKnownTargetAliases(aliasesInput.value),
       isActive: true
     };

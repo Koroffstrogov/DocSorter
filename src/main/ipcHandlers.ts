@@ -85,6 +85,7 @@ import { IPC_CHANNELS, type IpcChannel } from "../ipc/ipcChannels";
 import {
   createKnownTarget as createKnownTargetService,
   deactivateKnownTarget as deactivateKnownTargetService,
+  deleteKnownTarget as deleteKnownTargetService,
   listKnownTargets as listKnownTargetsService,
   updateKnownTarget as updateKnownTargetService,
   type KnownTargetInput,
@@ -323,6 +324,10 @@ export interface IpcHandlerServices {
     input: KnownTargetInput
   ) => Promise<KnownTargetsResult<KnownTargetsList>>;
   deactivateKnownTarget: (
+    userDataPath: string,
+    id: string
+  ) => Promise<KnownTargetsResult<KnownTargetsList>>;
+  deleteKnownTarget: (
     userDataPath: string,
     id: string
   ) => Promise<KnownTargetsResult<KnownTargetsList>>;
@@ -604,6 +609,14 @@ export const SENSITIVE_IPC_HANDLERS: SensitiveIpcHandlerContract[] = [
     serviceName: "deactivateKnownTarget"
   },
   {
+    channel: IPC_CHANNELS.knownTargetsDelete,
+    acceptsRendererPath: false,
+    usesMainSource: false,
+    usesMainTarget: false,
+    usesUserDataPath: true,
+    serviceName: "deleteKnownTarget"
+  },
+  {
     channel: IPC_CHANNELS.namingCheckDestinationAvailability,
     acceptsRendererPath: false,
     usesMainSource: false,
@@ -703,7 +716,8 @@ export const defaultIpcHandlerServices: IpcHandlerServices = {
   listKnownTargets: listKnownTargetsService,
   createKnownTarget: createKnownTargetService,
   updateKnownTarget: updateKnownTargetService,
-  deactivateKnownTarget: deactivateKnownTargetService
+  deactivateKnownTarget: deactivateKnownTargetService,
+  deleteKnownTarget: deleteKnownTargetService
 };
 
 export function createMainProcessAppState(): MainProcessAppState {
@@ -1022,6 +1036,12 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   );
   options.ipcMain.handle(IPC_CHANNELS.knownTargetsDeactivate, (_event, id: unknown) =>
     services.deactivateKnownTarget(
+      options.app.getPath("userData"),
+      typeof id === "string" ? id : ""
+    )
+  );
+  options.ipcMain.handle(IPC_CHANNELS.knownTargetsDelete, (_event, id: unknown) =>
+    services.deleteKnownTarget(
       options.app.getPath("userData"),
       typeof id === "string" ? id : ""
     )

@@ -17,6 +17,7 @@ interface AiPanelOptions {
   onKnownTargetCreate: (input: KnownTargetInput) => void;
   onKnownTargetUpdate: (id: string, input: KnownTargetInput) => void;
   onKnownTargetDeactivate: (id: string) => void;
+  onKnownTargetDelete: (id: string) => void;
   onFolderCandidateSelect: (relativePath: string) => void;
   onFolderManualEditStart: () => void;
   onFolderManualValueChange: (relativePath: string) => void;
@@ -227,7 +228,8 @@ var DocSorterAiPanel: AiPanelFactoryApi;
           onKnownTargetSelect: options.onKnownTargetSelect,
           onKnownTargetCreate: options.onKnownTargetCreate,
           onKnownTargetUpdate: options.onKnownTargetUpdate,
-          onKnownTargetDeactivate: options.onKnownTargetDeactivate
+          onKnownTargetDeactivate: options.onKnownTargetDeactivate,
+          onKnownTargetDelete: options.onKnownTargetDelete
         }));
       }
 

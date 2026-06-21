@@ -272,6 +272,7 @@ const aiPanel = DocSorterAiPanel.createAiPanel({
   onKnownTargetCreate: createKnownTargetFromPanel,
   onKnownTargetUpdate: updateKnownTargetFromPanel,
   onKnownTargetDeactivate: deactivateKnownTargetFromPanel,
+  onKnownTargetDelete: deleteKnownTargetFromPanel,
   onFolderCandidateSelect: selectAiFolderCandidate,
   onFolderManualEditStart: startAiFolderManualEdit,
   onFolderManualValueChange: updateAiFolderManualValue,

@@ -109,6 +109,7 @@ export const ALLOWED_PRELOAD_API_METHODS = [
   "createKnownTarget",
   "updateKnownTarget",
   "deactivateKnownTarget",
+  "deleteKnownTarget",
   "getRecentHistory"
 ] as const;
 
@@ -293,6 +294,13 @@ export function createPreloadApi(ipc: IpcInvoker) {
     ): Promise<KnownTargetsResult<KnownTargetsList>> =>
       ipc.invoke(
         IPC_CHANNELS.knownTargetsDeactivate,
+        id
+      ) as Promise<KnownTargetsResult<KnownTargetsList>>,
+    deleteKnownTarget: (
+      id: string
+    ): Promise<KnownTargetsResult<KnownTargetsList>> =>
+      ipc.invoke(
+        IPC_CHANNELS.knownTargetsDelete,
         id
       ) as Promise<KnownTargetsResult<KnownTargetsList>>,
     getRecentHistory: (limit?: number): Promise<ActionJournalReadResult<ActionJournalEntry[]>> =>

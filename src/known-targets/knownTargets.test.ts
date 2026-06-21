@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createKnownTarget,
   deactivateKnownTarget,
+  deleteKnownTarget,
   getKnownTargetsPath,
   listKnownTargets,
   updateKnownTarget
@@ -45,9 +46,9 @@ describe("known targets", () => {
       {
         id: "paul-martin",
         kind: "person",
-        displayName: "Paul Martin",
+        displayName: "paul-martin",
         fileAlias: "paul-martin",
-        aliases: ["Paul Martin", "paul-martin", "Paul", "P. Martin"],
+        aliases: ["paul-martin", "Paul", "P. Martin", "Paul Martin"],
         isActive: true,
         createdAt: "2026-06-21T08:00:00.000Z",
         updatedAt: "2026-06-21T08:00:00.000Z"
@@ -72,11 +73,11 @@ describe("known targets", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.targets[0]?.aliases).toEqual([
-      "Paul Martin",
       "paul",
       "Paulo",
       "P. Martin",
-      "PM"
+      "PM",
+      "Paul Martin"
     ]);
   });
 
@@ -163,18 +164,18 @@ describe("known targets", () => {
     expect(result.ok && result.value.targets[0]).toMatchObject({
       id: "paul",
       kind: "vehicle",
-      displayName: "Renault Captur",
+      displayName: "captur",
       fileAlias: "captur",
-      aliases: ["Renault Captur", "captur"]
+      aliases: ["captur", "Renault Captur"]
     });
 
     const reloaded = await listKnownTargets(userDataPath);
     expect(reloaded.ok && reloaded.value.targets[0]).toMatchObject({
       id: "paul",
       kind: "vehicle",
-      displayName: "Renault Captur",
+      displayName: "captur",
       fileAlias: "captur",
-      aliases: ["Renault Captur", "captur"]
+      aliases: ["captur", "Renault Captur"]
     });
 
     const raw = JSON.parse(await readFile(getKnownTargetsPath(userDataPath), "utf8")) as {
@@ -188,10 +189,28 @@ describe("known targets", () => {
     expect(raw.targets).toHaveLength(1);
     expect(raw.targets[0]).toMatchObject({
       id: "paul",
-      displayName: "Renault Captur",
+      displayName: "captur",
       fileAlias: "captur",
-      aliases: ["Renault Captur", "captur"]
+      aliases: ["captur", "Renault Captur"]
     });
+  });
+
+  it("deletes a target from the stored list only", async () => {
+    const userDataPath = await createUserDataPath();
+    await createKnownTarget(userDataPath, {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul"
+    }, fixedNow);
+
+    const result = await deleteKnownTarget(userDataPath, "paul");
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.targets).toEqual([]);
+    const raw = JSON.parse(await readFile(getKnownTargetsPath(userDataPath), "utf8")) as {
+      targets: unknown[];
+    };
+    expect(raw.targets).toEqual([]);
   });
 });
 

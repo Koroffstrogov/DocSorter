@@ -45,6 +45,7 @@ const REVIEWED_IPC_CHANNELS = [
   "knownTargets:create",
   "knownTargets:update",
   "knownTargets:deactivate",
+  "knownTargets:remove",
   "history:getRecent"
 ] as const;
 

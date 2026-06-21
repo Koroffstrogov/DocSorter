@@ -106,11 +106,17 @@ var DocSorterNameExplanation: NameExplanationApi;
     const knownTarget = field === "target" ? knownTargetSelections?.target : null;
     return {
       label,
-      value: knownTarget ? `${knownTarget.displayName} → ${knownTarget.fileAlias}` : value,
+      value: knownTarget ? formatKnownTargetSelection(knownTarget) : value,
       status: "used",
       reason: "Utilisé dans le nom final.",
       source: sourceForField(field, manualFields, knownTargetSelections)
     };
+  }
+
+  function formatKnownTargetSelection(knownTarget: KnownTargetSelection): string {
+    return knownTarget.displayName.trim().toLowerCase() === knownTarget.fileAlias.trim().toLowerCase()
+      ? knownTarget.fileAlias
+      : `${knownTarget.displayName} → ${knownTarget.fileAlias}`;
   }
 
   function createOptionalLine(

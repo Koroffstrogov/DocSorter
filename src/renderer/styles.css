@@ -2187,7 +2187,8 @@ details.detail-section[open] > summary {
 }
 
 .known-target-list section,
-.known-target-manager {
+.known-target-manager,
+.known-target-management-list {
   display: grid;
   gap: 5px;
 }
@@ -2214,6 +2215,43 @@ details.detail-section[open] > summary {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.known-target-management-list {
+  max-height: 180px;
+  overflow: auto;
+}
+
+.known-target-management-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto 30px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 5px;
+  background: #ffffff;
+}
+
+.known-target-management-row.inactive {
+  color: var(--text-muted);
+  background: #f5f7fa;
+}
+
+.known-target-management-row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.known-target-state {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
 }
 
 .known-target-picker button {
@@ -2260,6 +2298,14 @@ details.detail-section[open] > summary {
   border-color: #2563eb !important;
   color: #ffffff !important;
   background: #2563eb !important;
+}
+
+.known-target-delete {
+  width: 30px;
+  padding: 3px 0 !important;
+  color: #991b1b !important;
+  border-color: #fecaca !important;
+  background: #fff5f5 !important;
 }
 
 .known-target-empty {

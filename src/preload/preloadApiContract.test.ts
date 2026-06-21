@@ -138,6 +138,7 @@ describe("preload API surface", () => {
       aliases: ["Paul Martin"]
     });
     await api.deactivateKnownTarget("paul");
+    await api.deleteKnownTarget("paul");
     await api.getRecentHistory(8);
 
     expect(recorder.calls.map((call) => call.channel)).toEqual([
@@ -183,6 +184,7 @@ describe("preload API surface", () => {
       IPC_CHANNELS.knownTargetsCreate,
       IPC_CHANNELS.knownTargetsUpdate,
       IPC_CHANNELS.knownTargetsDeactivate,
+      IPC_CHANNELS.knownTargetsDelete,
       IPC_CHANNELS.historyGetRecent
     ]);
   });

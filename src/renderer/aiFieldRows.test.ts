@@ -96,6 +96,16 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain("Choisir une cible connue");
     expect(source).toContain("Saisie libre");
     expect(source).toContain("Gérer la liste");
+    expect(source).toContain("known-target-management-list");
+    expect(source).toContain("createKnownTargetManagementRow");
+    expect(source).toContain("options.knownTargets.targets.map");
+    expect(source).toContain('"Réactiver"');
+    expect(source).toContain("known-target-delete");
+    expect(source).toContain("🗑");
+    expect(source).toContain("onKnownTargetDelete(target.id)");
+    expect(source).toContain("isActive: true");
+    expect(source).toContain("Nom affiché / alias");
+    expect(source).not.toContain('createKnownTargetFormLabel("Alias nom"');
     expect(source).toContain("onKnownTargetSelect(target)");
     expect(source).toContain("onKnownTargetCreate(input)");
     expect(source).toContain("onKnownTargetUpdate(editingTargetId, input)");

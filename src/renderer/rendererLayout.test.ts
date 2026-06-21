@@ -393,6 +393,8 @@ describe("renderer right panel layout", () => {
     expect(css).toContain(".known-target-picker");
     expect(css).toContain(".known-target-choice");
     expect(css).toContain(".known-target-form");
+    expect(css).toContain(".known-target-management-list");
+    expect(css).toContain(".known-target-delete");
     expect(css).toContain("grid-template-columns: 64px minmax(0, 1fr)");
     expect(css).toContain(".ai-control-panel .ai-simple-status");
     expect(css).toContain(".target-folder-controls[hidden]");

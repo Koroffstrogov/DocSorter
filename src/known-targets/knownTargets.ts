@@ -183,6 +183,26 @@ export async function deactivateKnownTarget(
   return saveAndListKnownTargets(userDataPath, catalog);
 }
 
+export async function deleteKnownTarget(
+  userDataPath: string,
+  id: string
+): Promise<KnownTargetsResult<KnownTargetsList>> {
+  const loaded = await loadKnownTargetsCatalog(userDataPath);
+  if (!loaded.ok) {
+    return loaded;
+  }
+
+  const nextTargets = loaded.value.catalog.targets.filter((target) => target.id !== id);
+  if (nextTargets.length === loaded.value.catalog.targets.length) {
+    return knownTargetsFailure("KNOWN_TARGET_NOT_FOUND", "Cible locale introuvable.", "id");
+  }
+
+  return saveAndListKnownTargets(userDataPath, {
+    version: TARGETS_VERSION,
+    targets: nextTargets
+  });
+}
+
 export function normalizeKnownTargetFileAlias(value: string): string {
   return value
     .normalize("NFD")
@@ -319,21 +339,28 @@ function normalizeKnownTargetInput(
   timestamp: string,
   existing?: KnownTarget
 ): KnownTargetsResult<KnownTarget> {
-  const displayName = readString(input.displayName).slice(0, MAX_NAME_LENGTH);
-  if (!displayName) {
-    return knownTargetsFailure("KNOWN_TARGET_INVALID", "Nom affiché requis.", "displayName");
+  const rawDisplayName = readString(input.displayName).slice(0, MAX_NAME_LENGTH);
+  const rawFileAlias = readString(input.fileAlias).slice(0, MAX_ALIAS_LENGTH);
+  const aliasSource = rawFileAlias || rawDisplayName;
+  if (!aliasSource) {
+    return knownTargetsFailure("KNOWN_TARGET_INVALID", "Alias nom requis.", "fileAlias");
   }
 
   const kind = KIND_VALUES.has(input.kind as KnownTargetKind)
     ? input.kind as KnownTargetKind
     : "other";
-  const fileAlias = normalizeKnownTargetFileAlias(readString(input.fileAlias) || displayName);
+  const fileAlias = normalizeKnownTargetFileAlias(aliasSource);
   if (!isSafeFileAlias(fileAlias)) {
     return knownTargetsFailure("KNOWN_TARGET_INVALID", "Alias fichier invalide.", "fileAlias");
   }
 
   const id = existing?.id || createKnownTargetId(fileAlias);
-  const aliases = normalizeAliases(input.aliases, displayName, fileAlias);
+  const displayName = fileAlias;
+  const aliases = normalizeAliases(
+    [...readAliases(input.aliases), rawDisplayName].filter(Boolean),
+    displayName,
+    fileAlias
+  );
   const createdAt = existing?.createdAt || timestamp;
 
   return {

@@ -110,6 +110,13 @@ describe("sensitive IPC handler contract", () => {
       usesUserDataPath: true,
       serviceName: "createKnownTarget"
     });
+    expect(contractFor(IPC_CHANNELS.knownTargetsDelete)).toMatchObject({
+      acceptsRendererPath: false,
+      usesMainSource: false,
+      usesMainTarget: false,
+      usesUserDataPath: true,
+      serviceName: "deleteKnownTarget"
+    });
   });
 });
 
@@ -429,6 +436,7 @@ describe("registerIpcHandlers", () => {
       isActive: true
     });
     await harness.invoke(IPC_CHANNELS.knownTargetsDeactivate, "paul");
+    await harness.invoke(IPC_CHANNELS.knownTargetsDelete, "paul");
 
     expect(harness.services.listKnownTargets).toHaveBeenCalledWith(USER_DATA_PATH);
     expect(harness.services.createKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, {
@@ -445,6 +453,7 @@ describe("registerIpcHandlers", () => {
       isActive: true
     });
     expect(harness.services.deactivateKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, "paul");
+    expect(harness.services.deleteKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, "paul");
   });
 
   it("keeps real classification on existing main-state target, queue and journal path", async () => {
@@ -878,6 +887,13 @@ function createServices(): IpcHandlerServices {
       }
     })),
     deactivateKnownTarget: vi.fn(async () => ({
+      ok: true,
+      value: {
+        targets: [],
+        warnings: []
+      }
+    })),
+    deleteKnownTarget: vi.fn(async () => ({
       ok: true,
       value: {
         targets: [],

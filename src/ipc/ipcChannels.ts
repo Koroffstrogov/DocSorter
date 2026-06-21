@@ -41,6 +41,7 @@ export const IPC_CHANNELS = {
   knownTargetsCreate: "knownTargets:create",
   knownTargetsUpdate: "knownTargets:update",
   knownTargetsDeactivate: "knownTargets:deactivate",
+  knownTargetsDelete: "knownTargets:remove",
   historyGetRecent: "history:getRecent"
 } as const;
 

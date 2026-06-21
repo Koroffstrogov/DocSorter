@@ -53,6 +53,22 @@ async function deactivateKnownTargetFromPanel(id: string): Promise<void> {
   applyKnownTargetsResult(result, "Cible locale désactivée.");
 }
 
+async function deleteKnownTargetFromPanel(id: string): Promise<void> {
+  state.knownTargets = {
+    ...state.knownTargets,
+    status: "saving",
+    message: "Suppression de la cible locale...",
+    error: ""
+  };
+  renderAiPanel();
+
+  const result = await window.docSorter.deleteKnownTarget(id);
+  applyKnownTargetsResult(result, "Cible locale supprimée.");
+  if (result.ok) {
+    detachDeletedKnownTargetSelection(id);
+  }
+}
+
 function selectKnownTargetForAiTarget(target: KnownTarget): void {
   if (!state.ai.selection || !state.ai.suggestion || !target.isActive) {
     return;
@@ -76,7 +92,32 @@ function selectKnownTargetForAiTarget(target: KnownTarget): void {
     ...state.ai.selection,
     editingField: null
   };
-  state.ai.message = `Cible locale sélectionnée : ${target.displayName} → ${target.fileAlias}.`;
+  state.ai.message = `Cible locale sélectionnée : ${formatKnownTargetMessageValue(target)}.`;
+  clearFolderLearningAlignedNameOverride();
+  resetClassificationState();
+  resetDestinationCheck();
+  recalculateFolderLearningComparison();
+  render();
+  scheduleDestinationCheck();
+}
+
+function detachDeletedKnownTargetSelection(id: string): void {
+  const selection = state.ai.selection;
+  const selectedTarget = selection?.knownTargetSelections.target;
+  if (!selection || selectedTarget?.id !== id) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  state.ai.selection = updateAiSelectionField(
+    selection,
+    "target",
+    selection.fields.target,
+    "manual",
+    activeDocument?.extension ?? ".pdf",
+    state.targetPath
+  );
+  state.ai.message = "Cible locale supprimée. La cible courante reste une correction manuelle.";
   clearFolderLearningAlignedNameOverride();
   resetClassificationState();
   resetDestinationCheck();
@@ -111,13 +152,19 @@ function syncUpdatedKnownTargetSelection(id: string, targets: KnownTarget[]): vo
       fileAlias: updatedTarget.fileAlias
     }
   );
-  state.ai.message = `Cible locale mise à jour : ${updatedTarget.displayName} → ${updatedTarget.fileAlias}.`;
+  state.ai.message = `Cible locale mise à jour : ${formatKnownTargetMessageValue(updatedTarget)}.`;
   clearFolderLearningAlignedNameOverride();
   resetClassificationState();
   resetDestinationCheck();
   recalculateFolderLearningComparison();
   render();
   scheduleDestinationCheck();
+}
+
+function formatKnownTargetMessageValue(target: KnownTarget): string {
+  return target.displayName.trim().toLowerCase() === target.fileAlias.trim().toLowerCase()
+    ? target.fileAlias
+    : `${target.displayName} → ${target.fileAlias}`;
 }
 
 function applyKnownTargetsResult(
