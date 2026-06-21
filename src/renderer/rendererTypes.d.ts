@@ -798,6 +798,7 @@ type KnownTargetsResult<T> =
   | { ok: false; error: KnownTargetsError };
 
 interface KnownTargetSelection {
+  id?: string;
   displayName: string;
   fileAlias: string;
 }

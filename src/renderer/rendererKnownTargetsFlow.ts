@@ -35,6 +35,9 @@ async function updateKnownTargetFromPanel(id: string, input: KnownTargetInput): 
 
   const result = await window.docSorter.updateKnownTarget(id, input);
   applyKnownTargetsResult(result, "Cible locale mise à jour.");
+  if (result.ok) {
+    syncUpdatedKnownTargetSelection(id, result.value.targets);
+  }
 }
 
 async function deactivateKnownTargetFromPanel(id: string): Promise<void> {
@@ -64,6 +67,7 @@ function selectKnownTargetForAiTarget(target: KnownTarget): void {
     activeDocument?.extension ?? ".pdf",
     state.targetPath,
     {
+      id: target.id,
       displayName: target.displayName,
       fileAlias: target.fileAlias
     }
@@ -73,6 +77,41 @@ function selectKnownTargetForAiTarget(target: KnownTarget): void {
     editingField: null
   };
   state.ai.message = `Cible locale sélectionnée : ${target.displayName} → ${target.fileAlias}.`;
+  clearFolderLearningAlignedNameOverride();
+  resetClassificationState();
+  resetDestinationCheck();
+  recalculateFolderLearningComparison();
+  render();
+  scheduleDestinationCheck();
+}
+
+function syncUpdatedKnownTargetSelection(id: string, targets: KnownTarget[]): void {
+  const selection = state.ai.selection;
+  const selectedTarget = selection?.knownTargetSelections.target;
+  if (!selection || selectedTarget?.id !== id) {
+    return;
+  }
+
+  const updatedTarget = targets.find((target) => target.id === id);
+  if (!updatedTarget || !updatedTarget.isActive) {
+    return;
+  }
+
+  const activeDocument = getActiveDocument();
+  state.ai.selection = updateAiSelectionField(
+    selection,
+    "target",
+    updatedTarget.fileAlias,
+    "known-target",
+    activeDocument?.extension ?? ".pdf",
+    state.targetPath,
+    {
+      id: updatedTarget.id,
+      displayName: updatedTarget.displayName,
+      fileAlias: updatedTarget.fileAlias
+    }
+  );
+  state.ai.message = `Cible locale mise à jour : ${updatedTarget.displayName} → ${updatedTarget.fileAlias}.`;
   clearFolderLearningAlignedNameOverride();
   resetClassificationState();
   resetDestinationCheck();

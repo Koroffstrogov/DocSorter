@@ -102,6 +102,8 @@ describe("ai field rows renderer module", () => {
     expect(source).toContain("onKnownTargetDeactivate(target.id)");
     expect(source).toContain(".filter((target) => target.isActive)");
     expect(source).toContain('options.onFieldManualValueChange("target", freeInput.value)');
+    expect(source).toContain("splitKnownTargetAliases(aliasesInput.value)");
+    expect(source).toContain(".split(/[,;\\r\\n]+/)");
     expect(source).toContain('freeButton.textContent = "Saisie libre"');
     expect(source).not.toContain('"[x] "');
   });

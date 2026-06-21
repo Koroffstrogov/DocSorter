@@ -418,14 +418,14 @@ describe("registerIpcHandlers", () => {
       kind: "person",
       displayName: "Paul Martin",
       fileAlias: "paul",
-      aliases: ["Paul"],
+      aliases: "Paul, Paulo, P. Martin",
       ignoredPath: "C:\\secret\\document.pdf"
     });
     await harness.invoke(IPC_CHANNELS.knownTargetsUpdate, "paul", {
       kind: "person",
       displayName: "Paul Martin",
       fileAlias: "paul-martin",
-      aliases: ["Paul Martin"],
+      aliases: "Paul Martin, P. Martin, PM",
       isActive: true
     });
     await harness.invoke(IPC_CHANNELS.knownTargetsDeactivate, "paul");
@@ -435,13 +435,13 @@ describe("registerIpcHandlers", () => {
       kind: "person",
       displayName: "Paul Martin",
       fileAlias: "paul",
-      aliases: ["Paul"]
+      aliases: ["Paul", "Paulo", "P. Martin"]
     });
     expect(harness.services.updateKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, "paul", {
       kind: "person",
       displayName: "Paul Martin",
       fileAlias: "paul-martin",
-      aliases: ["Paul Martin"],
+      aliases: ["Paul Martin", "P. Martin", "PM"],
       isActive: true
     });
     expect(harness.services.deactivateKnownTarget).toHaveBeenCalledWith(USER_DATA_PATH, "paul");

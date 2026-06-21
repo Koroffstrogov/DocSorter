@@ -597,12 +597,16 @@ var DocSorterAiFieldRows: AiFieldRowsApi;
       kind: readKnownTargetKind(kindSelect.value),
       displayName: displayNameInput.value,
       fileAlias: fileAliasInput.value,
-      aliases: aliasesInput.value
-        .split(",")
-        .map((alias) => alias.trim())
-        .filter(Boolean),
+      aliases: splitKnownTargetAliases(aliasesInput.value),
       isActive: true
     };
+  }
+
+  function splitKnownTargetAliases(value: string): string[] {
+    return value
+      .split(/[,;\r\n]+/)
+      .map((alias) => alias.trim())
+      .filter(Boolean);
   }
 
   function readKnownTargetKind(value: string): KnownTargetKind {

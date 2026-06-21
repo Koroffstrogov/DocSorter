@@ -60,6 +60,26 @@ describe("known targets", () => {
     expect(raw.targets[0]?.fileAlias).toBe("paul-martin");
   });
 
+  it("keeps multiple aliases from comma separated text", async () => {
+    const userDataPath = await createUserDataPath();
+
+    const result = await createKnownTarget(userDataPath, {
+      kind: "person",
+      displayName: "Paul Martin",
+      fileAlias: "paul",
+      aliases: "Paul, Paulo; P. Martin\nPM"
+    } as unknown as Parameters<typeof createKnownTarget>[1], fixedNow);
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.targets[0]?.aliases).toEqual([
+      "Paul Martin",
+      "paul",
+      "Paulo",
+      "P. Martin",
+      "PM"
+    ]);
+  });
+
   it("rejects duplicate file aliases", async () => {
     const userDataPath = await createUserDataPath();
     await createKnownTarget(userDataPath, {
@@ -143,6 +163,31 @@ describe("known targets", () => {
     expect(result.ok && result.value.targets[0]).toMatchObject({
       id: "paul",
       kind: "vehicle",
+      displayName: "Renault Captur",
+      fileAlias: "captur",
+      aliases: ["Renault Captur", "captur"]
+    });
+
+    const reloaded = await listKnownTargets(userDataPath);
+    expect(reloaded.ok && reloaded.value.targets[0]).toMatchObject({
+      id: "paul",
+      kind: "vehicle",
+      displayName: "Renault Captur",
+      fileAlias: "captur",
+      aliases: ["Renault Captur", "captur"]
+    });
+
+    const raw = JSON.parse(await readFile(getKnownTargetsPath(userDataPath), "utf8")) as {
+      targets: Array<{
+        id: string;
+        displayName: string;
+        fileAlias: string;
+        aliases: string[];
+      }>;
+    };
+    expect(raw.targets).toHaveLength(1);
+    expect(raw.targets[0]).toMatchObject({
+      id: "paul",
       displayName: "Renault Captur",
       fileAlias: "captur",
       aliases: ["Renault Captur", "captur"]

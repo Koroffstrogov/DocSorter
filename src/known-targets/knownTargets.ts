@@ -297,7 +297,7 @@ function normalizeKnownTargetRecord(value: unknown): KnownTargetsResult<KnownTar
       kind: readString(input.kind) as KnownTargetKind,
       displayName: readString(input.displayName),
       fileAlias: readString(input.fileAlias),
-      aliases: Array.isArray(input.aliases) ? input.aliases.map(readString).filter(Boolean) : [],
+      aliases: readAliases(input.aliases),
       isActive: typeof input.isActive === "boolean" ? input.isActive : true
     },
     readIsoDate(input.updatedAt) || createdAt,
@@ -356,7 +356,7 @@ function normalizeAliases(
   displayName: string,
   fileAlias: string
 ): string[] {
-  const values = Array.isArray(input) ? input.map(readString) : [];
+  const values = readAliases(input);
   const aliases = [displayName, fileAlias, ...values]
     .map((value) => value.trim().slice(0, MAX_NAME_LENGTH))
     .filter(Boolean);
@@ -377,6 +377,15 @@ function normalizeAliases(
     }
   }
   return result;
+}
+
+function readAliases(value: unknown): string[] {
+  const values = typeof value === "string"
+    ? value.split(/[,;\r\n]+/)
+    : Array.isArray(value)
+      ? value.flatMap((alias) => typeof alias === "string" ? alias.split(/[,;\r\n]+/) : [])
+      : [];
+  return values.map(readString).filter(Boolean);
 }
 
 function isSafeFileAlias(value: string): boolean {

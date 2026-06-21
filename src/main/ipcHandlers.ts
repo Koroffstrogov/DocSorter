@@ -1247,11 +1247,20 @@ function readKnownTargetInput(value: unknown): KnownTargetInput {
     ...(typeof candidate.kind === "string" ? { kind: candidate.kind as KnownTargetInput["kind"] } : {}),
     ...(typeof candidate.displayName === "string" ? { displayName: candidate.displayName } : {}),
     ...(typeof candidate.fileAlias === "string" ? { fileAlias: candidate.fileAlias } : {}),
-    ...(Array.isArray(candidate.aliases)
-      ? { aliases: candidate.aliases.filter((alias): alias is string => typeof alias === "string") }
+    ...(Array.isArray(candidate.aliases) || typeof candidate.aliases === "string"
+      ? { aliases: readKnownTargetAliases(candidate.aliases) }
       : {}),
     ...(typeof candidate.isActive === "boolean" ? { isActive: candidate.isActive } : {})
   };
+}
+
+function readKnownTargetAliases(value: unknown): string[] {
+  const values = typeof value === "string"
+    ? value.split(/[,;\r\n]+/)
+    : Array.isArray(value)
+      ? value.flatMap((alias) => typeof alias === "string" ? alias.split(/[,;\r\n]+/) : [])
+      : [];
+  return values.map((alias) => alias.trim()).filter(Boolean);
 }
 
 function readAiDocumentTextContext(value: unknown): AiDocumentTextContext | null {
