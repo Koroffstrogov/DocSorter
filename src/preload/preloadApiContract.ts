@@ -223,8 +223,11 @@ export function createPreloadApi(ipc: IpcInvoker) {
       ipc.invoke(IPC_CHANNELS.ocrSaveSettings, settings) as Promise<OcrResult<OcrStatus>>,
     testOcrEngine: (): Promise<OcrResult<OcrStatus>> =>
       ipc.invoke(IPC_CHANNELS.ocrTestEngine) as Promise<OcrResult<OcrStatus>>,
-    runOcrForActiveImage: (documentPath: string): Promise<ImageOcrResult> =>
-      ipc.invoke(IPC_CHANNELS.ocrRunImage, documentPath) as Promise<ImageOcrResult>,
+    runOcrForActiveImage: (
+      documentPath: string,
+      options?: { forceRefresh?: boolean }
+    ): Promise<ImageOcrResult> =>
+      ipc.invoke(IPC_CHANNELS.ocrRunImage, documentPath, options) as Promise<ImageOcrResult>,
     getPdfOcrStatus: (): Promise<OcrResult<PdfOcrStatus>> =>
       ipc.invoke(IPC_CHANNELS.ocrGetPdfStatus) as Promise<OcrResult<PdfOcrStatus>>,
     runOcrForActivePdf: (documentPath: string): Promise<PdfOcrResult> =>

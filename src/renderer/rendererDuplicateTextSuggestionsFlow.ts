@@ -290,14 +290,17 @@ async function extractTextFromActivePdf(): Promise<void> {
 }
 
 async function runOcrForActiveImage(): Promise<void> {
-  return runOcrForActiveImageWithOptions({ resetAiSuggestion: true });
+  return runOcrForActiveImageWithOptions({ resetAiSuggestion: true, forceRefresh: true });
 }
 
 async function runOcrForActiveImageForAiAnalysis(): Promise<void> {
-  return runOcrForActiveImageWithOptions({ resetAiSuggestion: false });
+  return runOcrForActiveImageWithOptions({ resetAiSuggestion: false, forceRefresh: false });
 }
 
-async function runOcrForActiveImageWithOptions(options: { resetAiSuggestion: boolean }): Promise<void> {
+async function runOcrForActiveImageWithOptions(options: {
+  resetAiSuggestion: boolean;
+  forceRefresh: boolean;
+}): Promise<void> {
   const activeDocument = getActiveDocument();
   if (!activeDocument || !canRunOcrForActiveImage(activeDocument)) {
     return;
@@ -314,7 +317,9 @@ async function runOcrForActiveImageWithOptions(options: { resetAiSuggestion: boo
   });
   render();
 
-  const result = await window.docSorter.runOcrForActiveImage(activeDocument.filePath);
+  const result = await window.docSorter.runOcrForActiveImage(activeDocument.filePath, {
+    forceRefresh: options.forceRefresh
+  });
   if (requestId !== textExtractionRequestId) {
     return;
   }

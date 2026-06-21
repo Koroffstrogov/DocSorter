@@ -55,6 +55,7 @@ export interface RunImageOcrForDocumentOptions {
   documentPath: string;
   queuedDocumentPaths: Iterable<string>;
   userDataPath: string;
+  forceRefresh?: boolean;
   maxFileBytes?: number;
   maxTextChars?: number;
   maxExcerptLength?: number;
@@ -158,15 +159,17 @@ export async function runImageOcrForDocument(
     psm
   });
   const cacheFilePath = getAnalysisCacheFilePath(options.userDataPath, normalizedDocumentPath);
-  const cached = await readCacheEntry(cacheFilePath, options.readCacheFile ?? readFile);
-  if (cached && fingerprintsMatch(cached.fingerprint, fingerprint)) {
-    return {
-      ok: true,
-      value: {
-        ...cached.extraction,
-        fromCache: true
-      }
-    };
+  if (!options.forceRefresh) {
+    const cached = await readCacheEntry(cacheFilePath, options.readCacheFile ?? readFile);
+    if (cached && fingerprintsMatch(cached.fingerprint, fingerprint)) {
+      return {
+        ok: true,
+        value: {
+          ...cached.extraction,
+          fromCache: true
+        }
+      };
+    }
   }
 
   const startedAt = (options.getTimeMs ?? Date.now)();

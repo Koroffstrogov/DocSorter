@@ -188,6 +188,20 @@ describe("preload API surface", () => {
       IPC_CHANNELS.historyGetRecent
     ]);
   });
+
+  it("passes image OCR force refresh through the reviewed IPC channel", async () => {
+    const recorder = createRecordingInvoker();
+    const api = createPreloadApi(recorder.invoker);
+
+    await api.runOcrForActiveImage("C:\\source\\image.png", { forceRefresh: true });
+
+    expect(recorder.calls).toEqual([
+      {
+        channel: IPC_CHANNELS.ocrRunImage,
+        args: ["C:\\source\\image.png", { forceRefresh: true }]
+      }
+    ]);
+  });
 });
 
 describe("preload runtime", () => {

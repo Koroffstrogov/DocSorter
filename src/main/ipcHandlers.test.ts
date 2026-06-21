@@ -209,7 +209,21 @@ describe("registerIpcHandlers", () => {
     expect(harness.services.runImageOcrForDocument).toHaveBeenCalledWith({
       documentPath: DOCUMENT_PATH,
       queuedDocumentPaths: harness.state.queuedDocumentPaths,
-      userDataPath: USER_DATA_PATH
+      userDataPath: USER_DATA_PATH,
+      forceRefresh: false
+    });
+  });
+
+  it("passes image OCR force refresh when requested", async () => {
+    const harness = createHarness();
+
+    await harness.invoke(IPC_CHANNELS.ocrRunImage, DOCUMENT_PATH, { forceRefresh: true });
+
+    expect(harness.services.runImageOcrForDocument).toHaveBeenCalledWith({
+      documentPath: DOCUMENT_PATH,
+      queuedDocumentPaths: harness.state.queuedDocumentPaths,
+      userDataPath: USER_DATA_PATH,
+      forceRefresh: true
     });
   });
 

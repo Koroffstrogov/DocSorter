@@ -183,6 +183,25 @@ describe("runImageOcrForDocument", () => {
     expect(secondRun).not.toHaveBeenCalled();
   });
 
+  it("bypasses the cache when forceRefresh is enabled", async () => {
+    const workspace = await createWorkspace("image.png");
+    const firstRun = vi.fn(async () => createOcrOutput("texte cache"));
+    const secondRun = vi.fn(async () => createOcrOutput("texte recalculé"));
+
+    await runImageOcrForDocument(createOptions(workspace, { runOcr: firstRun }));
+    const second = await runImageOcrForDocument(
+      createOptions(workspace, {
+        forceRefresh: true,
+        runOcr: secondRun
+      })
+    );
+
+    expect(second.ok).toBe(true);
+    expect(second.ok && second.value.fromCache).toBe(false);
+    expect(second.ok && second.value.excerpt).toBe("texte recalculé");
+    expect(secondRun).toHaveBeenCalledTimes(1);
+  });
+
   it("runs the runner on cache miss", async () => {
     const workspace = await createWorkspace("image.png");
     const runOcr = vi.fn(async () => createOcrOutput("nouveau texte"));

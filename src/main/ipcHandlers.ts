@@ -274,6 +274,7 @@ export interface IpcHandlerServices {
     documentPath: string;
     queuedDocumentPaths: Iterable<string>;
     userDataPath: string;
+    forceRefresh?: boolean;
   }) => Promise<ImageOcrResult>;
   runPdfOcrForDocument: (options: {
     documentPath: string;
@@ -939,12 +940,15 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): MainPr
   options.ipcMain.handle(IPC_CHANNELS.ocrGetPdfStatus, () =>
     services.getPdfOcrStatus(options.app.getPath("userData"))
   );
-  options.ipcMain.handle(IPC_CHANNELS.ocrRunImage, async (_event, documentPath: unknown) =>
-    services.runImageOcrForDocument({
-      documentPath: typeof documentPath === "string" ? documentPath : "",
-      queuedDocumentPaths: state.queuedDocumentPaths,
-      userDataPath: options.app.getPath("userData")
-    })
+  options.ipcMain.handle(
+    IPC_CHANNELS.ocrRunImage,
+    async (_event, documentPath: unknown, runOptions: unknown) =>
+      services.runImageOcrForDocument({
+        documentPath: typeof documentPath === "string" ? documentPath : "",
+        queuedDocumentPaths: state.queuedDocumentPaths,
+        userDataPath: options.app.getPath("userData"),
+        forceRefresh: readForceRefreshOption(runOptions)
+      })
   );
   options.ipcMain.handle(IPC_CHANNELS.ocrRunPdf, async (event, documentPath: unknown) =>
     services.runPdfOcrForDocument({
@@ -1263,6 +1267,14 @@ function isQueuedDocumentPath(state: MainProcessAppState, documentPath: string):
 
 function getSelectedTargetFolderCandidates(state: MainProcessAppState): string[] {
   return state.selectedTargetFolder ? [state.selectedTargetFolder] : [];
+}
+
+function readForceRefreshOption(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return (value as { forceRefresh?: unknown }).forceRefresh === true;
 }
 
 function readKnownTargetInput(value: unknown): KnownTargetInput {
