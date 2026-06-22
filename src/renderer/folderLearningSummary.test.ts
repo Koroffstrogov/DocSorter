@@ -122,6 +122,60 @@ describe("folderLearningSummary", () => {
     ]);
   });
 
+  it("uses known targets to identify a target block in the folder schema", () => {
+    const analysis = summary.buildAnalysis({
+      targetFolder: "Banque/Releves",
+      entries: [
+        name("2026-01_releve-bancaire_compte-joint.pdf"),
+        name("2026-02_releve-bancaire_compte-joint.pdf"),
+        name("2026-03_releve-bancaire_compte-joint.pdf"),
+        name("2026-04_releve-bancaire_compte-joint.pdf")
+      ],
+      knownTargets: [
+        {
+          id: "compte-joint",
+          kind: "household",
+          displayName: "compte-joint",
+          fileAlias: "compte-joint",
+          aliases: ["Compte joint"],
+          isActive: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      aiName: "2026-05_foyer_releve-bancaire_bnp-paribas.pdf",
+      aiFields: {
+        dateToken: "2026-05",
+        subject: "",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas",
+        detail: ""
+      },
+      extension: ".pdf"
+    });
+
+    expect(analysis.profile.targetBlockRecognitions).toMatchObject([
+      {
+        block: "compte-joint",
+        position: 1,
+        field: "target"
+      }
+    ]);
+    expect(analysis.comparison).toMatchObject({
+      detectedPattern: "DATE_DOCUMENT_CIBLE",
+      alignedName: "2026-05_releve-bancaire_compte-joint.pdf"
+    });
+    expect(analysis.pipeline.find((step) => step.id === "folder-schema-analysis")?.variables).toMatchObject({
+      targetBlockRecognitions: [
+        {
+          block: "compte-joint",
+          position: 1
+        }
+      ]
+    });
+  });
+
   it("uses a confirmed local preference to strengthen a medium folder convention", () => {
     const analysis = summary.buildAnalysis({
       targetFolder: "Banque/Releves",

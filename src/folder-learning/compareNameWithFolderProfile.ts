@@ -529,13 +529,14 @@ function buildAlignedInput(
 
 function analyzeFolderSchema(profile: FolderNamingProfile, input: NamingInputV2): FolderSchemaAnalysis {
   const blocks = (profile.dominantBlocks ?? []).map((block) => normalizeNameBlock(block)).filter(Boolean);
+  const targetBlockAmbiguityWarnings = (profile.targetBlockAmbiguities ?? []).map((ambiguity) => ambiguity.reason);
   if (blocks.length === 0) {
     return {
       status: "blocked",
       fieldOrder: [],
       confidence: 0,
       reasons: [],
-      warnings: [],
+      warnings: targetBlockAmbiguityWarnings,
       blockingReason: "Aucun bloc dominant disponible pour inférer le schéma du dossier."
     };
   }
@@ -551,7 +552,8 @@ function analyzeFolderSchema(profile: FolderNamingProfile, input: NamingInputV2)
     .filter((schema) => schema.fields.length === blocks.length)
     .map((schema) => {
       const matchedFields = schema.fields.filter((field, index) =>
-        isCompatibleSchemaValue(blocks[index] ?? "", fieldValues[field])
+        isCompatibleSchemaValue(blocks[index] ?? "", fieldValues[field]) ||
+        isKnownTargetBlockMatch(profile, index, field)
       );
       return {
         ...schema,
@@ -567,7 +569,10 @@ function analyzeFolderSchema(profile: FolderNamingProfile, input: NamingInputV2)
       fieldOrder: [],
       confidence: 0,
       reasons: [],
-      warnings: ["Schéma du dossier non reconnu à partir des champs IA courants."],
+      warnings: [
+        "Schéma du dossier non reconnu à partir des champs IA courants.",
+        ...targetBlockAmbiguityWarnings
+      ],
       blockingReason: "Correspondance insuffisante entre les blocs du dossier et les champs IA."
     };
   }
@@ -579,7 +584,10 @@ function analyzeFolderSchema(profile: FolderNamingProfile, input: NamingInputV2)
       fieldOrder: [],
       confidence: Math.round((best.score / best.fields.length) * 100),
       reasons: [`Schémas possibles : ${tied.map((schema) => schema.pattern).join(", ")}.`],
-      warnings: ["Schéma du dossier ambigu : validation manuelle nécessaire."],
+      warnings: [
+        "Schéma du dossier ambigu : validation manuelle nécessaire.",
+        ...targetBlockAmbiguityWarnings
+      ],
       blockingReason: "Plusieurs ordres de blocs sont plausibles."
     };
   }
@@ -632,6 +640,15 @@ function isCompatibleSchemaValue(folderValue: string, aiValue: string): boolean 
   }
 
   return folderValue === aiValue || folderValue.startsWith(`${aiValue}-`) || aiValue.startsWith(`${folderValue}-`);
+}
+
+function isKnownTargetBlockMatch(
+  profile: FolderNamingProfile,
+  blockIndex: number,
+  field: FolderSchemaField
+): boolean {
+  return field === "target" &&
+    (profile.targetBlockRecognitions ?? []).some((recognition) => recognition.position === blockIndex);
 }
 
 function generateAlignedName(
@@ -719,7 +736,9 @@ function createPipeline(
       variables: {
         detectedPattern: schema?.pattern ?? "",
         fieldOrder: schema?.fieldOrder ?? [],
-        confidence: schema?.confidence ?? 0
+        confidence: schema?.confidence ?? 0,
+        targetBlockRecognitions: profile.targetBlockRecognitions ?? [],
+        targetBlockAmbiguities: profile.targetBlockAmbiguities ?? []
       },
       output: schema?.reasons ?? [],
       warnings: schema?.warnings ?? [],

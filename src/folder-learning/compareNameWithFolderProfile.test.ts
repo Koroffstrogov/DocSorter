@@ -171,6 +171,40 @@ describe("compareNameWithFolderProfile", () => {
     expect(comparison.confidence).toBeGreaterThanOrEqual(80);
   });
 
+  it("keeps an already ready aligned name unchanged when a known target also matches", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile(
+        Array.from({ length: 8 }, (_, index) => {
+          const month = String(index + 1).padStart(2, "0");
+          return `2026-${month}_compte-joint_releve-bancaire_bnp-paribas.pdf`;
+        }),
+        {
+          knownTargets: [
+            {
+              id: "compte-joint",
+              kind: "household",
+              displayName: "Compte joint",
+              fileAlias: "compte-joint",
+              aliases: ["Compte joint"],
+              isActive: true
+            }
+          ]
+        }
+      )
+    });
+
+    expect(comparison.detectedPattern).toBe("DATE_CIBLE_DOCUMENT_EMETTEUR");
+    expect(comparison.recommendation).toBe("prefer-folder-profile");
+    expect(comparison.alignedName).toBe("2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf");
+  });
+
   it("detects DATE_DOCUMENT_CIBLE and proposes a monthly aligned name", () => {
     const comparison = compareNameWithFolderProfile({
       aiFields: {
@@ -203,6 +237,129 @@ describe("compareNameWithFolderProfile", () => {
       "folder-schema-analysis",
       "aligned-name-proposal"
     ]);
+  });
+
+  it("uses a known target block to identify DATE_DOCUMENT_CIBLE when the AI target differs", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "releve-bancaire",
+        issuer: "bnp-paribas"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile(
+        [
+          "2026-01_releve-bancaire_compte-joint.pdf",
+          "2026-02_releve-bancaire_compte-joint.pdf",
+          "2026-03_releve-bancaire_compte-joint.pdf",
+          "2026-04_releve-bancaire_compte-joint.pdf"
+        ],
+        {
+          knownTargets: [
+            {
+              id: "compte-joint",
+              kind: "household",
+              displayName: "Compte joint",
+              fileAlias: "compte-joint",
+              aliases: ["compte joint"],
+              isActive: true
+            }
+          ]
+        }
+      )
+    });
+
+    expect(comparison.detectedPattern).toBe("DATE_DOCUMENT_CIBLE");
+    expect(comparison.alignedName).toBe("2026-05_releve-bancaire_compte-joint.pdf");
+    expect(comparison.appliedChanges).toContain("target");
+    expect(comparison.pipeline?.find((step) => step.id === "folder-schema-analysis")?.variables).toMatchObject({
+      targetBlockRecognitions: [
+        {
+          block: "compte-joint",
+          position: 1,
+          field: "target"
+        }
+      ]
+    });
+  });
+
+  it("keeps manual review when known target block recognition is ambiguous", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "releve-bancaire"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile(
+        [
+          "2026-01_releve-bancaire_paul.pdf",
+          "2026-02_releve-bancaire_paul.pdf",
+          "2026-03_releve-bancaire_paul.pdf",
+          "2026-04_releve-bancaire_paul.pdf"
+        ],
+        {
+          knownTargets: [
+            {
+              id: "paul",
+              kind: "person",
+              displayName: "Paul",
+              fileAlias: "paul",
+              aliases: ["Paul"],
+              isActive: true
+            },
+            {
+              id: "paul-martin",
+              kind: "person",
+              displayName: "Paul Martin",
+              fileAlias: "paul-martin",
+              aliases: ["Paul"],
+              isActive: true
+            }
+          ]
+        }
+      )
+    });
+
+    expect(comparison.recommendation).toBe("manual-review");
+    expect(comparison.alignedName).toBeUndefined();
+    expect(comparison.warnings.join(" ")).toContain("ambigu");
+  });
+
+  it("does not impose a known target when the document type is incompatible", () => {
+    const comparison = compareNameWithFolderProfile({
+      aiFields: {
+        dateToken: "2026-05",
+        target: "foyer",
+        documentType: "facture-energie",
+        issuer: "edf"
+      },
+      extension: ".pdf",
+      profile: buildFolderNamingProfile(
+        [
+          "2026-01_releve-bancaire_compte-joint.pdf",
+          "2026-02_releve-bancaire_compte-joint.pdf",
+          "2026-03_releve-bancaire_compte-joint.pdf",
+          "2026-04_releve-bancaire_compte-joint.pdf"
+        ],
+        {
+          knownTargets: [
+            {
+              id: "compte-joint",
+              kind: "household",
+              displayName: "Compte joint",
+              fileAlias: "compte-joint",
+              aliases: ["Compte joint"],
+              isActive: true
+            }
+          ]
+        }
+      )
+    });
+
+    expect(comparison.alignedName).toBeUndefined();
+    expect(comparison.warnings.join(" ")).toContain("Type dominant du dossier différent");
   });
 
   it("keeps ambiguous schemas for manual review", () => {

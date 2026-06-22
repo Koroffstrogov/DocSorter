@@ -229,6 +229,28 @@ interface FolderLearningPreference {
   lastConfirmedAt: string;
 }
 
+interface FolderLearningTargetBlockRecognition {
+  block: string;
+  position: number;
+  field: "target";
+  target: {
+    id: string;
+    displayName: string;
+    fileAlias: string;
+    kind?: string;
+  };
+  matchType: "exact-alias" | "exact-display-name" | "controlled-prefix";
+  confidence: number;
+  reason: string;
+}
+
+interface FolderLearningTargetBlockAmbiguity {
+  block: string;
+  position: number;
+  matchingFileAliases: string[];
+  reason: string;
+}
+
 interface FolderLearningProfile {
   status: FolderLearningProfileStatus;
   analyzedFileCount: number;
@@ -241,6 +263,8 @@ interface FolderLearningProfile {
   dominantDocumentType?: string;
   dominantIssuer?: string;
   detailUsage?: FolderLearningDetailUsage;
+  targetBlockRecognitions?: FolderLearningTargetBlockRecognition[];
+  targetBlockAmbiguities?: FolderLearningTargetBlockAmbiguity[];
   localPreference?: FolderLearningPreference;
   examples: string[];
   reasons: string[];

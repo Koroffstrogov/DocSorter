@@ -106,7 +106,8 @@ function buildFolderLearningAnalysis(
     aiName: aiPreview?.filename ?? "",
     aiFields: aiPreview?.fields ?? null,
     extension: activeDocument.extension,
-    warnings: nameList.warnings
+    warnings: nameList.warnings,
+    knownTargets: state.knownTargets?.targets ?? []
   });
 }
 

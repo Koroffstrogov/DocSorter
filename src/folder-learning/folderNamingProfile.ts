@@ -5,6 +5,12 @@ import {
   type FolderNamingPattern,
   type ParsedFolderFileName
 } from "./parseFolderFileName";
+import {
+  recognizeKnownTargetBlocks,
+  type FolderLearningKnownTargetReference,
+  type FolderLearningTargetBlockAmbiguity,
+  type FolderLearningTargetBlockRecognition
+} from "./knownTargetBlockRecognition";
 
 export type FolderNamingProfileStatus = "none" | "weak" | "medium" | "strong";
 export type FolderNamingProfileDatePrecision = FolderLearningDatePrecision | "mixed";
@@ -22,9 +28,15 @@ export interface FolderNamingProfile {
   dominantDocumentType?: string;
   dominantIssuer?: string;
   detailUsage?: FolderNamingProfileDetailUsage;
+  targetBlockRecognitions?: FolderLearningTargetBlockRecognition[];
+  targetBlockAmbiguities?: FolderLearningTargetBlockAmbiguity[];
   examples: string[];
   reasons: string[];
   warnings: string[];
+}
+
+export interface FolderNamingProfileOptions {
+  knownTargets?: readonly FolderLearningKnownTargetReference[];
 }
 
 interface DominantValue<T extends string> {
@@ -44,7 +56,8 @@ const STRONG_COHERENCE_RATIO = 0.8;
 const EXAMPLE_LIMIT = 3;
 
 export function buildFolderNamingProfile(
-  entries: readonly (string | FolderLearningFileEntry)[]
+  entries: readonly (string | FolderLearningFileEntry)[],
+  options: FolderNamingProfileOptions = {}
 ): FolderNamingProfile {
   const analyzedEntries = entries.filter(isAnalyzableFileEntry);
   const parsed = analyzedEntries.map(parseFolderFileName).filter(isParsedFolderFileName);
@@ -69,6 +82,7 @@ export function buildFolderNamingProfile(
   const dominantIssuer = dominantValue(parsed.map((entry) => entry.issuer).filter(isString));
   const dominantDatePrecision = detectDominantDatePrecision(parsed);
   const detailUsage = detectDetailUsage(parsed);
+  const targetBlockRecognition = recognizeKnownTargetBlocks(dominantBlocks, options.knownTargets ?? []);
   const coherence = computeCoherence({
     parsed,
     dominantTarget,
@@ -86,7 +100,8 @@ export function buildFolderNamingProfile(
     dominantIssuer,
     dominantDatePrecision,
     detailUsage,
-    coherenceScore: coherence.score
+    coherenceScore: coherence.score,
+    targetBlockRecognitions: targetBlockRecognition.recognitions
   });
   const warnings = buildWarnings({
     ignoredCount,
@@ -96,7 +111,8 @@ export function buildFolderNamingProfile(
     dominantIssuer,
     dominantDatePrecision,
     detailUsage,
-    coherenceWarnings: coherence.warnings
+    coherenceWarnings: coherence.warnings,
+    targetBlockAmbiguities: targetBlockRecognition.ambiguities
   });
 
   return {
@@ -111,6 +127,12 @@ export function buildFolderNamingProfile(
     ...(dominantDocumentType ? { dominantDocumentType: dominantDocumentType.value } : {}),
     ...(dominantIssuer ? { dominantIssuer: dominantIssuer.value } : {}),
     detailUsage,
+    ...(targetBlockRecognition.recognitions.length > 0
+      ? { targetBlockRecognitions: targetBlockRecognition.recognitions }
+      : {}),
+    ...(targetBlockRecognition.ambiguities.length > 0
+      ? { targetBlockAmbiguities: targetBlockRecognition.ambiguities }
+      : {}),
     examples: parsed.slice(0, EXAMPLE_LIMIT).map((entry) => entry.originalName),
     reasons,
     warnings
@@ -268,6 +290,7 @@ function buildReasons(input: {
   dominantDatePrecision: FolderNamingProfileDatePrecision;
   detailUsage: FolderNamingProfileDetailUsage;
   coherenceScore: number;
+  targetBlockRecognitions: FolderLearningTargetBlockRecognition[];
 }): string[] {
   const reasons = [
     `${input.parsed.length} nom(s) compatible(s) détecté(s).`,
@@ -290,6 +313,10 @@ function buildReasons(input: {
     reasons.push(`Émetteur dominant : ${input.dominantIssuer.value}.`);
   }
 
+  for (const recognition of input.targetBlockRecognitions) {
+    reasons.push(recognition.reason);
+  }
+
   return reasons;
 }
 
@@ -302,6 +329,7 @@ function buildWarnings(input: {
   dominantDatePrecision: FolderNamingProfileDatePrecision;
   detailUsage: FolderNamingProfileDetailUsage;
   coherenceWarnings: string[];
+  targetBlockAmbiguities: FolderLearningTargetBlockAmbiguity[];
 }): string[] {
   const warnings = [...input.coherenceWarnings];
   if (input.ignoredCount > 0) {
@@ -310,6 +338,10 @@ function buildWarnings(input: {
 
   if (input.parsed.length === 1) {
     warnings.push("Un seul nom reconnu : profil peu fiable.");
+  }
+
+  for (const ambiguity of input.targetBlockAmbiguities) {
+    warnings.push(ambiguity.reason);
   }
 
   return Array.from(new Set(warnings));

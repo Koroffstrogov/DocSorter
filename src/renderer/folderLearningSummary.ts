@@ -6,6 +6,7 @@ interface FolderLearningSummaryInput {
   aiFields: AiSelectionFields | null;
   extension: SupportedDocumentExtension;
   warnings?: string[];
+  knownTargets?: KnownTarget[];
 }
 
 interface FolderLearningSummaryApi {
@@ -61,6 +62,35 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     detail: string;
   }
 
+  interface TargetBlockRecognition {
+    block: string;
+    position: number;
+    field: "target";
+    target: {
+      id: string;
+      displayName: string;
+      fileAlias: string;
+      kind?: string;
+    };
+    matchType: "exact-alias" | "exact-display-name" | "controlled-prefix";
+    confidence: number;
+    reason: string;
+  }
+
+  interface TargetBlockAmbiguity {
+    block: string;
+    position: number;
+    matchingFileAliases: string[];
+    reason: string;
+  }
+
+  interface TargetToken {
+    value: string;
+    normalized: string;
+    matchType: "exact-alias" | "exact-display-name";
+    target: KnownTarget;
+  }
+
   const SUPPORTED_EXTENSIONS = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
   const BLOCK_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   const DOMINANT_RATIO = 0.6;
@@ -80,7 +110,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
   ];
 
   function buildAnalysis(input: FolderLearningSummaryInput): FolderLearningAnalysis {
-    const profile = buildProfile(input.entries, input.warnings ?? [], input.preference ?? null);
+    const profile = buildProfile(input.entries, input.warnings ?? [], input.preference ?? null, input.knownTargets ?? []);
     const aiInput = readAiInput(input);
     const schema = aiInput ? analyzeSchema(profile, aiInput) : blockedSchema("Champs IA incomplets.");
     const profileWithSchema = applySchemaSemantics(profile, schema);
@@ -95,7 +125,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
   function buildProfile(
     entries: FolderLearningNameEntry[],
     externalWarnings: string[],
-    preference: FolderLearningPreference | null
+    preference: FolderLearningPreference | null,
+    knownTargets: KnownTarget[]
   ): FolderLearningProfile {
     const analyzableEntries = entries.filter((entry) => entry.isFile);
     const parsed = analyzableEntries.map((entry) => parseName(entry.name)).filter(isParsedName);
@@ -126,6 +157,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     const dominantDocumentType = dominantValue(parsed.map((entry) => entry.documentType).filter(Boolean));
     const dominantIssuer = dominantValue(parsed.map((entry) => entry.issuer).filter(isString));
     const detailUsage = detailUsageFor(parsed);
+    const targetBlockSignal = recognizeTargetBlocks(dominantBlocks, knownTargets);
     const coherence = coherenceScore({
       parsed,
       dominantDatePrecision,
@@ -148,6 +180,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       dominantDocumentType: dominantDocumentType?.value,
       dominantIssuer: dominantIssuer?.value,
       detailUsage,
+      targetBlockRecognitions: targetBlockSignal.recognitions,
+      targetBlockAmbiguities: targetBlockSignal.ambiguities,
       localPreference: preference ?? undefined,
       examples: parsed.slice(0, 3).map((entry) => entry.originalName),
       reasons: uniqueStrings([
@@ -155,12 +189,14 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         dominantTarget ? `Cible dominante : ${dominantTarget.value}.` : "",
         dominantDocumentType ? `Type documentaire dominant : ${dominantDocumentType.value}.` : "",
         dominantIssuer ? `Émetteur dominant : ${dominantIssuer.value}.` : "",
+        ...targetBlockSignal.recognitions.map((recognition) => recognition.reason),
         preference ? `Préférence locale confirmée ${preference.confirmedCount} fois.` : ""
       ]),
       warnings: uniqueStrings([
         ...externalWarnings,
         ignoredCount > 0 ? `${ignoredCount} fichier(s) ignoré(s) car non conformes.` : "",
         ...coherence.warnings,
+        ...targetBlockSignal.ambiguities.map((ambiguity) => ambiguity.reason),
         parsed.length === 1 ? "Un seul nom reconnu : profil peu fiable." : ""
       ])
     };
@@ -420,8 +456,9 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
 
   function analyzeSchema(profile: FolderLearningProfile, fields: AiInputFields): SchemaAnalysis {
     const blocks = (profile.dominantBlocks ?? []).map(normalizeBlock).filter(Boolean);
+    const targetBlockAmbiguityWarnings = (profile.targetBlockAmbiguities ?? []).map((ambiguity) => ambiguity.reason);
     if (blocks.length === 0) {
-      return blockedSchema("Aucun bloc dominant disponible.");
+      return blockedSchema("Aucun bloc dominant disponible.", targetBlockAmbiguityWarnings);
     }
 
     const values: Record<SchemaField, string> = {
@@ -435,7 +472,8 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
       .filter((schema) => schema.fields.length === blocks.length)
       .map((schema) => {
         const matches = schema.fields.filter((field, index) =>
-          isCompatibleSchemaValue(blocks[index] ?? "", values[field])
+          isCompatibleSchemaValue(blocks[index] ?? "", values[field]) ||
+          isKnownTargetBlockMatch(profile, index, field)
         );
         return {
           ...schema,
@@ -451,7 +489,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         fieldOrder: [],
         confidence: 0,
         reasons: [],
-        warnings: ["Schéma du dossier non reconnu à partir des champs IA."],
+        warnings: ["Schéma du dossier non reconnu à partir des champs IA.", ...targetBlockAmbiguityWarnings],
         blockingReason: "Correspondance insuffisante entre blocs et champs IA."
       };
     }
@@ -463,7 +501,7 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         fieldOrder: [],
         confidence: Math.round((best.score / best.fields.length) * 100),
         reasons: [`Schémas possibles : ${tied.map((candidate) => candidate.pattern).join(", ")}.`],
-        warnings: ["Schéma du dossier ambigu : validation manuelle nécessaire."],
+        warnings: ["Schéma du dossier ambigu : validation manuelle nécessaire.", ...targetBlockAmbiguityWarnings],
         blockingReason: "Plusieurs ordres de blocs sont plausibles."
       };
     }
@@ -538,6 +576,153 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     return folderValue === aiValue || folderValue.startsWith(`${aiValue}-`) || aiValue.startsWith(`${folderValue}-`);
   }
 
+  function isKnownTargetBlockMatch(
+    profile: FolderLearningProfile,
+    blockIndex: number,
+    field: SchemaField
+  ): boolean {
+    return field === "target" &&
+      (profile.targetBlockRecognitions ?? []).some((recognition) => recognition.position === blockIndex);
+  }
+
+  function recognizeTargetBlocks(
+    blocks: string[],
+    knownTargets: KnownTarget[]
+  ): { recognitions: TargetBlockRecognition[]; ambiguities: TargetBlockAmbiguity[] } {
+    const tokens = buildTargetTokens(knownTargets);
+    const recognitions: TargetBlockRecognition[] = [];
+    const ambiguities: TargetBlockAmbiguity[] = [];
+
+    blocks.forEach((block, position) => {
+      const normalizedBlock = normalizeBlock(block);
+      if (!normalizedBlock) {
+        return;
+      }
+
+      const matches = tokens
+        .map((token) => matchTargetToken(normalizedBlock, token))
+        .filter(isTargetTokenMatch)
+        .sort((left, right) =>
+          right.confidence - left.confidence ||
+          left.token.target.fileAlias.localeCompare(right.token.target.fileAlias, "fr", { sensitivity: "base" })
+        );
+      if (matches.length === 0) {
+        return;
+      }
+
+      const bestConfidence = matches[0]?.confidence ?? 0;
+      const bestMatches = matches.filter((match) => match.confidence === bestConfidence);
+      const distinctTargets = new Map(bestMatches.map((match) => [match.token.target.id, match]));
+      if (distinctTargets.size > 1) {
+        ambiguities.push({
+          block,
+          position,
+          matchingFileAliases: Array.from(distinctTargets.values())
+            .map((match) => match.token.target.fileAlias)
+            .sort((left, right) => left.localeCompare(right, "fr", { sensitivity: "base" })),
+          reason: `Bloc "${block}" ambigu : plusieurs cibles locales correspondent.`
+        });
+        return;
+      }
+
+      const best = bestMatches[0];
+      if (!best) {
+        return;
+      }
+
+      recognitions.push({
+        block,
+        position,
+        field: "target",
+        target: {
+          id: best.token.target.id,
+          displayName: best.token.target.displayName,
+          fileAlias: best.token.target.fileAlias,
+          kind: best.token.target.kind
+        },
+        matchType: best.matchType,
+        confidence: best.confidence,
+        reason: `Bloc "${block}" reconnu comme cible via ${labelForTargetMatch(best.matchType)} du référentiel.`
+      });
+    });
+
+    return { recognitions, ambiguities };
+  }
+
+  function buildTargetTokens(knownTargets: KnownTarget[]): TargetToken[] {
+    const tokens: TargetToken[] = [];
+    const seen = new Set<string>();
+    for (const target of knownTargets) {
+      if (!target.isActive) {
+        continue;
+      }
+
+      const displayName = normalizeBlock(target.displayName);
+      if (displayName && !seen.has(`${target.id}:display:${displayName}`)) {
+        seen.add(`${target.id}:display:${displayName}`);
+        tokens.push({ value: target.displayName, normalized: displayName, matchType: "exact-display-name", target });
+      }
+
+      for (const value of [target.fileAlias, ...target.aliases]) {
+        const normalized = normalizeBlock(value);
+        if (!normalized || seen.has(`${target.id}:alias:${normalized}`)) {
+          continue;
+        }
+        seen.add(`${target.id}:alias:${normalized}`);
+        tokens.push({ value, normalized, matchType: "exact-alias", target });
+      }
+    }
+    return tokens.sort((left, right) => right.normalized.length - left.normalized.length);
+  }
+
+  function matchTargetToken(
+    normalizedBlock: string,
+    token: TargetToken
+  ): { token: TargetToken; matchType: TargetBlockRecognition["matchType"]; confidence: number } | null {
+    if (normalizedBlock === token.normalized) {
+      return {
+        token,
+        matchType: token.matchType,
+        confidence: token.matchType === "exact-alias" ? 95 : 92
+      };
+    }
+
+    if (isControlledPrefixMatch(normalizedBlock, token.normalized)) {
+      return {
+        token,
+        matchType: "controlled-prefix",
+        confidence: 75
+      };
+    }
+
+    return null;
+  }
+
+  function isControlledPrefixMatch(left: string, right: string): boolean {
+    const shorter = left.length <= right.length ? left : right;
+    const longer = left.length <= right.length ? right : left;
+    return shorter.length >= 3 &&
+      !["doc", "pdf", "scan", "test", "file", "fichier", "document"].includes(shorter) &&
+      longer.length > shorter.length &&
+      longer.startsWith(`${shorter}-`);
+  }
+
+  function isTargetTokenMatch(
+    value: { token: TargetToken; matchType: TargetBlockRecognition["matchType"]; confidence: number } | null
+  ): value is { token: TargetToken; matchType: TargetBlockRecognition["matchType"]; confidence: number } {
+    return value !== null;
+  }
+
+  function labelForTargetMatch(matchType: TargetBlockRecognition["matchType"]): string {
+    if (matchType === "exact-display-name") {
+      return "nom affiché";
+    }
+    if (matchType === "controlled-prefix") {
+      return "préfixe contrôlé";
+    }
+    return "alias";
+  }
+
   function hasProfileWarning(profile: FolderLearningProfile, signal: string): boolean {
     const normalizedSignal = normalizeBlock(signal);
     return profile.warnings.some((warning) => normalizeBlock(warning).includes(normalizedSignal));
@@ -602,7 +787,9 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
         variables: {
           detectedPattern: schema.pattern ?? "",
           fieldOrder: schema.fieldOrder,
-          confidence: schema.confidence
+          confidence: schema.confidence,
+          targetBlockRecognitions: profile.targetBlockRecognitions ?? [],
+          targetBlockAmbiguities: profile.targetBlockAmbiguities ?? []
         },
         output: schema.reasons,
         warnings: schema.warnings,
@@ -965,13 +1152,13 @@ var DocSorterFolderLearningSummary: FolderLearningSummaryApi;
     };
   }
 
-  function blockedSchema(reason: string): SchemaAnalysis {
+  function blockedSchema(reason: string, warnings: string[] = []): SchemaAnalysis {
     return {
       status: "blocked",
       fieldOrder: [],
       confidence: 0,
       reasons: [],
-      warnings: [],
+      warnings,
       blockingReason: reason
     };
   }

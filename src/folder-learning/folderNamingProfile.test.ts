@@ -116,4 +116,44 @@ describe("buildFolderNamingProfile", () => {
     expect(entries).toEqual(before);
     expect(profile.recognizedFileCount).toBe(2);
   });
+
+  it("adds target block recognition from known targets without changing the profile shape", () => {
+    const profile = buildFolderNamingProfile(
+      ["2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf"],
+      {
+        knownTargets: [
+          {
+            id: "compte-joint",
+            kind: "household",
+            displayName: "Compte joint",
+            fileAlias: "compte-joint",
+            aliases: ["compte joint"],
+            isActive: true
+          }
+        ]
+      }
+    );
+
+    expect(profile.dominantTarget).toBe("compte-joint");
+    expect(profile.targetBlockRecognitions).toMatchObject([
+      {
+        block: "compte-joint",
+        position: 0,
+        field: "target",
+        target: {
+          fileAlias: "compte-joint"
+        }
+      }
+    ]);
+    expect(profile.reasons.join(" ")).toContain("reconnu comme cible");
+  });
+
+  it("keeps the current behavior when the known target catalog is empty", () => {
+    const entries = [
+      "2026-05_compte-joint_releve-bancaire_bnp-paribas.pdf",
+      "2026-06_compte-joint_releve-bancaire_bnp-paribas.pdf"
+    ];
+
+    expect(buildFolderNamingProfile(entries, { knownTargets: [] })).toEqual(buildFolderNamingProfile(entries));
+  });
 });
